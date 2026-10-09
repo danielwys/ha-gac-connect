@@ -1,0 +1,275 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GAC Connect",
+        "description": "Beta: unofficial, with limited testing. Remote commands act on your vehicle; use at your own risk. Sign in with the mobile number on your GAC account. You'll solve a slide puzzle and enter a code sent by SMS.",
+        "data": {
+          "region": "Region",
+          "mobile": "Mobile number"
+        },
+        "data_description": {
+          "mobile": "For Thailand, enter 08… / 09… / 06… or +66…; both formats are accepted."
+        }
+      },
+      "sms": {
+        "title": "Enter the SMS code",
+        "description": "Enter the code just sent to your phone.",
+        "data": {
+          "code": "SMS code"
+        }
+      },
+      "vehicle": {
+        "title": "Choose your vehicle",
+        "data": {
+          "vin": "Vehicle"
+        }
+      },
+      "profile": {
+        "title": "Choose a vehicle profile",
+        "description": "Select an equipment profile for {model}. Aion UT always omits its unsupported fridge, steering wheel heat and sunroof controls. You can change other choices later in the integration options.",
+        "data": {
+          "profile": "Vehicle profile"
+        }
+      },
+      "profile_custom": {
+        "title": "Choose supported equipment",
+        "description": "Turn off the fridge if your car has none, then select any other sensors or controls to omit.",
+        "data": {
+          "enable_fridge": "Fridge / warmer box fitted",
+          "omit_entities": "Entities to omit"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "Your session has expired. Sign in again to reconnect."
+      }
+    },
+    "progress": {
+      "captcha": "Solve the slide puzzle in the window that opened, then return here."
+    },
+    "error": {
+      "invalid_thai_mobile": "Enter a Thai mobile number such as 0812345678 or +66812345678.",
+      "cannot_connect": "Could not reach GAC. Check your connection and try again.",
+      "invalid_code": "That code was not accepted. Request a new one and try again.",
+      "rate_limited": "Too many requests to GAC just now. Wait a minute and try again."
+    },
+    "abort": {
+      "already_configured": "This vehicle is already set up.",
+      "no_vehicles": "No vehicles were found on this account.",
+      "rate_limited": "Too many requests to GAC just now. Wait a minute, then start again.",
+      "cannot_connect": "Could not reach GAC. Check your connection and try again.",
+      "wrong_vehicle": "This account does not have the vehicle this entry is for. Sign in with the account that owns it.",
+      "reauth_successful": "Signed in again. The integration is reloading."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "GAC Connect options",
+        "data": {
+          "scan_interval": "Poll interval (seconds)",
+          "enable_tracker": "Enable location tracking",
+          "enable_fridge": "Fridge / warmer box controls",
+          "experimental_pinless_unlock": "Try PIN-free unlock (experimental)",
+          "omit_entities": "Omit unsupported entities",
+          "picture": "Car picture on the map (optional)",
+          "quiet_start": "Quiet hours start (HH:MM, optional)",
+          "quiet_end": "Quiet hours end (HH:MM, optional)",
+          "ac_minutes": "A/C run time (minutes)"
+        },
+        "data_description": {
+          "enable_fridge": "Shown when the car reports a fridge. Turn off to remove them, for example on a trim without one.",
+          "experimental_pinless_unlock": "Allows the Doors control to send one unlock request without a PIN. Confirmed on an Aion UT in Thailand; other vehicles are untested. Off by default.",
+          "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",
+          "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials."
+        }
+      }
+    },
+    "error": {
+      "invalid_picture": "Enter an image URL (https://…) or a path that starts with /, for example /local/my-car.png."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "soc": {
+        "name": "Battery"
+      },
+      "range": {
+        "name": "Range"
+      },
+      "odometer": {
+        "name": "Odometer"
+      },
+      "cabin_temp": {
+        "name": "Cabin temperature"
+      },
+      "aux_voltage": {
+        "name": "12V battery"
+      },
+      "charge_time": {
+        "name": "Estimated charge time"
+      },
+      "charge_current": {
+        "name": "Charge current"
+      },
+      "tyre_1_pressure": {
+        "name": "Tyre 1 pressure"
+      },
+      "tyre_1_temp": {
+        "name": "Tyre 1 temperature"
+      },
+      "tyre_2_pressure": {
+        "name": "Tyre 2 pressure"
+      },
+      "tyre_2_temp": {
+        "name": "Tyre 2 temperature"
+      },
+      "tyre_3_pressure": {
+        "name": "Tyre 3 pressure"
+      },
+      "tyre_3_temp": {
+        "name": "Tyre 3 temperature"
+      },
+      "tyre_4_pressure": {
+        "name": "Tyre 4 pressure"
+      },
+      "tyre_4_temp": {
+        "name": "Tyre 4 temperature"
+      },
+      "pm25": {
+        "name": "Cabin PM2.5"
+      },
+      "charge_window_start": {
+        "name": "Reported charge window start"
+      },
+      "charge_window_stop": {
+        "name": "Reported charge window stop"
+      },
+      "last_report": {
+        "name": "Last report"
+      },
+      "charge_power": {
+        "name": "Charge power"
+      },
+      "charge_voltage": {
+        "name": "Charge voltage"
+      },
+      "fridge_keep_mode": {
+        "name": "Fridge after leaving",
+        "state": {
+          "timed": "Timed",
+          "unlimited": "Unlimited"
+        }
+      },
+      "fridge_time_left": {
+        "name": "Fridge time left"
+      }
+    },
+    "binary_sensor": {
+      "plugged": {
+        "name": "Plugged in"
+      },
+      "charging": {
+        "name": "Charging"
+      },
+      "locked": {
+        "name": "Lock"
+      },
+      "door_open": {
+        "name": "Door"
+      },
+      "window_open": {
+        "name": "Window"
+      },
+      "hatch_open": {
+        "name": "Boot"
+      },
+      "online": {
+        "name": "Online"
+      },
+      "charger_locked": {
+        "name": "Charger lock"
+      }
+    },
+    "button": {
+      "charge_now": {
+        "name": "Charge now"
+      },
+      "charge_pause": {
+        "name": "Pause charging"
+      },
+      "refresh": {
+        "name": "Refresh"
+      },
+      "precondition_battery": {
+        "name": "Precondition battery"
+      },
+      "horn": {
+        "name": "Sound horn"
+      }
+    },
+    "switch": {
+      "charging": {
+        "name": "Scheduled charging"
+      },
+      "steering_heat": {
+        "name": "Steering wheel heat"
+      },
+      "ventilation": {
+        "name": "Ventilation"
+      },
+      "climate_power": {
+        "name": "Pre-conditioning"
+      },
+      "lights": {
+        "name": "Flash lights"
+      },
+      "fridge": {
+        "name": "Fridge"
+      }
+    },
+    "device_tracker": {
+      "location": {
+        "name": "Location"
+      }
+    },
+    "climate": {
+      "climate": {
+        "name": "Climate"
+      }
+    },
+    "lock": {
+      "doors": {
+        "name": "Doors"
+      }
+    },
+    "cover": {
+      "windows": {
+        "name": "Windows"
+      },
+      "sunroof": {
+        "name": "Sunroof"
+      },
+      "tailgate": {
+        "name": "Tailgate"
+      }
+    },
+    "select": {
+      "fridge_mode": {
+        "name": "Fridge mode",
+        "state": {
+          "off": "Off",
+          "refrigerate": "Refrigerate",
+          "heat": "Heat",
+          "freeze": "Freeze"
+        }
+      }
+    },
+    "number": {
+      "fridge_temperature": {
+        "name": "Fridge temperature"
+      }
+    }
+  }
+}

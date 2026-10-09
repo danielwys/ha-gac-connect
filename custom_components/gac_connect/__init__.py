@@ -1,0 +1,96 @@
+"""GAC Connect (unofficial) — Home Assistant integration."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from gac_connect.client import GacClient
+
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
+
+from .cabin import controller as cabin_controller
+from .const import CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS
+from .coordinator import ConfigEntryStore, GacCoordinator
+from .entity_filter import apply_registry_choices
+from .fridge import FridgeController, controls_enabled, remove_entities, store_key
+from .helpers import async_build_client
+
+type GacConfigEntry = ConfigEntry[GacRuntime]
+
+
+@dataclass
+class GacRuntime:
+    client: GacClient
+    coordinator: GacCoordinator
+    options: dict = field(default_factory=dict)  # snapshot: reload only when these change
+    fridge: FridgeController | None = None
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
+    # Isolated session: this login's cookies must not mix with other integrations.
+    http = async_create_clientsession(hass)
+    client = await async_build_client(hass, entry.data[CONF_REGION], http, ConfigEntryStore(hass, entry))
+    await client.load()
+
+    _remove_retired_entities(hass, entry)
+    apply_registry_choices(hass, entry)
+    if not controls_enabled(entry):
+        remove_entities(hass, entry)
+    coordinator = GacCoordinator(hass, entry, client)
+    await coordinator.async_config_entry_first_refresh()
+
+    entry.runtime_data = GacRuntime(client=client, coordinator=coordinator, options=dict(entry.options))
+    cabin_controller(coordinator).async_setup(entry)
+    entry.runtime_data.fridge = FridgeController(hass, entry, coordinator)
+    await entry.runtime_data.fridge.async_setup(entry)
+    coordinator.start_push()
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_reload_on_update))
+
+    _register_services(hass)
+    return True
+
+
+# unique-id suffixes of entities earlier versions created and later versions replaced
+_RETIRED: tuple[tuple[str, str], ...] = (("button", "flash_lights"),)
+
+
+def _remove_retired_entities(hass: HomeAssistant, entry: GacConfigEntry) -> None:
+    registry = er.async_get(hass)
+    for domain, suffix in _RETIRED:
+        entity_id = registry.async_get_entity_id(domain, DOMAIN, f"{entry.data[CONF_VIN]}_{suffix}")
+        if entity_id:
+            registry.async_remove(entity_id)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None:
+    """Forget stored fridge preferences with the entry."""
+    from homeassistant.helpers.storage import Store
+
+    await Store(hass, 1, store_key(entry.entry_id)).async_remove()
+
+
+async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:
+    # The token store writes refreshed tokens into entry.data; that must not
+    # bounce the integration (it would close the session under a running poll).
+    runtime = getattr(entry, "runtime_data", None)
+    if runtime is not None and dict(entry.options) == runtime.options:
+        return
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _register_services(hass: HomeAssistant) -> None:
+    # Registered lazily on first entry; imported here to keep module load light.
+    from .services import async_register_services
+
+    async_register_services(hass)

@@ -1,0 +1,38 @@
+"""Constants for the GAC Connect integration."""
+from __future__ import annotations
+
+from typing import Final
+
+DOMAIN: Final = "gac_connect"
+
+# config entry data
+CONF_REGION: Final = "region"
+CONF_MOBILE: Final = "mobile"
+CONF_VIN: Final = "vin"
+CONF_SESSION: Final = "session"
+CONF_MODEL: Final = "model"
+
+# options
+CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_QUIET_START: Final = "quiet_start"
+CONF_QUIET_END: Final = "quiet_end"
+CONF_ENABLE_TRACKER: Final = "enable_tracker"
+CONF_ENABLE_FRIDGE: Final = "enable_fridge"
+CONF_AC_MINUTES: Final = "ac_minutes"
+CONF_PICTURE: Final = "picture"
+CONF_OMIT_ENTITIES: Final = "omit_entities"
+CONF_EXPERIMENTAL_PINLESS_UNLOCK: Final = "experimental_pinless_unlock"
+
+DEFAULT_SCAN_INTERVAL: Final = 300     # seconds
+MIN_SCAN_INTERVAL: Final = 60
+DEFAULT_ENABLE_TRACKER: Final = False
+DEFAULT_ENABLE_FRIDGE: Final = True    # shown when the car reports a fridge
+DEFAULT_AC_MINUTES: Final = 30       # minutes an A/C run lasts
+
+SIGNAL_COMMAND_RESULT: Final = "gac_connect_command_result_{vin}"
+EVENT_COMMAND_RESULT: Final = "gac_connect_command_result"
+
+PLATFORMS: Final = [
+    "sensor", "binary_sensor", "button", "switch", "device_tracker",
+    "climate", "lock", "cover", "select", "number",
+]

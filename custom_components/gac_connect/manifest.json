@@ -1,0 +1,20 @@
+{
+  "domain": "gac_connect",
+  "name": "GAC Connect (unofficial, beta)",
+  "after_dependencies": [
+    "http"
+  ],
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/wattferry/ha-gac-connect",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/wattferry/ha-gac-connect/issues",
+  "loggers": [
+    "gac_connect"
+  ],
+  "requirements": [
+    "gac-connect==0.4.0b1"
+  ],
+  "version": "0.4.0b2"
+}

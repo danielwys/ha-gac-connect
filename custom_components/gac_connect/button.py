@@ -1,0 +1,70 @@
+"""Buttons: force refresh, charge now/pause, sound horn, battery preconditioning."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+
+from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from gac_connect.client import GacClient
+
+from . import GacConfigEntry
+from .client import PAUSE_UNSUPPORTED
+from .coordinator import GacCoordinator
+from .entity import GacEntity
+from .entity_filter import add_configured_entities
+
+
+@dataclass(frozen=True, kw_only=True)
+class GacButton(ButtonEntityDescription):
+    press: Callable[[GacClient, str], Awaitable[object]]
+
+
+BUTTONS: tuple[GacButton, ...] = (
+    GacButton(key="charge_now", translation_key="charge_now", press=lambda c, vin: c.charge_now(vin)),
+    GacButton(key="charge_pause", translation_key="charge_pause", press=lambda c, vin: c.charge_pause(vin)),
+    GacButton(key="horn", translation_key="horn", icon="mdi:bullhorn", press=lambda c, vin: c.command(vin, "horn-on")),
+    GacButton(
+        key="precondition_battery",
+        translation_key="precondition_battery",
+        icon="mdi:battery-heart-variant",
+        press=lambda c, vin: c.command(vin, "battery-precondition"),
+    ),
+)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_entities: AddEntitiesCallback) -> None:
+    coordinator = entry.runtime_data.coordinator
+    entities: list[ButtonEntity] = [GacButtonEntity(coordinator, d) for d in BUTTONS]
+    entities.append(GacRefreshButton(coordinator))
+    add_configured_entities(entry, add_entities, "button", entities)
+
+
+class GacButtonEntity(GacEntity, ButtonEntity):
+    entity_description: GacButton
+
+    def __init__(self, coordinator: GacCoordinator, description: GacButton) -> None:
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+        if description.key == "charge_pause":
+            self._attr_extra_state_attributes = {"action_supported": False, "reason": PAUSE_UNSUPPORTED}
+
+    async def async_press(self) -> None:
+        if self.entity_description.key == "charge_pause":
+            raise ServiceValidationError(PAUSE_UNSUPPORTED)
+        await self._send(self.entity_description.press(self.coordinator.client, self.coordinator.vin))
+        await self.coordinator.async_request_refresh()
+
+
+class GacRefreshButton(GacEntity, ButtonEntity):
+    _attr_translation_key = "refresh"
+
+    def __init__(self, coordinator: GacCoordinator) -> None:
+        super().__init__(coordinator, "refresh")
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_manual_refresh()
