@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import logging
+import math
 import json
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
@@ -106,6 +107,22 @@ def window_operation(
     }
 
 
+def _complete_iov_tokens(data: Any) -> bool:
+    """A partial rotation must never overwrite the last complete credential pair."""
+    if not isinstance(data, dict):
+        return False
+    if not all(isinstance(data.get(key), str) and data[key].strip() for key in ("token", "refreshToken")):
+        return False
+    for key in ("expireTime", "rexpireTime"):
+        value = data.get(key)
+        if type(value) is int and value > 0:
+            continue
+        if isinstance(value, float) and math.isfinite(value) and value > 0:
+            continue
+        return False
+    return True
+
+
 class GacClient(LibraryClient):
     """Retain the library transport with corrected telemetry and reservations."""
 
@@ -148,7 +165,7 @@ class GacClient(LibraryClient):
         if path == "/refresh/token":
             data = self._data(response)
             spent = isinstance(response, dict) and response.get("code") == ERR_REFRESH_SPENT
-            if not spent and not (isinstance(data, dict) and data.get("token")):
+            if not spent and not _complete_iov_tokens(data):
                 # b1 otherwise treats any error body as permanent authentication loss.
                 raise GacError("refresh response has no usable token; credentials retained")
         return response
