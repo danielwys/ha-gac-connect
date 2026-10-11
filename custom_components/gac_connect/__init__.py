@@ -11,12 +11,15 @@ if TYPE_CHECKING:
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
+from gac_connect.errors import GacError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .cabin import controller as cabin_controller
 from .const import CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS
-from .coordinator import ConfigEntryStore, GacCoordinator
+from .coordinator import GacCoordinator
+from .session_store import ConfigEntryStore
 from .entity_filter import apply_registry_choices
 from .fridge import FridgeController, controls_enabled, remove_entities, store_key
 from .helpers import async_build_client
@@ -36,7 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     # Isolated session: this login's cookies must not mix with other integrations.
     http = async_create_clientsession(hass)
     client = await async_build_client(hass, entry.data[CONF_REGION], http, ConfigEntryStore(hass, entry))
-    await client.load()
+    try:
+        await client.load()
+    except GacError as err:
+        raise ConfigEntryNotReady(str(err)) from err
 
     _remove_retired_entities(hass, entry)
     apply_registry_choices(hass, entry)
@@ -78,6 +84,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None
     from homeassistant.helpers.storage import Store
 
     await Store(hass, 1, store_key(entry.entry_id)).async_remove()
+    await ConfigEntryStore(hass, entry).remove()
 
 
 async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:

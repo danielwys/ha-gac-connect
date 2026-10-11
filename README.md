@@ -218,6 +218,9 @@ day, since any pause recorded in it is unknown; deleting
 
 - Temporary server failures during token refresh preserve the saved session.
   An expired or explicitly rejected refresh token still requires reauthentication.
+- Credentials use a private, atomically written per-entry file in Home Assistant's
+  `.storage` directory. Existing config-entry credentials migrate automatically
+  after a successful write; removing the integration removes its credential file.
 
 - Sign-in needs a human (a slide puzzle and an SMS code); there is no headless login.
 - The library blocks unlock, remote power and charger-release because it marks

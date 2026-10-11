@@ -11,7 +11,6 @@ from gac_connect.client import GacClient
 from gac_connect.errors import AuthExpiredError, RateLimitedError
 from gac_connect.models import VehicleStatus
 from gac_connect.push import PushClient, PushResult
-from gac_connect.session import Session
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -25,7 +24,6 @@ from .const import (
     CONF_QUIET_END,
     CONF_QUIET_START,
     CONF_SCAN_INTERVAL,
-    CONF_SESSION,
     CONF_VIN,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -39,22 +37,6 @@ _LOGGER = logging.getLogger(__name__)
 # Command results can arrive in bursts; the status refreshes they trigger are at
 # least this far apart. (The client library also caps every request it sends.)
 RESULT_REFRESH_GAP = 10.0
-
-
-class ConfigEntryStore:
-    """Persist the session in the config entry so tokens survive restarts."""
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self._hass = hass
-        self._entry = entry
-
-    async def load(self) -> Session:
-        return Session.from_dict(self._entry.data.get(CONF_SESSION))
-
-    async def save(self, session: Session) -> None:
-        self._hass.config_entries.async_update_entry(
-            self._entry, data={**self._entry.data, CONF_SESSION: session.to_dict()}
-        )
 
 
 def _parse_hhmm(value: str | None) -> time | None:

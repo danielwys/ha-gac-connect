@@ -30,6 +30,7 @@ from homeassistant.helpers.network import get_url
 
 from .captcha_view import CAPTCHA_URL, GacCaptchaView, flow_state
 from .helpers import async_build_client
+from .session_store import ConfigEntryStore
 from .entity_filter import OMIT_OPTIONS, is_aion_ut, model_omissions
 from .const import (
     CONF_AC_MINUTES,
@@ -174,9 +175,11 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             entry = self._get_reauth_entry()
             if entry.data[CONF_VIN] not in by_vin:
                 return self.async_abort(reason="wrong_vehicle")
-            return self.async_update_reload_and_abort(entry, data_updates={
-                CONF_SESSION: self._client.session.to_dict(), CONF_MOBILE: self._mobile,
-            })
+            try:
+                await ConfigEntryStore(self.hass, entry).save(self._client.session)
+            except GacError:
+                return self.async_abort(reason="cannot_connect")
+            return self.async_update_reload_and_abort(entry, data_updates={CONF_MOBILE: self._mobile})
 
         if len(vehicles) == 1:
             user_input = {CONF_VIN: vehicles[0].vin}
