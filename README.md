@@ -223,6 +223,10 @@ day, since any pause recorded in it is unknown; deleting
 
 ## Notes
 
+- Diagnostics omit picture URLs and unreviewed options, and redact known personal
+  identifiers from entry data and telemetry. Review an export before sharing it:
+  an upstream service can add fields the integration has not encountered before.
+
 - Temporary server failures during token refresh preserve the saved session.
   An expired or explicitly rejected refresh token still requires reauthentication.
 - Sign-in reports connection failures as retryable form errors. If the optional

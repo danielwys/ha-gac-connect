@@ -7,6 +7,19 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import GacConfigEntry
+from .const import (
+    CONF_AC_MINUTES, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
+    CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES,
+    CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
+)
+
+# URLs can contain passwords, signed query strings or private locations. New
+# options must be reviewed before being included in a shareable diagnostic.
+SAFE_OPTIONS = {
+    CONF_AC_MINUTES, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
+    CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES,
+    CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
+}
 
 TO_REDACT = {
     "vin", "mobile", "session", "token", "refreshToken", "refresh_token",
@@ -22,7 +35,7 @@ async def async_get_config_entry_diagnostics(
     raw = dict(status.raw) if status else {}
     return {
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
-        "options": dict(entry.options),
+        "options": {key: value for key, value in entry.options.items() if key in SAFE_OPTIONS},
         "status_updated_ms": status.updated_ms if status else None,
         "status_online": status.online if status else None,
         "status_raw": async_redact_data(raw, TO_REDACT),
