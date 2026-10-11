@@ -135,8 +135,12 @@ class GacClient(LibraryClient):
 
     async def _iov_call(self, path: str, body: Any, *, sensitive: dict | None = None,
                         kind: str = "request") -> Any:
+        used = self._session.token
         response = await super()._iov_call(path, body, sensitive=sensitive, kind=kind)
         if kind == "command":
+            if (isinstance(response, dict) and response.get("code") == ERR_TOKEN_INVALID
+                    and self._session.token == used):
+                self._session.expire_time = 0
             return command_result(response)
         if path == "/refresh/token":
             data = self._data(response)
