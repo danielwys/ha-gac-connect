@@ -25,6 +25,7 @@ from gac_connect.limits import parse_retry_after
 from gac_connect.models import VehicleStatus
 
 from .status import decode_status, enum_code
+from .phone import local_mobile
 
 PAUSE_UNSUPPORTED = (
     "Continuous charging pause is unavailable. The previous pause command allowed "
@@ -151,6 +152,14 @@ class GacClient(LibraryClient):
                 # b1 otherwise treats any error body as permanent authentication loss.
                 raise GacError("refresh response has no usable token; credentials retained")
         return response
+
+    async def request_sms(self, mobile: str, x: int) -> None:
+        # b1 strips Australian "61" before zeros. Prefix a trunk zero after
+        # regional normalization so valid local 61... numbers survive that helper.
+        await super().request_sms("0" + local_mobile(mobile, self._cfg["tel"]), x)
+
+    async def login_sms(self, mobile: str, code: str) -> None:
+        await super().login_sms("0" + local_mobile(mobile, self._cfg["tel"]), code)
 
     @staticmethod
     def _ok(response: Any) -> bool:

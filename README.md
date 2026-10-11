@@ -38,6 +38,10 @@ Click the badge above for one-click add, or add it manually:
 
 You sign in with the mobile number on your GAC account:
 
+Use a local number, or prefix an international number with `+` or `00` and the
+country code for the selected region. Spaces, hyphens and parentheses are accepted.
+A local number beginning with `61` keeps those digits outside Australia too.
+
 1. Choose your region and enter your mobile number.
    For Thailand, select **TH** and enter either a local number (for example,
    `0812345678`) or an international number (for example, `+66812345678`).
