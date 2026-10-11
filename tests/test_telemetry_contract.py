@@ -1,4 +1,4 @@
-"""Expected telemetry shared by pinned and native library test runs."""
+"""Expected telemetry from the library bundled with the integration."""
 from copy import deepcopy
 
 import pytest

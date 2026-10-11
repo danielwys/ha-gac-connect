@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from gac_connect.models import VehicleStatus
+from ._vendor.gac_connect.models import VehicleStatus
 
 from homeassistant.components.cover import (
     CoverDeviceClass,

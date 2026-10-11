@@ -3,8 +3,8 @@ import json
 from unittest.mock import Mock
 
 import pytest
-from gac_connect.errors import AuthExpiredError, GacError
-from gac_connect.session import MemoryStore, Session
+from custom_components.gac_connect._vendor.gac_connect.errors import AuthExpiredError, GacError
+from custom_components.gac_connect._vendor.gac_connect.session import MemoryStore, Session
 from custom_components.gac_connect.api import GacClient
 
 
@@ -73,15 +73,15 @@ def test_confirmed_spent_refresh_stays_terminal():
 
 @pytest.fixture(autouse=True)
 def isolated_limiter(monkeypatch):
-    from gac_connect.limits import Limiter
+    from custom_components.gac_connect._vendor.gac_connect.limits import Limiter
     limiter = Limiter(min_gap=0, state_path=None)
-    monkeypatch.setattr("gac_connect.client.DEFAULT_LIMITER", limiter)
+    monkeypatch.setattr("custom_components.gac_connect._vendor.gac_connect.client.DEFAULT_LIMITER", limiter)
 
 
 @pytest.mark.parametrize("body", [None, [], True, 0, "maintenance", {"success": "false", "code": 503},
                                  {"success": 1}, {"success": False}, {}])
 def test_malformed_command_response_is_not_acceptance(body):
-    from gac_connect.errors import CommandError
+    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
     client, http, _ = make_client(Response(body=body), valid=True)
     async def run():
         await client.load()
@@ -103,7 +103,7 @@ def test_explicit_command_acceptance_is_preserved(body):
 
 @pytest.mark.parametrize("method", ["lock", "unlock", "charge_now"])
 def test_rejected_command_is_not_replayed_but_next_explicit_attempt_refreshes(method):
-    from gac_connect.errors import TokenInvalidError
+    from custom_components.gac_connect._vendor.gac_connect.errors import TokenInvalidError
     client, http, _ = make_client(Response(), valid=True)
     http.post.side_effect = [
         Response(body={"code": "SDK.GATE.0007"}),
@@ -125,7 +125,7 @@ def test_rejected_command_is_not_replayed_but_next_explicit_attempt_refreshes(me
 
 @pytest.mark.parametrize("method", ["lock", "unlock"])
 def test_rejection_does_not_invalidate_a_concurrently_rotated_token(method):
-    from gac_connect.errors import TokenInvalidError
+    from custom_components.gac_connect._vendor.gac_connect.errors import TokenInvalidError
     client, http, _ = make_client(Response(), valid=True)
     class RotatedResponse(Response):
         async def read(self):

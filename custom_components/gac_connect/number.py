@@ -12,7 +12,7 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from gac_connect.commands import FRIDGE_TEMP_RANGE
+from ._vendor.gac_connect.commands import FRIDGE_TEMP_RANGE
 
 from . import GacConfigEntry, fridge
 from .coordinator import GacCoordinator

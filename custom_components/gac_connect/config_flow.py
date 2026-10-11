@@ -10,12 +10,12 @@ import time
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from gac_connect.client import GacClient
-    from gac_connect.models import Vehicle
+    from ._vendor.gac_connect.client import GacClient
+    from ._vendor.gac_connect.models import Vehicle
 
 import aiohttp
 import voluptuous as vol
-from gac_connect.errors import GacError, LoginError, RateLimitedError
+from ._vendor.gac_connect.errors import GacError, LoginError, RateLimitedError
 
 from homeassistant.config_entries import (
     SOURCE_REAUTH,

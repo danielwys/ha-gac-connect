@@ -2,7 +2,7 @@ import asyncio
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from gac_connect.errors import CommandError
+from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
@@ -44,10 +44,10 @@ def test_unlock_failure_clears_pending_state_and_surfaces_error():
 @pytest.mark.parametrize("body,accepted", [({"code": 13001}, True), ({"success": "false"}, False), ({}, False)])
 @pytest.mark.parametrize("generic", [False, True])
 def test_unlock_uses_normal_transport_and_command_acceptance(body, accepted, generic):
-    from gac_connect.limits import Limiter
+    from custom_components.gac_connect._vendor.gac_connect.limits import Limiter
     from unittest.mock import patch
 
-    with patch("gac_connect.client.DEFAULT_LIMITER", Limiter(min_gap=0, state_path=None)):
+    with patch("custom_components.gac_connect._vendor.gac_connect.client.DEFAULT_LIMITER", Limiter(min_gap=0, state_path=None)):
         client, http, _ = make_client(Response(body=body), valid=True)
 
     async def run():

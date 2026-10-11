@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from gac_connect.models import VehicleStatus
+from ._vendor.gac_connect.models import VehicleStatus
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,

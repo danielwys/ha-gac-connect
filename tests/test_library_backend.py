@@ -1,31 +1,24 @@
-"""Run these contracts with both the pinned package and an installed candidate."""
+"""The integration must exercise only its bundled library's public API."""
 import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-import gac_connect
+from custom_components.gac_connect._vendor import gac_connect
 import pytest
-from gac_connect.client import GacClient as LibraryClient
-from gac_connect.const import PROFILE_MATERIAL, REGIONS
-from gac_connect.session import MemoryStore
+from custom_components.gac_connect._vendor.gac_connect.client import GacClient as LibraryClient
+from custom_components.gac_connect._vendor.gac_connect.const import PROFILE_MATERIAL, REGIONS
+from custom_components.gac_connect._vendor.gac_connect.session import MemoryStore
 
 from custom_components.gac_connect import api, helpers
 
 
-def test_expected_library_backend_is_actually_exercised(pytestconfig):
-    native = api.GacClient is LibraryClient
-    expected = pytestconfig.getoption("--library-backend")
-    if expected is not None:
-        assert native is (expected == "native"), "Wrong library installed or compatibility overrides mask the candidate"
-    if native:
-        for name in api.__all__:
-            assert getattr(api, name) is getattr(gac_connect, name), name
-        assert not any(name.startswith("custom_components.gac_connect._compat_b1") for name in sys.modules)
-    else:
-        assert not hasattr(gac_connect, "decode_status")
-        assert api.GacClient.__module__ == "custom_components.gac_connect._compat_b1.client"
-        assert api.PushClient.__module__ == "custom_components.gac_connect._compat_b1.push"
+def test_bundled_library_is_actually_exercised():
+    assert api.GacClient is LibraryClient
+    for name in api.__all__:
+        assert getattr(api, name) is getattr(gac_connect, name), name
+    assert api.GacClient.__module__ == "custom_components.gac_connect._vendor.gac_connect.client"
+    assert not any(name.startswith("custom_components.gac_connect._compat_b1") for name in sys.modules)
 
 
 @pytest.mark.parametrize("region", list(REGIONS))

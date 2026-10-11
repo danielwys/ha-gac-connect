@@ -6,11 +6,11 @@ import logging
 from datetime import time, timedelta
 from time import monotonic
 
-from gac_connect import GacError
-from gac_connect.client import GacClient
-from gac_connect.errors import AuthExpiredError, RateLimitedError
-from gac_connect.models import VehicleStatus
-from gac_connect.push import PushResult
+from ._vendor.gac_connect import GacError
+from ._vendor.gac_connect.client import GacClient
+from ._vendor.gac_connect.errors import AuthExpiredError, RateLimitedError
+from ._vendor.gac_connect.models import VehicleStatus
+from ._vendor.gac_connect.push import PushResult
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant

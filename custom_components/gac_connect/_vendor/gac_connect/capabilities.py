@@ -1,4 +1,3 @@
-# Generated from gac-connect/src/gac_connect/capabilities.py. Do not edit; run tools/sync_capabilities.py.
 """Passive equipment discovery from decoded reports and confirmed user actions.
 
 Missing reports never prove absence. Reading a state does not prove that a

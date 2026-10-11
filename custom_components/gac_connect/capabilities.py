@@ -7,7 +7,7 @@ import hashlib
 import logging
 from time import monotonic
 
-from gac_connect import command_session_id
+from ._vendor.gac_connect import command_session_id
 from homeassistant.helpers.storage import Store
 
 from .api import Capabilities, Support, doors_locked

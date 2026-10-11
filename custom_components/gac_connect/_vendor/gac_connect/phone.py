@@ -1,9 +1,9 @@
-"""Backport regional phone normalization for the pinned b1 client."""
+"""Normalize an explicit international prefix using the selected region."""
 from __future__ import annotations
 
 import re
 
-from gac_connect.errors import LoginError
+from .errors import LoginError
 
 
 def local_mobile(value: str, country_tel: str) -> str:

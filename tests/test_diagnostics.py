@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 
 from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics
+from custom_components.gac_connect._vendor import LIBRARY_COMMIT, LIBRARY_SOURCE, LIBRARY_VERSION
 
 
 def test_diagnostics_omit_private_urls_and_unreviewed_options():
@@ -22,4 +23,7 @@ def test_diagnostics_omit_private_urls_and_unreviewed_options():
     assert result["options"] == {"scan_interval": 300}
     assert result["status_raw"]["soc"] == 0.5
     assert result["status_updated_ms"] == 123
+    assert result["library"] == {
+        "source": LIBRARY_SOURCE, "version": LIBRARY_VERSION, "commit": LIBRARY_COMMIT, "bundled": True,
+    }
     assert entry.options["future_secret_option"] == "PRIVATE-FUTURE"

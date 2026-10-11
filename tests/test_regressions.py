@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from gac_connect.commands import CATALOG
-from gac_connect.models import ChargingMode, VehicleStatus
-from gac_connect.push import PushResult
+from custom_components.gac_connect._vendor.gac_connect.commands import CATALOG
+from custom_components.gac_connect._vendor.gac_connect.models import ChargingMode, VehicleStatus
+from custom_components.gac_connect._vendor.gac_connect.push import PushResult
 from homeassistant.components.climate import HVACMode
 
 from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
@@ -242,7 +242,7 @@ def test_bad_charge_mode_does_not_abort_all_telemetry(raw):
 
 
 def test_pause_does_not_create_recurring_charging_window():
-    from gac_connect.errors import CommandError
+    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
 
     c = coord(VehicleStatus())
     with pytest.raises(CommandError, match="03:00 to 03:30"):
@@ -460,7 +460,7 @@ def test_client_read_uses_corrected_decoder_and_existing_transport():
 
 @pytest.mark.parametrize("data", [[], "invalid", {"results": []}, {"results": [None]}])
 def test_malformed_report_envelope_fails_clearly(data):
-    from gac_connect.errors import AuthExpiredError, GacError
+    from custom_components.gac_connect._vendor.gac_connect.errors import AuthExpiredError, GacError
 
     c = coord(VehicleStatus())
     c.client._iov_read = AsyncMock(return_value={"data": data})
@@ -619,7 +619,7 @@ def test_reported_switch_expires_without_poll(scheduled):
 
 
 def test_generic_switch_restores_previous_result_correlation_after_failure():
-    from gac_connect.errors import CommandError
+    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
     from homeassistant.exceptions import HomeAssistantError
 
     from custom_components.gac_connect.switch import GacCommandSwitch
@@ -659,7 +659,7 @@ def service_registry(c):
 
 @pytest.mark.parametrize("surface", ["button", "switch", "service", "client"])
 def test_pause_is_blocked_at_every_entry_point(surface):
-    from gac_connect.errors import CommandError
+    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
     from homeassistant.exceptions import ServiceValidationError
 
     from custom_components.gac_connect.button import BUTTONS, GacButtonEntity

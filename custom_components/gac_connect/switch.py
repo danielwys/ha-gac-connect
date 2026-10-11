@@ -20,9 +20,9 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 
-from gac_connect import command_session_id
-from gac_connect.models import ChargingMode, VehicleStatus
-from gac_connect.push import PushResult
+from ._vendor.gac_connect import command_session_id
+from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
+from ._vendor.gac_connect.push import PushResult
 
 from . import GacConfigEntry, cabin, fridge
 from .api import PAUSE_UNSUPPORTED

@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from gac_connect.errors import GacError
+from ._vendor.gac_connect.errors import GacError
 
 from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
 from .capabilities import async_send

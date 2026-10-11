@@ -15,8 +15,13 @@ odometer, charging, doors and windows, tyres, and charge control.
 > affiliates. GAC and AION are third-party trademarks of their respective
 > owners. Use it with a vehicle you own, on your own account.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wattferry&repository=ha-gac-connect&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=leecaochang&repository=ha-gac-connect&category=integration)
 
+This fork ships a tested copy of its maintained GAC library with the integration.
+It can release fixes independently of the original projects. Upstream remains
+[wattferry/ha-gac-connect](https://github.com/wattferry/ha-gac-connect) and
+[wattferry/gac-connect](https://github.com/wattferry/gac-connect); the changes here
+do not imply upstream endorsement or adoption.
 
 Supports **Australia and New Zealand**. Other regions, including Thailand, appear
 in the list but are best-effort.
@@ -30,9 +35,22 @@ Click the badge above for one-click add, or add it manually:
 
 
 1. HACS → three-dot menu → **Custom repositories**.
-2. Add this repository, category **Integration**.
+2. Add `https://github.com/leecaochang/ha-gac-connect`, category **Integration**.
 3. Install **GAC Connect (unofficial)**, then restart Home Assistant.
 4. **Settings → Devices & Services → Add Integration → GAC Connect.**
+
+The GAC library is included in the HACS download. This works on Home Assistant OS
+without copying a separate library, installing a wheel, or choosing a library in
+setup. Home Assistant still installs the declared MQTT dependency when needed;
+its HTTP and encryption dependencies come with Home Assistant. Installing the
+integration does not make the GAC cloud service available offline.
+
+Upgrading this integration updates its bundled library at the same time. Restart
+Home Assistant after installing or changing versions. Existing accounts and
+options are retained; no new sign-in is required solely because of vendoring.
+Selecting an earlier integration release also selects that release's library
+arrangement, which may install an external package for older releases. Make a
+Home Assistant backup before downgrading across changes to stored data.
 
 ## Set-up
 
@@ -289,8 +307,8 @@ day, since any pause recorded in it is unknown; deleting
   after a successful write; removing the integration removes its credential file.
 
 - Sign-in needs a human (a slide puzzle and an SMS code); there is no headless login.
-- Door unlock does not require a PIN. The pinned b1 library incorrectly blocks
-  it, so the integration backports the corrected public unlock method.
+- Door unlock does not require a PIN. The bundled library includes the corrected
+  public unlock method; enable unlocking in the integration options to use it.
   Remote power and charger-release remain blocked; no PIN is stored.
 - Using the official app and this integration on the same account at the same time
   can occasionally sign one of them out.
@@ -319,7 +337,9 @@ Thanks to their authors for showing what a good community integration looks like
   action are disabled until a true stop command is verified.
   The UT preset removes all eight tyre readings. A new Auto detect profile learns
   equipment from reports and confirmed user actions, with manual overrides and
-  persistent evidence; the library requirement remains `0.4.0b1`.
+  persistent evidence. This fork now bundles its maintained library snapshot,
+  removes the external `gac-connect` requirement and b1 compatibility copies, and
+  reports the exact library source revision in diagnostics.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was
@@ -383,55 +403,88 @@ Thanks to their authors for showing what a good community integration looks like
 
 The offline regression suite uses mocked vehicle responses and sends no vehicle
 commands. With Python 3.14, install `requirements-dev.txt`, then run
-`python -m pytest` and `ruff check .`. The suite is also checked against Home
-Assistant 2025.2.0 with Python 3.13 and 2026.10.0 with Python 3.14. Compatibility fixes for the pinned library
-live in the integration's `_compat_b1/` directory; review their tests before
-changing the `gac-connect` requirement.
+`python -m pytest` and `ruff check custom_components tests tools`. The suite is
+also checked against Home Assistant 2025.2.0 with Python 3.13 and 2026.10.0 with
+Python 3.14. Node 22 is needed for the embedded CAPTCHA script's race and rendering
+tests.
 
 The validation workflow runs tests and static checks on those three HA versions
-with the exact manifest dependency. Node 22 runs the embedded CAPTCHA script's
-race and rendering tests. A manual workflow run can specify a `library_ref` from
-the same owner's `gac-connect` repository to build and test an upgrade candidate's
-wheel without editing the production pin. Pinned tests always run first; candidate
-tests require the native library path and fail if the backports are selected.
-The candidate check also verifies that the bundled capability detector matches
-the canonical library source.
-This is an offline compatibility matrix, not evidence
-of successful vehicle commands or of support for every intervening/future HA
-release. Repository administrators must make these jobs required checks in their
-branch protection settings; adding the workflow alone does not enforce that.
+with the exact manifest requirements and bundled source. It checks the recorded
+file hashes and exercises a standalone copy of the integration without an
+external GAC library, and with an incompatible external GAC package present.
+Both regional material bundles are tested after relocation. This is an offline
+compatibility matrix, not evidence of successful vehicle commands or of support
+for every intervening/future HA release. Repository administrators must make these
+jobs required checks in their branch protection settings; adding the workflow
+alone does not enforce that.
 
-HACS distributes the integration files from GitHub. Home Assistant installs
-`gac-connect==0.4.0b1` through its configured package installer (normally PyPI),
-then imports the installed package. The sibling `gac-connect` checkout is an
-independent library project and is not loaded automatically. Its local fixes
-require a separately published library release before ordinary installations can
-use them.
+### Where the library comes from
 
-`custom_components/gac_connect/api.py` is the integration's behavior boundary.
-When the installed library exposes the consolidated public `decode_status` API,
-it uses the library's clients, telemetry, lock decoding, phone normalization and
-schedule helpers directly. It does not subclass or override the updated clients.
-While the manifest remains pinned to b1, isolated backports in `_compat_b1/`
-provide those behaviors. The entity, service, configuration and storage lifecycle
-code remains in Home Assistant. The unlock option retains its original stored key
-so existing preferences survive the change.
+The canonical library source is [this fork's separate library repository](https://github.com/leecaochang/gac-connect).
+An unchanged snapshot of its runtime package lives under
+`custom_components/gac_connect/_vendor/gac_connect/`. All integration imports use
+that private namespace. The sibling checkout and any globally installed
+`gac_connect` package are not used at runtime; Python's global import paths and
+module names are not patched. No library source selector is required.
 
-Capability rules live in the library's `src/gac_connect/capabilities.py`. For the
-unchanged b1 pin, `_compat_b1/capabilities.py` is a generated copy, not a separate
-implementation. Regenerate it after changing the library with
-`python tools/sync_capabilities.py --source ../gac-connect/src/gac_connect/capabilities.py`;
-add `--check` to verify it without writing. HA owns the profile options, entity
-mapping, persistence and correlation of user-command results.
+The snapshot includes the library license, typing marker and regional material
+files. The standalone CLI is excluded, so its optional Typer and Rich packages
+are not installed. This is **not a zero-dependency integration**: the library
+still uses `aiohttp`, `cryptography` and `aiomqtt`. Home Assistant supplies the first
+two; `manifest.json` pins the additional MQTT requirement. Tests verify that the
+installed versions meet the snapshot's recorded requirements.
 
-Run the HA regression suite with `python -m pytest --library-backend=pinned`
-for the declared dependency, or `--library-backend=native` after installing a
-consolidated library candidate into an isolated test environment. The latter
-fails if compatibility overrides are still selected. Both modes use the same
-behavior tests; changing only the installed library must not hide a regression.
-After publishing and validating a corrected artifact, the remaining release
-steps are to update both dependency pins and delete `_compat_b1/` and its fallback.
+`_vendor/provenance.json` records the source repository, full Git commit, library
+version, dependencies, exclusions and file hashes. Diagnostics include the source,
+version and commit too. The version label alone is insufficient: this fork's
+patched `0.4.0b5` snapshot is identified by its commit and is not the PyPI release
+with the same version label.
+
+### Updating the bundled library
+
+1. Make and test behavior changes in the **library repository**, then commit them
+   there. Do not edit the generated copy in the integration.
+2. From the integration repository, bundle the committed library revision:
+
+   ```sh
+   python tools/vendor_library.py --source ../gac-connect
+   python tools/vendor_library.py --check --source ../gac-connect
+   python -m pytest
+   ruff check custom_components tests tools
+   ```
+
+   Use `--ref COMMIT` to choose a specific revision. Updates read Git objects and
+   therefore exclude uncommitted changes. Verification with `--source` compares
+   the recorded revision even if the library branch has advanced; add `--ref HEAD`
+   to compare the bundle with its current tip. The command refuses to overwrite
+   modified or unexpected files in the bundle; review and preserve them first.
+3. Review the generated diff and dependency requirements. Commit the snapshot
+   update separately from behavior changes, then release the tested integration
+   and snapshot together. Before publishing, make the recorded library commit
+   available in the source repository so others can reproduce it.
+
+`python tools/vendor_library.py --check` verifies the shipped hashes without the
+source checkout, Git, or network access. Hashes detect accidental drift; comparing
+with the recorded source commit also verifies provenance. CI always tests the
+committed bundle and does not download an arbitrary candidate library.
+
+Capability detection, clients, telemetry decoding and command behavior remain
+library responsibilities. Home Assistant owns entities, services, configuration,
+storage and correlation of command results. The old b1 backports have been
+removed, so there is one runtime implementation of library behavior.
+
+### Contributing upstream
+
+Offer library fixes and their tests to the original library project independently
+of this integration's packaging. Offer integration fixes on focused branches
+based on upstream, excluding vendoring changes. Separate commits on one branch
+do not automatically produce separate pull requests. Upstream can keep using a
+published library while this fork vendors its tested snapshot; accepting bug
+fixes does not require adopting vendoring. Maintainers of this fork must review
+upstream bug and security fixes and deliberately refresh the snapshot.
 
 ## License
 
-MIT. Built on the [`gac-connect`](https://pypi.org/project/gac-connect/) library.
+MIT. Includes a maintained fork of [wattferry/gac-connect](https://github.com/wattferry/gac-connect).
+The bundled library's [MIT license and copyright notice](custom_components/gac_connect/_vendor/gac_connect/LICENSE)
+are preserved with its source.

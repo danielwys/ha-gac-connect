@@ -13,9 +13,9 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_call_later
 
-from gac_connect import GacError, command_session_id
-from gac_connect.commands import validate_climate
-from gac_connect.push import PushResult
+from ._vendor.gac_connect import GacError, command_session_id
+from ._vendor.gac_connect.commands import validate_climate
+from ._vendor.gac_connect.push import PushResult
 
 from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES, SIGNAL_COMMAND_RESULT
 from .capabilities import async_send

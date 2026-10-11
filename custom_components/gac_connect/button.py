@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from gac_connect.client import GacClient
+from ._vendor.gac_connect.client import GacClient
 
 from . import GacConfigEntry
 from .api import PAUSE_UNSUPPORTED

@@ -5,8 +5,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from gac_connect.errors import GacError
-from gac_connect.session import Session
+from ._vendor.gac_connect.errors import GacError
+from ._vendor.gac_connect.session import Session
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.util.file import WriteError, write_utf8_file_atomic

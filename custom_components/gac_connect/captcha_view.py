@@ -15,7 +15,7 @@ from typing import Any
 
 import aiohttp
 from aiohttp import web
-from gac_connect.errors import CaptchaError, GacError, LoginError, RateLimitedError
+from ._vendor.gac_connect.errors import CaptchaError, GacError, LoginError, RateLimitedError
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
