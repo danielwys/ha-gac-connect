@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -85,7 +86,41 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self._followup_blocked = False
         self._followup_closed = False
         self._fetch_lock = asyncio.Lock()   # one status request in flight, whatever triggered it
+        self.last_refresh_success = None
+        self.last_refresh_attempt = None
+        self._refresh_outcome = "waiting"
+        self._freshness_timer = async_track_time_interval(hass, self._freshness_tick, timedelta(minutes=1))
         entry.async_on_unload(self._cancel_result_refresh)
+
+    @callback
+    def _freshness_tick(self, _now) -> None:
+        """Age the displayed report without making a request to the car."""
+        self.async_update_listeners()
+
+    @property
+    def report_age(self) -> float | None:
+        if self.data is None or self.data.updated_ms is None:
+            return None
+        return (dt_util.utcnow().timestamp() - self.data.updated_ms / 1000)
+
+    @property
+    def stale_after(self) -> int:
+        return max(600, int(self.update_interval.total_seconds()) * 2)
+
+    @property
+    def freshness(self) -> str:
+        age = self.report_age
+        if age is None:
+            return "not_reported"
+        if age < -60:
+            return "clock_mismatch"
+        return "stale" if age > self.stale_after else "recent"
+
+    @property
+    def polling_state(self) -> str:
+        if self._refresh_outcome in ("error", "auth_required", "rate_limited"):
+            return self._refresh_outcome
+        return "quiet_hours" if self._in_quiet_hours() else self._refresh_outcome
 
     def start_push(self) -> None:
         self.config_entry.async_create_background_task(
@@ -157,6 +192,9 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
     @callback
     def _cancel_result_refresh(self) -> None:
         self._followup_closed = True
+        if self._freshness_timer is not None:
+            self._freshness_timer()
+            self._freshness_timer = None
         self._refresh_deadlines.clear()
         if self._result_refresh_task is not None:
             self._result_refresh_task.cancel()
@@ -190,15 +228,20 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 return self.data
             self._force_refresh = False
             self._followup_blocked = False
+            self.last_refresh_attempt = dt_util.utcnow()
             try:
                 status = await self.client.get_status(self.vin)
+                self.last_refresh_success = dt_util.utcnow()
+                self._refresh_outcome = "ok"
                 if manager := getattr(self, "capabilities", None):
                     manager.observe(status)
                 return status
             except AuthExpiredError as err:
+                self._refresh_outcome = "auth_required"
                 self._followup_blocked = True
                 raise ConfigEntryAuthFailed(str(err)) from err
             except RateLimitedError as err:
+                self._refresh_outcome = "rate_limited"
                 self._followup_blocked = True
                 # Held back by the request limits (or the service asked us to slow
                 # down): keep showing the last reading rather than going unavailable.
@@ -207,6 +250,10 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                     return self.data
                 raise UpdateFailed(str(err)) from err
             except GacError as err:
+                self._refresh_outcome = "error"
                 raise UpdateFailed(str(err)) from err
+            except Exception:
+                self._refresh_outcome = "error"
+                raise
             finally:
                 self._last_status_refresh = monotonic()

@@ -40,6 +40,25 @@ from .entity_filter import add_configured_entities
 
 
 @dataclass(frozen=True, kw_only=True)
+class GacActivityDescription(SensorEntityDescription):
+    value: Callable
+
+
+ACTIVITY_SENSORS = (
+    GacActivityDescription(key="data_freshness", translation_key="data_freshness",
+                           device_class=SensorDeviceClass.ENUM,
+                           options=["recent", "stale", "not_reported", "clock_mismatch"],
+                           value=lambda c: c.freshness),
+    GacActivityDescription(key="last_refresh", translation_key="last_refresh",
+                           device_class=SensorDeviceClass.TIMESTAMP, value=lambda c: c.last_refresh_success),
+    GacActivityDescription(key="polling_status", translation_key="polling_status",
+                           device_class=SensorDeviceClass.ENUM,
+                           options=["waiting", "ok", "quiet_hours", "rate_limited", "error", "auth_required"],
+                           value=lambda c: c.polling_state),
+)
+
+
+@dataclass(frozen=True, kw_only=True)
 class GacSensor(SensorEntityDescription):
     value: Callable[[VehicleStatus], str | float | int | datetime | None]
 
@@ -126,6 +145,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: GacConfigEntry, add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data.coordinator
+    # Integration health is available for every profile, including before any
+    # optional equipment has been detected or when cloud updates fail.
+    add_entities(GacActivitySensor(coordinator, description) for description in ACTIVITY_SENSORS)
     add_configured_entities(
         entry, add_entities, "sensor",
         (GacSensorEntity(coordinator, d) for d in (*SENSORS, *_tyre_sensors())),
@@ -146,3 +168,29 @@ class GacSensorEntity(GacEntity, SensorEntity):
         if self.status is None:
             return None
         return self.entity_description.value(self.status)
+
+
+class GacActivitySensor(GacEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, description: GacActivityDescription) -> None:
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+
+    @property
+    def available(self) -> bool:
+        return True  # A failed cloud request must not hide the explanation.
+
+    @property
+    def native_value(self):
+        return self.entity_description.value(self.coordinator)
+
+    @property
+    def extra_state_attributes(self):
+        if self.entity_description.key == "data_freshness":
+            age = self.coordinator.report_age
+            return {"report_age_seconds": round(age) if age is not None else None,
+                    "stale_after_seconds": self.coordinator.stale_after}
+        if self.entity_description.key == "polling_status":
+            return {"last_attempt": self.coordinator.last_refresh_attempt}
+        return None

@@ -9,7 +9,7 @@
           "mobile": "Mobile number"
         },
         "data_description": {
-          "mobile": "For Thailand, enter 08… / 09… / 06… or +66…; both formats are accepted."
+          "mobile": "For Thailand, enter 08\u2026 / 09\u2026 / 06\u2026 or +66\u2026; both formats are accepted."
         }
       },
       "sms": {
@@ -99,7 +99,7 @@
     },
     "error": {
       "conflicting_entity_choices": "An entity cannot be in both Always show and Omit. Remove it from one list.",
-      "invalid_picture": "Enter an image URL (https://…) or a path that starts with /, for example /local/my-car.png.",
+      "invalid_picture": "Enter an image URL (https://\u2026) or a path that starts with /, for example /local/my-car.png.",
       "invalid_quiet_time": "Enter a time from 00:00 to 23:59 in HH:MM format.",
       "quiet_pair_required": "Set both quiet-hour times, or clear both to disable quiet hours.",
       "quiet_times_equal": "Start and end must differ. Clear both to disable quiet hours."
@@ -179,6 +179,29 @@
       },
       "fridge_time_left": {
         "name": "Fridge time left"
+      },
+      "data_freshness": {
+        "name": "Data freshness",
+        "state": {
+          "recent": "Recent report",
+          "stale": "Old report",
+          "not_reported": "Report time unknown",
+          "clock_mismatch": "Report clock ahead"
+        }
+      },
+      "last_refresh": {
+        "name": "Last cloud refresh"
+      },
+      "polling_status": {
+        "name": "Polling status",
+        "state": {
+          "waiting": "Waiting for first refresh",
+          "ok": "Polling normally",
+          "quiet_hours": "Quiet hours",
+          "rate_limited": "Waiting for request limit",
+          "error": "Refresh failed",
+          "auth_required": "Sign in again"
+        }
       }
     },
     "binary_sensor": {

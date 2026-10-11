@@ -328,6 +328,23 @@ to a vehicle safely. Remove those explicitly from Home Assistant's **Statistics*
 page; this integration never guesses ownership from a sensor name or VIN prefix.
 Home Assistant otherwise [retains statistics after sensor deletion](https://www.home-assistant.io/docs/configuration/long-term-statistics/#good-to-know).
 
+## Vehicle data freshness
+
+The device page and example dashboard show **Data freshness**, **Last cloud
+refresh** and **Polling status**. A successful cloud refresh means GAC returned
+a response; it may still contain an old vehicle report. **Last report** remains
+the timestamp supplied by GAC, which does not guarantee every individual reading
+was updated then.
+
+A report is marked old after the greater of ten minutes or two polling intervals.
+This is a display threshold, not a guarantee that a recent report reflects the
+car right now. Missing report timestamps remain unknown; timestamps more than a
+minute ahead are flagged as a clock mismatch. The display ages once a minute
+without contacting GAC, including during quiet hours. Quiet hours, refresh
+failures, sign-in problems and request limits are shown separately. Cached or
+failed requests never advance **Last cloud refresh**. These diagnostic sensors
+remain visible when the vehicle sensors become unavailable.
+
 ## Request limits
 
 The integration is built to go easy on GAC's service. Regular background polls

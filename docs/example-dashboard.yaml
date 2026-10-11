@@ -76,6 +76,25 @@ views:
       - type: grid
         cards:
           - type: heading
+            heading: Vehicle updates
+            icon: mdi:update
+          - type: tile
+            entity: sensor.aion_v_data_freshness
+            name: Vehicle report
+          - type: tile
+            entity: sensor.aion_v_last_cloud_refresh
+            name: Last cloud refresh
+          - type: tile
+            entity: sensor.aion_v_polling_status
+            name: Polling
+          - type: tile
+            entity: button.aion_v_refresh
+            name: Refresh
+            tap_action: { action: toggle }
+
+      - type: grid
+        cards:
+          - type: heading
             heading: Trips & consumption
             icon: mdi:road-variant
             # GAC's API does not provide these. Home Assistant counts the

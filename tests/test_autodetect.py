@@ -108,7 +108,8 @@ def test_live_platform_discovery_adds_only_observed_entities_once_without_comman
                 module = importlib.import_module(f"custom_components.gac_connect.{platform}")
                 await module.async_setup_entry(hass, entry, lambda entities, p=platform: added.extend(
                     (p, entity.unique_id) for entity in entities))
-            assert added == [("button", "VIN_refresh")]
+            health = {("sensor", f"VIN_{key}") for key in ("data_freshness", "last_refresh", "polling_status")}
+            assert set(added) == health | {("button", "VIN_refresh")}
 
             coordinator.client.get_status.return_value = decode_status({
                 "drivingOverviewAccessors": [{"remainElectricityPercentage": 0}],
@@ -119,14 +120,14 @@ def test_live_platform_discovery_adds_only_observed_entities_once_without_comman
                 "refrigeratorAccessors": [{"workingMode": 3}],
             })
             await coordinator.async_refresh()
-            assert set(added) == {
+            assert set(added) == health | {
                 ("button", "VIN_refresh"), ("sensor", "VIN_soc"), ("cover", "VIN_sunroof"),
                 ("switch", "VIN_steering_heat"), ("sensor", "VIN_tyre_3_pressure"),
                 ("switch", "VIN_fridge"), ("select", "VIN_fridge_mode"), ("number", "VIN_fridge_temperature"),
             }
             coordinator.client.get_status.return_value = decode_status({})
             await coordinator.async_refresh()
-            assert len(added) == 8  # a sleeping/missing report neither removes nor duplicates entities
+            assert len(added) == 8 + len(health)  # a sleeping/missing report neither removes nor duplicates entities
             coordinator.client.command.assert_not_called()
             coordinator.client.unlock.assert_not_called()
             coordinator.client.mqtt_info.assert_not_called()
