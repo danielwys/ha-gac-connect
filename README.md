@@ -218,6 +218,9 @@ day, since any pause recorded in it is unknown; deleting
 
 - Temporary server failures during token refresh preserve the saved session.
   An expired or explicitly rejected refresh token still requires reauthentication.
+- Sign-in reports connection failures as retryable form errors. If the optional
+  account-token rotation fails after vehicle sign-in, that sign-in remains usable;
+  a warning notes that a later official-app sign-in may still end the session.
 - Credentials use a private, atomically written per-entry file in Home Assistant's
   `.storage` directory. Existing config-entry credentials migrate automatically
   after a successful write; removing the integration removes its credential file.

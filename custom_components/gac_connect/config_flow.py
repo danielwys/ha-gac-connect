@@ -1,7 +1,7 @@
 """Config flow: region → mobile → slide puzzle → SMS code → vehicle.
 
 The puzzle is an external step (see captcha_view). Reauth re-runs sign-in;
-reconfigure changes region/vehicle; options tune polling and privacy.
+options tune polling and privacy.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from gac_connect.client import GacClient
     from gac_connect.models import Vehicle
 
+import aiohttp
 import voluptuous as vol
 from gac_connect.errors import GacError, LoginError, RateLimitedError
 
@@ -104,7 +105,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                     await self._client.start_captcha()
                 except RateLimitedError:
                     errors["base"] = "rate_limited"
-                except GacError:
+                except (GacError, aiohttp.ClientError, TimeoutError):
                     errors["base"] = "cannot_connect"
                 else:
                     return await self.async_step_captcha()
@@ -150,7 +151,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_code"
             except RateLimitedError:
                 errors["base"] = "rate_limited"
-            except GacError:
+            except (GacError, aiohttp.ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
             if not errors:
                 return await self.async_step_vehicle()
@@ -164,7 +165,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             vehicles = await self._client.list_vehicles()
         except RateLimitedError:
             return self.async_abort(reason="rate_limited")
-        except GacError:
+        except (GacError, aiohttp.ClientError, TimeoutError):
             return self.async_abort(reason="cannot_connect")
         if not vehicles:
             return self.async_abort(reason="no_vehicles")
@@ -177,7 +178,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="wrong_vehicle")
             try:
                 await ConfigEntryStore(self.hass, entry).save(self._client.session)
-            except GacError:
+            except (GacError, aiohttp.ClientError, TimeoutError):
                 return self.async_abort(reason="cannot_connect")
             return self.async_update_reload_and_abort(entry, data_updates={CONF_MOBILE: self._mobile})
 
@@ -259,7 +260,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             await self._client.start_captcha()
         except RateLimitedError:
             errors["base"] = "rate_limited"
-        except GacError:
+        except (GacError, aiohttp.ClientError, TimeoutError):
             errors["base"] = "cannot_connect"
         if errors:
             return self.async_show_form(step_id="reauth_confirm", errors=errors)

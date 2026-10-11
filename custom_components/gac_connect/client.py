@@ -8,6 +8,7 @@ tests must be checked when updating the pinned dependency.
 from __future__ import annotations
 
 import re
+import logging
 import json
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
@@ -30,6 +31,7 @@ PAUSE_UNSUPPORTED = (
     "charging daily from 03:00 to 03:30, so Pause and Off are disabled. "
     "Use Set charge window to choose an explicit charging schedule."
 )
+_LOGGER = logging.getLogger(__name__)
 _CLOCK = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]\Z")
 
 
@@ -149,6 +151,28 @@ class GacClient(LibraryClient):
                 # b1 otherwise treats any error body as permanent authentication loss.
                 raise GacError("refresh response has no usable token; credentials retained")
         return response
+
+    @staticmethod
+    def _ok(response: Any) -> bool:
+        return isinstance(response, dict) and response.get("success") is True
+
+    async def _rotate_account_token(self) -> None:
+        """A failed optional rotation must not discard a completed sign-in."""
+        if not (self._session.main_token and self._session.main_refresh_token):
+            return
+        try:
+            response = await self._main_call(
+                "/iam/api/user/token/refresh/sec", {"refreshToken": self._session.main_refresh_token},
+                authorization=self._session.main_token,
+            )
+        except (GacError, aiohttp.ClientError, TimeoutError):
+            _LOGGER.warning("Account rotation failed; sign-in is usable but later app sign-in may end it")
+            return
+        data = self._data(response)
+        if self._ok(response) and isinstance(data, dict) and data.get("token"):
+            self._session.main_token = data["token"]
+            self._session.main_refresh_token = data.get("refreshToken") or self._session.main_refresh_token
+            await self._persist()
 
     async def get_status(self, vin: str) -> VehicleStatus:
         response = await self._iov_read(CATALOG["status"].path, {"vin": vin}, sensitive={"vin": vin})
