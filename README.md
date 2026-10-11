@@ -209,6 +209,9 @@ URL or a `/local/` path), and how long an A/C run lasts. For an existing Aion UT
 entry, fridge, steering wheel heat and sunroof controls are omitted automatically,
 including when the entry was created before vehicle profiles were introduced.
 The poll interval is at least 60 seconds (default 5 minutes).
+Quiet hours use Home Assistant's configured time zone. Enter two different times
+in `HH:MM` format; windows can cross midnight. Clear both fields to disable quiet
+hours. Manual refreshes and command-result refreshes still run during that window.
 
 ## Request limits
 

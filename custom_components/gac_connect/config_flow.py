@@ -317,8 +317,19 @@ class GacOptionsFlow(OptionsFlow):
             picture = (user_input.get(CONF_PICTURE) or "").strip()
             if picture and not (picture.startswith("/") or picture.lower().startswith(("http://", "https://"))):
                 errors[CONF_PICTURE] = "invalid_picture"
-            else:
-                return self.async_create_entry(data={**user_input, CONF_PICTURE: picture})
+            quiet = {}
+            for key in (CONF_QUIET_START, CONF_QUIET_END):
+                value = (user_input.get(key) or "").strip()
+                quiet[key] = value
+                if value and re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value) is None:
+                    errors[key] = "invalid_quiet_time"
+            start, end = quiet[CONF_QUIET_START], quiet[CONF_QUIET_END]
+            if bool(start) != bool(end):
+                errors[CONF_QUIET_END if start else CONF_QUIET_START] = "quiet_pair_required"
+            elif start and start == end and not errors:
+                errors[CONF_QUIET_END] = "quiet_times_equal"
+            if not errors:
+                return self.async_create_entry(data={**user_input, **quiet, CONF_PICTURE: picture})
         opts = {**self.config_entry.options, **(user_input or {})}
         forced = model_omissions(self.config_entry)
         omit_options = {key: label for key, label in OMIT_OPTIONS.items() if key not in forced}

@@ -89,7 +89,10 @@
       }
     },
     "error": {
-      "invalid_picture": "Enter an image URL (https://…) or a path that starts with /, for example /local/my-car.png."
+      "invalid_picture": "Enter an image URL (https://…) or a path that starts with /, for example /local/my-car.png.",
+      "invalid_quiet_time": "Enter a time from 00:00 to 23:59 in HH:MM format.",
+      "quiet_pair_required": "Set both quiet-hour times, or clear both to disable quiet hours.",
+      "quiet_times_equal": "Start and end must differ. Clear both to disable quiet hours."
     }
   },
   "entity": {
