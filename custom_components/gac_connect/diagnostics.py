@@ -45,6 +45,7 @@ async def async_get_config_entry_diagnostics(
         "options": {key: value for key, value in entry.options.items() if key in SAFE_OPTIONS},
         "status_updated_ms": status.updated_ms if status else None,
         "status_online": status.online if status else None,
+        "commands": coordinator.commands.attributes() if getattr(coordinator, "commands", None) else None,
         "status_raw": async_redact_data(raw, TO_REDACT),
         "capabilities": coordinator.capabilities.diagnostics() if getattr(coordinator, "capabilities", None) else None,
     }

@@ -16,7 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_MODEL, DOMAIN, SIGNAL_COMMAND_RESULT
 from .coordinator import GacCoordinator
-from .capabilities import async_send
+from .command_tracking import async_send
 
 
 class GacEntity(CoordinatorEntity[GacCoordinator]):

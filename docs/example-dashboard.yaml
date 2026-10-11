@@ -85,6 +85,9 @@ views:
             entity: sensor.aion_v_last_cloud_refresh
             name: Last cloud refresh
           - type: tile
+            entity: sensor.aion_v_last_command
+            name: Last command
+          - type: tile
             entity: sensor.aion_v_polling_status
             name: Polling
           - type: tile

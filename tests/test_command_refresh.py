@@ -7,7 +7,7 @@ import pytest
 
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
-from custom_components.gac_connect.capabilities import async_send
+from custom_components.gac_connect.command_tracking import async_send
 from custom_components.gac_connect._vendor.gac_connect.errors import GacError, RateLimitedError
 from test_autodetect import vehicle
 from test_regressions import ACCEPTED

@@ -202,6 +202,22 @@
           "error": "Refresh failed",
           "auth_required": "Sign in again"
         }
+      },
+      "last_command": {
+        "name": "Last command",
+        "state": {
+          "idle": "No command this session",
+          "sending": "Sending request",
+          "pending": "Waiting for vehicle",
+          "awaiting_report": "Success reported; waiting for state",
+          "confirmed": "Requested state reported",
+          "reported_success": "Vehicle reported success",
+          "rejected": "Vehicle rejected request",
+          "failed": "Request failed",
+          "timed_out": "Not confirmed in time",
+          "cancelled": "Request cancelled",
+          "superseded": "Replaced by a newer request"
+        }
       }
     },
     "binary_sensor": {

@@ -328,6 +328,23 @@ to a vehicle safely. Remove those explicitly from Home Assistant's **Statistics*
 page; this integration never guesses ownership from a sensor name or VIN prefix.
 Home Assistant otherwise [retains statistics after sensor deletion](https://www.home-assistant.io/docs/configuration/long-term-statistics/#good-to-know).
 
+## Command progress
+
+**Last command** on the device page and example dashboard tracks controls and
+advanced actions together. Its details show the command, request time, any other
+pending commands, and the five most recent outcomes in this HA session. A
+request can be sending, accepted and waiting, rejected, failed, cancelled, or
+unconfirmed after three minutes. A successful push result is identified
+separately from a new vehicle report showing the requested state. Unsupported
+readbacks (such as the horn) can show a vehicle-reported success, never a
+fabricated sensor reading. Changes made outside HA still need a status refresh.
+
+Results must match this vehicle and the exact command session. Early results
+are held until the request returns its session ID. A newer accepted command for
+the same feature replaces the earlier pending request; a failed replacement
+does not. Command details omit raw responses, session IDs and parameters, and
+are cleared on reload. Equipment learning uses this same result correlation.
+
 ## Vehicle data freshness
 
 The device page and example dashboard show **Data freshness**, **Last cloud

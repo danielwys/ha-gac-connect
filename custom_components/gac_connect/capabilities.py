@@ -1,13 +1,10 @@
 """Persist passive evidence and correlate outcomes of user-requested commands."""
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import replace
 import hashlib
 import logging
-from time import monotonic
 
-from ._vendor.gac_connect import command_session_id
 from homeassistant.helpers.storage import Store
 
 from .api import Capabilities, Support, doors_locked
@@ -17,7 +14,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-RESULT_SECONDS = 180
 
 # HA entity names map to library evidence. Hardware readings may reveal a
 # control, but its individual commands remain unconfirmed until a real result.
@@ -58,9 +54,6 @@ class CapabilityManager:
         identity = f"{entry.data.get(CONF_REGION)}:{entry.data[CONF_VIN]}"
         self._vehicle_key = hashlib.sha256(identity.encode()).hexdigest()
         self._dirty = False
-        self._pending: dict[str, tuple[str, float]] = {}
-        self._early: deque = deque(maxlen=32)
-        self._inflight = 0
 
     async def async_load(self) -> None:
         try:
@@ -102,51 +95,14 @@ class CapabilityManager:
         feature = ENTITY_FEATURES.get(entity_key)
         return feature is not None and self.detector.feature(feature).state is Support.SUPPORTED
 
-    def _prune(self) -> None:
-        now = monotonic()
-        self._pending = {sid: item for sid, item in self._pending.items() if now - item[1] <= RESULT_SECONDS}
-        while len(self._pending) > 64:
-            self._pending.pop(next(iter(self._pending)))
-        while self._early and now - self._early[0][0] > RESULT_SECONDS:
-            self._early.popleft()
-
-    def result(self, result) -> bool:
-        self._prune()
-        if result.vin != self.entry.data[CONF_VIN] or not result.session_id or result.ok is None:
-            return False
-        pending = self._pending.pop(result.session_id, None)
-        if pending is None:
-            if self._inflight:
-                self._early.append((monotonic(), result))
-            return False
-        if result.ok is True and self.detector.confirm_command(pending[0]):
+    def confirm_command(self, command: str) -> bool:
+        """Called only after the shared tracker correlates a successful result."""
+        if self.detector.confirm_command(command):
             self._changed()
             return True
-        return False  # a generic failure does not prove the equipment is absent
-
-    async def send(self, command: str, request):
-        """Only called for an explicit user action; acceptance is not success."""
-        self._prune()
-        started = monotonic()
-        self._inflight += 1
-        try:
-            response = await request
-            if sid := command_session_id(response):
-                self._pending[sid] = (command, started)
-                self._prune()
-                for received, result in tuple(self._early):
-                    if received >= started and result.session_id == sid:
-                        self.result(result)
-                        break
-            return response
-        finally:
-            self._inflight -= 1
-            if not self._inflight:
-                self._early.clear()
+        return False
 
     async def async_close(self) -> None:
-        self._pending.clear()
-        self._early.clear()
         if self._dirty:
             try:
                 await self._store.async_save(self._snapshot())
@@ -161,14 +117,3 @@ class CapabilityManager:
             "enable" if key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()) else "automatic")}
             for key in ENTITY_FEATURES}
         return data
-
-
-async def async_send(coordinator, command: str, request):
-    manager = getattr(coordinator, "capabilities", None)
-    if manager is None:
-        response = await request
-    else:
-        response = await manager.send(command, request)
-        coordinator.async_update_listeners()  # also handles a result that arrived before acceptance
-    coordinator.async_schedule_command_refresh()
-    return response

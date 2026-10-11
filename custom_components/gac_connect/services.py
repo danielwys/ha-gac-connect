@@ -10,7 +10,7 @@ from homeassistant.helpers import config_validation as cv
 from ._vendor.gac_connect.errors import GacError
 
 from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
-from .capabilities import async_send
+from .command_tracking import async_send
 from .const import DOMAIN
 
 ATTR_VIN = "vin"
@@ -74,7 +74,9 @@ def async_register_services(hass: HomeAssistant) -> None:
         coordinator, vin = _resolve(hass, call)
         try:
             command = call.data[ATTR_COMMAND]
-            await async_send(coordinator, command, coordinator.client.command(vin, command, **(call.data.get(ATTR_PARAMS) or {})))
+            params = call.data.get(ATTR_PARAMS) or {}
+            await async_send(coordinator, command, coordinator.client.command(vin, command, **params),
+                             expected={} if params else None)
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 

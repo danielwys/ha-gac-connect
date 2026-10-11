@@ -319,6 +319,7 @@ def test_manual_refresh_fetches_during_quiet_hours():
 
     c = object.__new__(GacCoordinator)
     c._fetch_lock = asyncio.Lock()
+    c.commands = Mock()
     c.data = VehicleStatus(soc=50)
     c.vin = "TESTVIN"
     c._force_refresh = False

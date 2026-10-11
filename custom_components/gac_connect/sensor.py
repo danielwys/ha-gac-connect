@@ -37,6 +37,7 @@ else:
 from . import GacConfigEntry, fridge
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
+from .command_tracking import STATES as COMMAND_STATES
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -45,6 +46,8 @@ class GacActivityDescription(SensorEntityDescription):
 
 
 ACTIVITY_SENSORS = (
+    GacActivityDescription(key="last_command", translation_key="last_command", device_class=SensorDeviceClass.ENUM,
+                           options=COMMAND_STATES, value=lambda c: c.commands.state),
     GacActivityDescription(key="data_freshness", translation_key="data_freshness",
                            device_class=SensorDeviceClass.ENUM,
                            options=["recent", "stale", "not_reported", "clock_mismatch"],
@@ -187,6 +190,8 @@ class GacActivitySensor(GacEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.entity_description.key == "last_command":
+            return self.coordinator.commands.attributes()
         if self.entity_description.key == "data_freshness":
             age = self.coordinator.report_age
             return {"report_age_seconds": round(age) if age is not None else None,

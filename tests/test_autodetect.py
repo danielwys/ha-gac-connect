@@ -15,7 +15,8 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components.gac_connect import async_remove_entry, async_unload_entry
 from custom_components.gac_connect.api import GacClient, Support, decode_status
-from custom_components.gac_connect.capabilities import CapabilityManager, ENTITY_FEATURES, async_send, store_key
+from custom_components.gac_connect.capabilities import CapabilityManager, ENTITY_FEATURES, store_key
+from custom_components.gac_connect.command_tracking import async_send
 from custom_components.gac_connect.config_flow import GacConfigFlow, GacOptionsFlow, PROFILES
 from custom_components.gac_connect.const import PLATFORMS
 from custom_components.gac_connect.coordinator import GacCoordinator
@@ -108,7 +109,7 @@ def test_live_platform_discovery_adds_only_observed_entities_once_without_comman
                 module = importlib.import_module(f"custom_components.gac_connect.{platform}")
                 await module.async_setup_entry(hass, entry, lambda entities, p=platform: added.extend(
                     (p, entity.unique_id) for entity in entities))
-            health = {("sensor", f"VIN_{key}") for key in ("data_freshness", "last_refresh", "polling_status")}
+            health = {("sensor", f"VIN_{key}") for key in ("data_freshness", "last_refresh", "polling_status", "last_command")}
             assert set(added) == health | {("button", "VIN_refresh")}
 
             coordinator.client.get_status.return_value = decode_status({
@@ -215,8 +216,8 @@ def test_evidence_survives_reload_but_does_not_leak_between_vehicles(tmp_path):
         async with vehicle(tmp_path) as (hass, entry, coordinator):
             manager = coordinator.capabilities
             manager.observe(decode_status({"tyreAccessors": [{"tyre": 4, "temperature": -1, "pressure": 230}]}))
-            await manager.send("sunroof-close", coordinator.client.command("VIN", "sunroof-close"))
-            assert manager.result(result())
+            await coordinator.commands.send("sunroof-close", coordinator.client.command("VIN", "sunroof-close"))
+            assert coordinator.commands.result(result())
             await manager.async_close()
             text = (tmp_path / ".storage" / store_key(entry.entry_id)).read_text()
             assert "VIN" not in text and "230" not in text
@@ -256,15 +257,15 @@ def test_only_matched_success_confirms_a_command_and_directions_are_independent(
             manager = coordinator.capabilities
             await async_send(coordinator, "sunroof-close", coordinator.client.command("VIN", "sunroof-close"))
             assert manager.detector.command("sunroof-close").state is Support.UNKNOWN  # accepted, not applied
-            assert not manager.result(result("other"))
-            assert not manager.result(result(vin="OTHER"))
-            assert not manager.result(result(ok=None))  # a progress/unknown message must not consume the request
-            assert manager.result(result())
+            assert not coordinator.commands.result(result("other"))
+            assert not coordinator.commands.result(result(vin="OTHER"))
+            assert not coordinator.commands.result(result(ok=None))  # a progress/unknown message must not consume the request
+            assert coordinator.commands.result(result())
             assert manager.detector.command("sunroof-close").state is Support.SUPPORTED
             assert manager.detector.command("sunroof-open").state is Support.UNKNOWN
-            assert not manager.result(result())  # duplicate result
-            await manager.send("sunroof-open", coordinator.client.command("VIN", "sunroof-open"))
-            assert not manager.result(result(ok=False))
+            assert not coordinator.commands.result(result())  # duplicate result
+            await coordinator.commands.send("sunroof-open", coordinator.client.command("VIN", "sunroof-open"))
+            assert coordinator.commands.result(result(ok=False))
             assert manager.detector.command("sunroof-open").state is Support.UNKNOWN
             assert manager.includes("cover:sunroof")  # generic failure does not erase equipment evidence
     asyncio.run(run())
@@ -276,14 +277,14 @@ def test_early_command_result_is_correlated_after_acceptance(tmp_path):
             manager = coordinator.capabilities
 
             async def request():
-                manager.result(result("unrelated"))
-                manager.result(result())
+                coordinator.commands.result(result("unrelated"))
+                coordinator.commands.result(result())
                 return ACCEPTED
 
             await async_send(coordinator, "horn-on", request())
             assert manager.includes("button:horn")
             assert manager.detector.command("horn-on").state is Support.SUPPORTED
-            assert not manager._early
+            assert not coordinator.commands._early
     asyncio.run(run())
 
 
@@ -343,7 +344,7 @@ def test_entity_and_service_actions_feed_the_same_discovery_evidence(tmp_path, s
             assert len(coordinator._refresh_deadlines) == 3
             coordinator.async_request_refresh.assert_not_awaited()
             assert coordinator.capabilities.detector.command(command).state is Support.UNKNOWN
-            assert coordinator.capabilities.result(result())
+            assert coordinator.commands.result(result())
             assert coordinator.capabilities.detector.command(command).state is Support.SUPPORTED
     asyncio.run(run())
 
@@ -367,13 +368,13 @@ def test_failed_cancelled_and_expired_requests_never_confirm_equipment(tmp_path)
             for failure in (HomeAssistantError("offline"), asyncio.CancelledError()):
                 request = AsyncMock(side_effect=failure)
                 with pytest.raises(type(failure)):
-                    await manager.send("horn-on", request())
-                assert manager._inflight == 0 and not manager._pending
-                assert not manager.result(result())
-            with patch("custom_components.gac_connect.capabilities.monotonic", return_value=0):
-                await manager.send("horn-on", coordinator.client.command("VIN", "horn-on"))
-            with patch("custom_components.gac_connect.capabilities.monotonic", return_value=181):
-                assert not manager.result(result())
+                    await coordinator.commands.send("horn-on", request())
+                assert not coordinator.commands.pending
+                assert not coordinator.commands.result(result())
+            with patch("custom_components.gac_connect.command_tracking.monotonic", return_value=0):
+                await coordinator.commands.send("horn-on", coordinator.client.command("VIN", "horn-on"))
+            with patch("custom_components.gac_connect.command_tracking.monotonic", return_value=181):
+                assert not coordinator.commands.result(result())
             assert not manager.includes("button:horn")
     asyncio.run(run())
 

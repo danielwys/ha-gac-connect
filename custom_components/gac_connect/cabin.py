@@ -18,7 +18,7 @@ from ._vendor.gac_connect.commands import validate_climate
 from ._vendor.gac_connect.push import PushResult
 
 from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES, SIGNAL_COMMAND_RESULT
-from .capabilities import async_send
+from .command_tracking import async_send
 
 _LOGGER = logging.getLogger(__name__)
 DEFAULT_TARGET_C = 24.0
@@ -201,7 +201,8 @@ class CabinController:
         try:
             client, vin = self.coordinator.client, self.coordinator.vin
             response = await async_send(self.coordinator, "aircon-on" if on else "aircon-off",
-                client.climate_on(vin, temperature=setpoint, minutes=duration) if on else client.climate_off(vin)
+                client.climate_on(vin, temperature=setpoint, minutes=duration) if on else client.climate_off(vin),
+                expected={"ac_on": on, **({"ac_target_temp_c": setpoint} if on else {})},
             )
             req.session_id = command_session_id(response)
             accepted = True

@@ -31,7 +31,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import CONF_ENABLE_FRIDGE, CONF_VIN, DEFAULT_ENABLE_FRIDGE, DOMAIN, SIGNAL_COMMAND_RESULT
 from .entity_filter import is_aion_ut, add_configured_entities
-from .capabilities import async_send
+from .command_tracking import async_send
 from .profiles import profile_for
 from .const import PROFILE_AUTO
 
@@ -335,7 +335,8 @@ class FridgeController:
         try:
             resp = await async_send(self.coordinator, "fridge-off" if option == "off" else "fridge-on",
                                     client.fridge_off(vin) if option == "off" else
-                                    client.fridge_on(vin, mode=option, temperature=temp))
+                                    client.fridge_on(vin, mode=option, temperature=temp),
+                                    expected={"fridge_mode": option, **({"fridge_temp_c": temp} if option != "off" else {})})
             sent = True
         except GacError as err:
             raise HomeAssistantError(str(err)) from err

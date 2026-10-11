@@ -36,6 +36,7 @@ from .const import (
 )
 from .api import PushClient
 from .capabilities import CapabilityManager
+from .command_tracking import CommandTracker
 from .profiles import profile_for
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self.client = client
         self.vin = entry.data[CONF_VIN]
         self.capabilities = CapabilityManager(hass, entry) if profile_for(entry) == PROFILE_AUTO else None
+        self.commands = CommandTracker(self)
         # Command results arrive on the service's push feed; each one triggers
         # an immediate status refresh so entities show what the car actually did.
         self.push = PushClient(client.mqtt_info, self._on_command_result, decrypt=client.decrypt_push,
@@ -136,8 +138,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             return   # another vehicle on the account, or no vehicle named: not ours to act on
         _LOGGER.debug("command result: event=%s ok=%s code=%s", result.event, result.ok, result.code)
         self.last_result = result
-        if (manager := getattr(self, "capabilities", None)) is not None and manager.result(result):
-            self.async_update_listeners()
+        self.commands.result(result)
         registry = dr.async_get(self.hass)
         if lookup := getattr(registry, "async_get_device_by_identifier", None):
             device = lookup((DOMAIN, self.vin), self.config_entry.entry_id)
@@ -192,6 +193,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
     @callback
     def _cancel_result_refresh(self) -> None:
         self._followup_closed = True
+        self.commands.close()
         if self._freshness_timer is not None:
             self._freshness_timer()
             self._freshness_timer = None
@@ -235,6 +237,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 self._refresh_outcome = "ok"
                 if manager := getattr(self, "capabilities", None):
                     manager.observe(status)
+                self.commands.observe(status)
                 return status
             except AuthExpiredError as err:
                 self._refresh_outcome = "auth_required"
