@@ -47,12 +47,15 @@ const s=document.getElementById('s'),p=document.getElementById('p'),xv=document.
 b=document.getElementById('b'),g=document.getElementById('g'),m=document.getElementById('m');
 let at=0,nid=0,done=false;const u=()=>{p.style.left=s.value+'px';xv.textContent=s.value};s.oninput=u;
 document.onkeydown=e=>{if(e.key=='ArrowRight'){s.value=+s.value+1;u()}if(e.key=='ArrowLeft'){s.value=+s.value-1;u()}};
+const verified=()=>{done=true;g.disabled=true;m.textContent='Verified ✓ — return to Home Assistant.'};
 async function poll(){if(done)return;let t;try{const r=await fetch('?flow_id='+F+'&state=1',{headers:{accept:'application/json'}});
+if(done)return;
 if(r.status==404){done=true;g.disabled=true;m.textContent='This sign-in has expired. Start again from Home Assistant.';return}
 if(!r.ok)throw new Error(r.status);t=await r.json()}
 catch(e){setTimeout(poll,2000);return}
+if(done)return;
 if(t.attempt!=at){at=t.attempt;b.src='data:image/png;base64,'+t.bg;p.src='data:image/png;base64,'+t.piece;s.value=0;u();g.disabled=false;if(at>1)m.innerHTML='<span class=bad>Not quite — new puzzle (try '+at+').</span>'}
-if(t.status=='ok'){done=true;g.disabled=true;m.innerHTML='<span class=ok>Verified ✓</span> return to Home Assistant.';return}
+if(t.status=='ok'){verified();return}
 if(t.status=='failed'){done=true;g.disabled=true;m.innerHTML='<span class=bad>'+t.msg+'</span>';return}
 if(t.nid!=nid){nid=t.nid;m.innerHTML='';const sp=document.createElement('span');sp.className='bad';sp.textContent=t.notice;m.appendChild(sp);
 setTimeout(()=>{if(!done)g.disabled=false},Math.max(0,t.wait)*1000)}
@@ -61,7 +64,8 @@ g.onclick=async()=>{g.disabled=true;m.textContent='Checking…';
 const fail=t=>{m.textContent=t;setTimeout(()=>{if(!done)g.disabled=false},3000)};
 try{const r=await fetch('?flow_id='+F,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({x:+s.value})});
 if(r.status==404){done=true;m.textContent='This sign-in has expired. Start again from Home Assistant.'}
-else if(!r.ok&&r.status!=409)fail('Something went wrong. Press Verify to try again.')}
+else if(r.ok){const result=await r.json();if(result.ok)verified()}
+else if(r.status!=409)fail('Something went wrong. Press Verify to try again.')}
 catch(e){fail('Could not reach Home Assistant. Try again in a moment.')}};
 poll();</script>"""
 
