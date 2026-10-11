@@ -14,6 +14,7 @@ from .profiles import profile_for
 # applied to an entity that was already registered before this setting existed.
 ENTITY_CHOICES: dict[str, dict[str, str]] = {
     "sensor": {
+        "charge_schedule": "Charging schedule",
         "soc": "Battery", "range": "Range", "odometer": "Odometer",
         "cabin_temp": "Cabin temperature", "aux_voltage": "12V battery",
         "charge_time": "Estimated charge time", "charge_current": "Charge current",

@@ -38,6 +38,7 @@ from . import GacConfigEntry, fridge
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .command_tracking import STATES as COMMAND_STATES
+from .charging import schedule_attributes, schedule_mode
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -67,6 +68,9 @@ class GacSensor(SensorEntityDescription):
 
 
 SENSORS: tuple[GacSensor, ...] = (
+    GacSensor(key="charge_schedule", translation_key="charge_schedule", device_class=SensorDeviceClass.ENUM,
+              options=["unrestricted", "scheduled", "not_reported"], icon="mdi:calendar-clock",
+              value=schedule_mode),
     GacSensor(key="soc", translation_key="soc", device_class=SensorDeviceClass.BATTERY,
               native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
               value=lambda s: s.soc),
@@ -171,6 +175,12 @@ class GacSensorEntity(GacEntity, SensorEntity):
         if self.status is None:
             return None
         return self.entity_description.value(self.status)
+
+    @property
+    def extra_state_attributes(self):
+        if self.entity_description.key == "charge_schedule":
+            return schedule_attributes(self.status)
+        return None
 
 
 class GacActivitySensor(GacEntity, SensorEntity):

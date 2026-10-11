@@ -18,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 # HA entity names map to library evidence. Hardware readings may reveal a
 # control, but its individual commands remain unconfirmed until a real result.
 ENTITY_FEATURES = {
+    "sensor:charge_schedule": "charge_control",
     "sensor:soc": "soc", "sensor:range": "range_km", "sensor:odometer": "odometer_km",
     "sensor:cabin_temp": "cabin_temp_c", "sensor:aux_voltage": "aux_voltage", "sensor:pm25": "pm25",
     "sensor:charge_time": "estimated_charge_minutes", "sensor:charge_current": "charge_current_a",

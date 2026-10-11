@@ -16,10 +16,10 @@
 # location tracking. With it off the tracker entity is not created at all, so
 # delete both cards (or the whole Location section) to avoid an error tile.
 #
-# CHARGE WINDOW: the car's own reported charge-window sensors are disabled by
-# default (they are reported on the service's clock, which may not match yours).
-# Enable them under the device page if you want them, then add tiles for
-# sensor.aion_v_reported_charge_window_start / _stop.
+# CHARGE WINDOW: Charging schedule shows the reported mode, window and days in
+# its details. Configure → Charging schedule displays these readings and offers
+# a form for sending a new window. Reported clock times may differ from the
+# library's regional scheduling zone; verify in the car or official app.
 #
 # NOT EVERY CAR REPORTS EVERYTHING: a reading your car never sends usually shows
 # as Unknown; Unavailable means the integration could not update at all. Delete
@@ -37,8 +37,7 @@
 # Home Assistant counts itself. Without that file, delete the section.
 #
 # NO REMOTE COMMANDS: if you would rather the dashboard could not send anything
-# to the car, delete the Controls section AND, in Charging, the "Charge on
-# plug-in" and "Charge now" tiles AND, in Fridge, the Fridge, Mode and
+# to the car, delete the Controls section AND, in Charging, the "Charge now" tile AND, in Fridge, the Fridge, Mode and
 # Temperature tiles — those send commands too.
 #
 # Layout: `type: sections` with 3 columns. Each section is small so Home
@@ -154,12 +153,17 @@ views:
             entity: binary_sensor.aion_v_charger_lock
             name: Charger lock
           - type: tile
-            entity: switch.aion_v_scheduled_charging
-            name: Charge on plug-in
+            entity: sensor.aion_v_charging_schedule
+            name: Charging mode and schedule
             tap_action: { action: more-info }
-            # State: On = unrestricted charging; Off = scheduled charging.
-            # Turning On is supported. Turning Off / Pause is unavailable;
-            # use gac_connect.set_charge_window for an explicit schedule.
+          - type: markdown
+            content: >-
+              Reported window:
+              {{ state_attr('sensor.aion_v_charging_schedule', 'reported_start') or 'Not reported' }}
+              to {{ state_attr('sensor.aion_v_charging_schedule', 'reported_stop') or 'Not reported' }}.
+              {{ state_attr('sensor.aion_v_charging_schedule', 'reported_days') or 'Days not reported' }}.
+              These times use the service's reported clock. To send a new window,
+              open GAC Connect → Configure → Charging schedule.
           - type: tile
             entity: sensor.aion_v_estimated_charge_time
             name: Charge time

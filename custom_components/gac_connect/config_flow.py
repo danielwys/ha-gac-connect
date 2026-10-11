@@ -324,7 +324,73 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
 
 class GacOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["settings", "equipment"])
+        return self.async_show_menu(step_id="init", menu_options=["settings", "equipment", "charging"])
+
+    def _loaded_coordinator(self):
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        return getattr(runtime, "coordinator", None)
+
+    async def async_step_charging(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from .charging import schedule_summary
+
+        if (coordinator := self._loaded_coordinator()) is None:
+            return self.async_abort(reason="vehicle_not_loaded")
+        return self.async_show_menu(step_id="charging", menu_options=["refresh_charging", "charge_window", "charge_now", "init"],
+                                    description_placeholders={"schedule": schedule_summary(coordinator)})
+
+    async def async_step_refresh_charging(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if (coordinator := self._loaded_coordinator()) is None:
+            return self.async_abort(reason="vehicle_not_loaded")
+        await coordinator.async_manual_refresh()
+        return await self.async_step_charging()
+
+    async def async_step_charge_now(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from .command_tracking import async_send
+
+        if (coordinator := self._loaded_coordinator()) is None:
+            return self.async_abort(reason="vehicle_not_loaded")
+        errors = {}
+        if user_input is not None:
+            try:
+                await async_send(coordinator, "charge-now", coordinator.client.charge_now(coordinator.vin))
+            except GacError:
+                errors["base"] = "command_failed"
+            else:
+                return self.async_abort(reason="command_sent")
+        return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors)
+
+    async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from .api import validate_clock
+        from .charging import DAYS
+        from .command_tracking import async_send
+
+        if (coordinator := self._loaded_coordinator()) is None:
+            return self.async_abort(reason="vehicle_not_loaded")
+        errors = {}
+        if user_input is not None:
+            try:
+                start, stop = (validate_clock(user_input[key]) for key in ("start", "stop"))
+                if start == stop:
+                    raise ValueError("start and stop must differ")
+                days = user_input.get("days", [])
+                if not isinstance(days, list) or any(day not in DAYS for day in days):
+                    raise ValueError("unknown day")
+                weekly = sum(1 << index for index, day in enumerate(DAYS) if day in days)
+                await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
+                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False)))
+            except ValueError:
+                errors["base"] = "invalid_charge_window"
+            except GacError:
+                errors["base"] = "command_failed"
+            else:
+                return self.async_abort(reason="command_sent")
+        values = user_input or {}
+        return self.async_show_form(step_id="charge_window", errors=errors, data_schema=vol.Schema({
+            vol.Required("start", description={"suggested_value": values.get("start", "")}): str,
+            vol.Required("stop", description={"suggested_value": values.get("stop", "")}): str,
+            vol.Optional("days", default=values.get("days", [])): cv.multi_select(DAYS),
+            vol.Optional("until_soc", default=values.get("until_soc", False)): bool,
+        }), description_placeholders={"timezone": coordinator.client.timezone})
 
     async def async_step_equipment(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         from .equipment import equipment_summary

@@ -328,6 +328,34 @@ to a vehicle safely. Remove those explicitly from Home Assistant's **Statistics*
 page; this integration never guesses ownership from a sensor name or VIN prefix.
 Home Assistant otherwise [retains statistics after sensor deletion](https://www.home-assistant.io/docs/configuration/long-term-statistics/#good-to-know).
 
+## Viewing and changing charging schedules
+
+Open **GAC Connect → Configure → Charging schedule**. This shows the last
+reported charging mode, start and stop times, and days, where GAC supplies them.
+The new **Charging schedule** sensor exposes the same readings in its details;
+the example dashboard uses it instead of a charging switch with an unsupported
+Off action. Existing switch IDs and advanced actions remain available.
+
+Choose **Set a charging window** to enter start/stop times and weekdays, then
+submit to send the command. An empty day selection means every day; overnight
+windows belong to their start day. **Charge whenever plugged in** explicitly
+switches to unrestricted charging. Opening either page sends nothing. Submitting
+reports request acceptance; **Last command** distinguishes this from a matched
+vehicle result, and follow-up polls fetch reported state. Options are not saved
+or reloaded when sending these commands.
+
+This is partial schedule readback, not a complete charging-plan editor. A stored
+window can be reported while unrestricted mode is active. The stopping rule and
+target charge level are not available from decoded telemetry. The optional stop
+at target setting uses the car’s existing target and cannot change it.
+
+The form displays the library’s regional scheduling zone (for example,
+Australia/Brisbane), which can differ from Home Assistant’s zone or the car’s
+actual zone. If it is wrong for your vehicle, use the official app. Reported
+time-of-day fields have not been verified against that zone and are deliberately
+not copied into the edit form or used to claim a schedule was applied. Verify a
+new schedule in the car or official app. Continuous pause remains unavailable.
+
 ## Equipment explanations
 
 Open **GAC Connect → Configure → Detected equipment** to see why each sensor or
