@@ -47,7 +47,8 @@ def doors_locked(status: VehicleStatus | None, model: str | None = None) -> bool
 
     # The UT reports door 3/4 as -1 even when its app confirms the car is
     # locked. Paired live captures show door 1/2 flip 0 <-> 1 with the remote.
-    if (model or "").strip().casefold().startswith("aion ut"):
+    model_name = (model or "").strip().casefold()
+    if model_name == "aion ut" or model_name.startswith("aion ut "):
         if (len(doors) == 4
                 and codes_by_door == {1: 0, 2: 0, 3: -1, 4: -1}):
             return True
