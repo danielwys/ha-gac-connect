@@ -102,7 +102,8 @@
           "settings": "Vehicle settings",
           "equipment": "Detected equipment",
           "charging": "Charging schedule"
-        }
+        },
+        "description": "Vehicle settings are saved when you submit them. You can open another panel here, or close this dialog when finished."
       },
       "equipment": {
         "title": "Detected equipment",
@@ -110,7 +111,7 @@
       },
       "charging": {
         "title": "Charging schedule",
-        "description": "{schedule}",
+        "description": "{schedule}\n\nSubmitting a charging action returns here after the request is accepted, not after the car confirms it. Check Last command for the outcome.",
         "menu_options": {
           "charge_window": "Set a charging window",
           "charge_now": "Charge whenever plugged in",
@@ -149,8 +150,7 @@
       "command_failed": "The request was not accepted. Check Last command and Polling status before trying again."
     },
     "abort": {
-      "vehicle_not_loaded": "The vehicle integration is not loaded. Reconnect it before viewing or changing charging settings.",
-      "command_sent": "The request was accepted. This does not confirm the car applied it. Check Last command and the next vehicle report."
+      "vehicle_not_loaded": "The vehicle integration is not loaded. Reconnect it before viewing or changing charging settings."
     }
   },
   "entity": {

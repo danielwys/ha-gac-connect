@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -9,6 +9,33 @@ from custom_components.gac_connect.config_flow import GacOptionsFlow
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
 from custom_components.gac_connect.coordinator import GacCoordinator
 from test_session_store import make_entry
+
+
+def test_repeated_submits_persist_and_notify_without_finishing_the_flow(tmp_path):
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        entry = make_entry(hass, {"vin": "VIN", "model": "Aion V"})
+        hass.config_entries._store = Mock()
+        listener = AsyncMock()
+        remove_listener = entry.add_update_listener(listener)
+        flow = GacOptionsFlow()
+        flow.hass, flow.handler = hass, entry.entry_id
+        try:
+            for interval in (600, 900):
+                result = await flow.async_step_settings({"scan_interval": interval})
+                assert result["type"] == "menu" and result["step_id"] == "init"
+                await hass.async_block_till_done()
+                assert entry.options["scan_interval"] == interval
+                reopened = await flow.async_step_settings()
+                assert reopened["data_schema"]({})["scan_interval"] == interval
+            assert listener.await_count == 2
+            saved = dict(entry.options)
+            invalid = await flow.async_step_settings({"quiet_start": "invalid", "quiet_end": "06:00"})
+            assert invalid["type"] == "form"
+            assert dict(entry.options) == saved
+        finally:
+            remove_listener()
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("allow_unlock", [None, False, True])
@@ -28,9 +55,9 @@ def test_options_preserve_existing_unlock_preference(tmp_path, allow_unlock):
         validated = form["data_schema"]({"scan_interval": 600})
         assert validated[CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
         result = await flow.async_step_settings(validated)
-        assert result["type"] == "create_entry"
-        assert result["data"][CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
-        assert result["data"]["scan_interval"] == 600
+        assert result["type"] == "menu" and result["step_id"] == "init"
+        assert entry.options[CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
+        assert entry.options["scan_interval"] == 600
 
     asyncio.run(run())
 
@@ -53,9 +80,9 @@ def test_quiet_hours_validation(tmp_path, start, end, error):
             assert result["type"] == "form"
             assert error in result["errors"].values()
         else:
-            assert result["type"] == "create_entry"
-            assert result["data"]["quiet_start"] == start
-            assert result["data"]["quiet_end"] == end
+            assert result["type"] == "menu" and result["step_id"] == "init"
+            assert entry.options["quiet_start"] == start
+            assert entry.options["quiet_end"] == end
     asyncio.run(run())
 
 

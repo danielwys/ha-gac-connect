@@ -328,6 +328,14 @@ to a vehicle safely. Remove those explicitly from Home Assistant's **Statistics*
 page; this integration never guesses ownership from a sensor name or VIN prefix.
 Home Assistant otherwise [retains statistics after sensor deletion](https://www.home-assistant.io/docs/configuration/long-term-statistics/#good-to-know).
 
+## Configuration navigation
+
+Submitting **Vehicle settings** saves the changes immediately and returns to
+the configuration menu. Submitting a charging action returns to **Charging
+schedule** after request acceptance; check **Last command** for the vehicle’s
+outcome. Invalid inputs and rejected requests stay on their form for correction.
+Close the dialog when finished; closing it does not undo settings already saved.
+
 ## Viewing and changing charging schedules
 
 Open **GAC Connect → Configure → Charging schedule**. This shows the last

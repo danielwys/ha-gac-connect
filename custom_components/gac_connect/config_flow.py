@@ -356,7 +356,7 @@ class GacOptionsFlow(OptionsFlow):
             except GacError:
                 errors["base"] = "command_failed"
             else:
-                return self.async_abort(reason="command_sent")
+                return await self.async_step_charging()
         return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors)
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -383,7 +383,7 @@ class GacOptionsFlow(OptionsFlow):
             except GacError:
                 errors["base"] = "command_failed"
             else:
-                return self.async_abort(reason="command_sent")
+                return await self.async_step_charging()
         values = user_input or {}
         return self.async_show_form(step_id="charge_window", errors=errors, data_schema=vol.Schema({
             vol.Required("start", description={"suggested_value": values.get("start", "")}): str,
@@ -434,7 +434,12 @@ class GacOptionsFlow(OptionsFlow):
             elif start and start == end and not errors:
                 errors[CONF_QUIET_END] = "quiet_times_equal"
             if not errors:
-                return self.async_create_entry(data={**user_input, **quiet, CONF_PICTURE: picture})
+                # Persist through HA's normal update API (including its reload
+                # listener), without finishing and closing this options flow.
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, options={**user_input, **quiet, CONF_PICTURE: picture}
+                )
+                return await self.async_step_init()
         opts = {**self.config_entry.options, **(user_input or {})}
         forced = model_omissions(self.config_entry)
         omit_options = {key: label for key, label in OMIT_OPTIONS.items() if key not in forced}

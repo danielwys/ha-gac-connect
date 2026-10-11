@@ -82,11 +82,11 @@ def test_existing_ut_can_switch_to_auto_without_inheriting_preset_exclusions(tmp
             form = await flow.async_step_settings()
             assert "profile" in form["data_schema"].schema
             response = await flow.async_step_settings({"profile": "auto_detect"})
-            assert response["type"] == "create_entry"
-            assert response["data"]["omit_entities"] == ["sensor:pm25"]
-            assert response["data"]["enable_fridge"] is True
-            assert response["data"]["enable_tracker"] is False
-            assert response["data"]["experimental_pinless_unlock"] is True
+            assert response["type"] == "menu" and response["step_id"] == "init"
+            assert entry.options["omit_entities"] == ["sensor:pm25"]
+            assert entry.options["enable_fridge"] is True
+            assert entry.options["enable_tracker"] is False
+            assert entry.options["experimental_pinless_unlock"] is True
     asyncio.run(run())
 
 

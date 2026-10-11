@@ -53,7 +53,7 @@ def test_editor_sends_validated_overnight_window_with_selected_days(tmp_path, un
             form = await flow.async_step_charge_window()
             submitted = form['data_schema']({'start': '23:00', 'stop': '05:00', 'days': ['mon', 'fri'], 'until_soc': until_soc})
             response = await flow.async_step_charge_window(submitted)
-            assert response['type'] == 'abort' and response['reason'] == 'command_sent'
+            assert response['type'] == 'menu' and response['step_id'] == 'charging'
             vin, operation = client._reservation.await_args.args
             assert vin == 'VIN'
             assert operation['weeklyReservation'] == 17
@@ -63,6 +63,9 @@ def test_editor_sends_validated_overnight_window_with_selected_days(tmp_path, un
             assert c.commands.state == 'pending'  # acceptance did not fabricate a schedule
             assert c.data is None
             assert dict(entry.options) == before
+            await flow.async_step_charging()
+            await flow.async_step_charge_window()
+            client._reservation.assert_awaited_once()  # navigating back must not replay the command
     asyncio.run(run())
 
 
@@ -89,8 +92,10 @@ def test_rejected_window_keeps_input_and_charge_now_requires_submit(tmp_path):
             client._reservation.reset_mock(side_effect=True)
             await flow.async_step_charge_now()
             client._reservation.assert_not_awaited()
-            await flow.async_step_charge_now({})
+            response = await flow.async_step_charge_now({})
+            assert response['type'] == 'menu' and response['step_id'] == 'charging'
             assert client._reservation.await_args.args[1]['chargingMode'] == 0
+            client._reservation.assert_awaited_once()
     asyncio.run(run())
 
 
