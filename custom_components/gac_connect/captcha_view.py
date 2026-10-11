@@ -123,6 +123,10 @@ class GacCaptchaView(HomeAssistantView):
         except (ValueError, TypeError):
             return web.json_response({"ok": False}, status=400)
 
+        # Reading the body yielded control: the flow may have been canceled.
+        if active_flow_state(hass, flow_id) is not state:
+            return web.json_response({"ok": False}, status=404)
+
         if state.get("status") == "ok":
             return web.json_response({"ok": True})          # already verified; nothing more to send
         if state.get("busy"):

@@ -95,7 +95,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _new_http(self):
         if self._http is not None:
-            await self._http.close()
+            self._http.detach()  # HA owns the shared connector
         self._http = async_create_clientsession(self.hass, auto_cleanup=False)
         return self._http
 
@@ -118,7 +118,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_remove(self) -> None:
         self._clear_puzzle()
         if self._http is not None:
-            self.hass.async_create_task(self._http.close())
+            self._http.detach()
             self._http = None
         super().async_remove()
 

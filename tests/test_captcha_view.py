@@ -1,7 +1,7 @@
 import asyncio
 import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -37,7 +37,7 @@ def test_removed_flow_and_expired_flow_cannot_request_sms(tmp_path):
     asyncio.run(run())
 
 
-def test_flow_removal_cancels_inflight_verification_and_closes_session(tmp_path):
+def test_flow_removal_cancels_inflight_verification_and_detaches_session(tmp_path):
     async def run():
         hass = HomeAssistant(str(tmp_path))
         request, client = pending(hass)
@@ -50,7 +50,7 @@ def test_flow_removal_cancels_inflight_verification_and_closes_session(tmp_path)
         await started.wait()
         flow = GacConfigFlow()
         flow.hass, flow.flow_id = hass, "flow"
-        flow._http = SimpleNamespace(close=AsyncMock())
+        flow._http = SimpleNamespace(detach=Mock())
         http = flow._http
         cancel = flow._captcha_expiry = Mock()
         flow.async_remove()
@@ -58,9 +58,51 @@ def test_flow_removal_cancels_inflight_verification_and_closes_session(tmp_path)
             await task
         await asyncio.sleep(0)
         assert not flow_state(hass)
-        http.close.assert_awaited_once()
+        http.detach.assert_called_once()
         cancel.assert_called_once()
         hass.config_entries.flow.async_configure.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_flow_cleanup_preserves_the_shared_home_assistant_connector(tmp_path):
+    import aiohttp
+    from homeassistant.helpers.aiohttp_client import async_create_clientsession
+
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        connector = aiohttp.TCPConnector()
+        flow = GacConfigFlow()
+        flow.hass, flow.flow_id = hass, "flow"
+        other = None
+        try:
+            with patch("homeassistant.helpers.aiohttp_client._async_get_connector", return_value=connector):
+                other = async_create_clientsession(hass, auto_cleanup=False)
+                first = await flow._new_http()
+                second = await flow._new_http()
+            assert first.closed
+            assert not second.closed and not other.closed and not connector.closed
+            flow.async_remove()
+            assert second.closed
+            assert not other.closed and not connector.closed
+        finally:
+            if other is not None:
+                other.detach()
+            if flow._http is not None:
+                flow._http.detach()
+            await connector.close()
+    asyncio.run(run())
+
+
+def test_cancellation_while_reading_request_body_cannot_send_sms(tmp_path):
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        request, client = pending(hass)
+        async def read_body():
+            flow_state(hass).clear()  # removed while the HTTP body was arriving
+            return {"x": 10}
+        request.json = read_body
+        assert (await GacCaptchaView().post(request)).status == 404
+        client.request_sms.assert_not_called()
     asyncio.run(run())
 
 
