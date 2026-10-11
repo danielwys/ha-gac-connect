@@ -360,7 +360,6 @@ class FridgeController:
             self._replay(held)
         self.sync()                          # a report that arrived meanwhile
         self._notify()
-        self.hass.async_create_task(self.coordinator.async_request_refresh())
 
 
 def controller(coordinator) -> FridgeController:

@@ -337,6 +337,8 @@ def test_entity_and_service_actions_feed_the_same_discovery_evidence(tmp_path, s
                 entity.hass = hass
                 await action()
             assert client.command.await_count + client._reservation.await_count == 1
+            assert len(coordinator._refresh_deadlines) == 3
+            coordinator.async_request_refresh.assert_not_awaited()
             assert coordinator.capabilities.detector.command(command).state is Support.UNKNOWN
             assert coordinator.capabilities.result(result())
             assert coordinator.capabilities.detector.command(command).state is Support.SUPPORTED

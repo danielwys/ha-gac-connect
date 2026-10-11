@@ -105,7 +105,9 @@ has been verified for this service.
   samples show its two front readings change reliably. The integration uses
   those front readings for the UT; other cars retain an unknown state if any
   door-lock reading is unknown. State changes made with the physical remote
-  appear after the next status poll (every five minutes by default).
+  or auto-lock appear after the next status poll (every five minutes by default),
+  once the GAC server has the new report. Set the poll interval to **60 seconds**
+  for more frequent background checks, or press **Refresh** to check now.
 - **Covers**: windows, sunroof and tailgate (state may read unknown when the car
   does not report it; open / close still work). Opening really opens them — treat
   automations that touch these with care.
@@ -178,9 +180,16 @@ trip computer (it reads 0.0 on some cars), so the package does not use it.
 
 ## Command results
 
-Remote commands are applied asynchronously. When the push feed is connected, the
-integration receives command results and requests a status refresh (subject to
-the request limits). Otherwise confirmation relies on polling. A refused command
+Remote commands are applied asynchronously. After a command is accepted, the
+integration requests fresh reports at roughly **5, 15 and 30 seconds** after the
+latest action. Locks, covers, switches, climate, fridge controls, buttons and
+service actions share this bounded sequence per vehicle, including when the push
+feed is disconnected. Each report updates all related sensors. Overlapping
+commands replace the pending sequence rather than adding more polling loops.
+These checks do not resend the command or assume that acceptance means success.
+
+When the push feed is connected, command results share the pending refreshes or
+request one delayed read. A refused command
 clears the requested state and is logged. Each result also fires a
 `gac_connect_command_result` event (`device_id`, `ok`, `code`, `event`,
 `session_id`) for automations.
@@ -236,7 +245,7 @@ older UT entries use that preset until you explicitly select another profile.
 The poll interval is at least 60 seconds (default 5 minutes).
 Quiet hours use Home Assistant's configured time zone. Enter two different times
 in `HH:MM` format; windows can cross midnight. Clear both fields to disable quiet
-hours. Manual refreshes and command-result refreshes still run during that window.
+hours. Manual refreshes and post-command checks still run during that window.
 
 ### Auto detect
 
@@ -275,10 +284,13 @@ its own and cannot guarantee that a remote action works on every trim.
 
 ## Request limits
 
-The integration is built to go easy on GAC's service. Status is polled on the
-interval above (never more often than once a minute); refresh presses and the
-refreshes that follow commands are merged, and refreshes triggered by command
-results are at least 10 seconds apart. Underneath, every request goes through the
+The integration is built to go easy on GAC's service. Regular background polls
+use the configured interval (at least one minute). Commands temporarily request
+up to three follow-up reads; those reads wait at least 10 seconds after a previous
+status request finishes, so a slow request or a manual refresh can delay them.
+Push results share that sequence. A rate-limit response stops the remaining
+follow-ups, and normal scheduled polling resumes. Removing or reloading the
+integration cancels pending follow-ups. Underneath, every request goes through the
 `gac-connect` library's limiter, shared by all GAC Connect entries in Home
 Assistant: one request at a time, at most one a second, 20 a minute, 240 an hour
 and 3000 a day, with commands to the car limited to 6 a minute and 60 an hour. If
@@ -340,6 +352,8 @@ Thanks to their authors for showing what a good community integration looks like
   persistent evidence. This fork now bundles its maintained library snapshot,
   removes the external `gac-connect` requirement and b1 compatibility copies, and
   reports the exact library source revision in diagnostics.
+  All command controls and services now share delayed status checks, so related
+  sensors can update after acceptance even without a push result.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

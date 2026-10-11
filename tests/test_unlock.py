@@ -21,7 +21,7 @@ def test_unlock_calls_public_client_method_only_when_enabled(enabled):
     if enabled:
         asyncio.run(entity.async_unlock())
         coordinator.client.unlock.assert_awaited_once_with("TESTVIN")
-        coordinator.async_request_refresh.assert_awaited_once()
+        coordinator.async_schedule_command_refresh.assert_called_once()
         assert not entity.is_unlocking
     else:
         with pytest.raises(HomeAssistantError, match="disabled"):

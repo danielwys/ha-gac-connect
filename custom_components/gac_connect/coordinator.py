@@ -13,7 +13,7 @@ from ._vendor.gac_connect.models import VehicleStatus
 from ._vendor.gac_connect.push import PushResult
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -39,8 +39,9 @@ from .profiles import profile_for
 
 _LOGGER = logging.getLogger(__name__)
 
-# Command results can arrive in bursts; the status refreshes they trigger are at
-# least this far apart. (The client library also caps every request it sends.)
+# Acknowledgement often precedes fresh telemetry. Read again after the backend
+# has had time to update, sharing one bounded sequence across all controls.
+COMMAND_REFRESH_DELAYS = (5.0, 15.0, 30.0)
 RESULT_REFRESH_GAP = 10.0
 
 
@@ -79,9 +80,12 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self.last_result: PushResult | None = None
         self._force_refresh = False       # explicit refreshes may run inside quiet hours
         self._result_refresh_task: asyncio.Task | None = None
-        self._result_refresh_again = False
-        self._last_result_refresh = 0.0
+        self._refresh_deadlines: list[float] = []
+        self._last_status_refresh = float("-inf")
+        self._followup_blocked = False
+        self._followup_closed = False
         self._fetch_lock = asyncio.Lock()   # one status request in flight, whatever triggered it
+        entry.async_on_unload(self._cancel_result_refresh)
 
     def start_push(self) -> None:
         self.config_entry.async_create_background_task(
@@ -112,26 +116,56 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         async_dispatcher_send(self.hass, SIGNAL_COMMAND_RESULT.format(vin=self.vin), result)
         self._schedule_result_refresh()
 
+    @callback
+    def async_schedule_command_refresh(self) -> None:
+        """Debounce accepted commands into at most three follow-up reads per burst."""
+        if self._followup_closed:
+            return
+        now = monotonic()
+        self._refresh_deadlines = [now + delay for delay in COMMAND_REFRESH_DELAYS]
+        self._start_result_refresh()
+
+    @callback
     def _schedule_result_refresh(self) -> None:
-        """One status refresh per burst of results, without blocking the feed."""
-        self._force_refresh = True
+        """A push result shares pending reads, or requests one delayed read."""
+        if self._followup_closed:
+            return
+        if not self._refresh_deadlines:
+            self._refresh_deadlines = [monotonic() + COMMAND_REFRESH_DELAYS[0]]
+        self._start_result_refresh()
+
+    @callback
+    def _start_result_refresh(self) -> None:
         if self._result_refresh_task and not self._result_refresh_task.done():
-            self._result_refresh_again = True
             return
         self._result_refresh_task = self.config_entry.async_create_background_task(
             self.hass, self._result_refresh(), f"{DOMAIN} result refresh {self.config_entry.entry_id}"
         )
 
     async def _result_refresh(self) -> None:
-        while True:
-            wait = self._last_result_refresh + RESULT_REFRESH_GAP - monotonic()
+        while self._refresh_deadlines:
+            wait = max(self._refresh_deadlines[0], self._last_status_refresh + RESULT_REFRESH_GAP) - monotonic()
             if wait > 0:
-                await asyncio.sleep(wait)   # results that land meanwhile share this refresh
-            self._result_refresh_again = False
+                await asyncio.sleep(wait)
+                continue  # commands or another status read may have moved the deadline
+            self._refresh_deadlines.pop(0)
+            self._force_refresh = True  # explicit commands also refresh during quiet hours
             await self.async_refresh()
-            self._last_result_refresh = monotonic()   # the gap runs from when the refresh finished
-            if not self._result_refresh_again:
-                return
+            if self._followup_blocked:
+                self._refresh_deadlines.clear()  # do not retry through a rate limit or expired login
+
+    @callback
+    def _cancel_result_refresh(self) -> None:
+        self._followup_closed = True
+        self._refresh_deadlines.clear()
+        if self._result_refresh_task is not None:
+            self._result_refresh_task.cancel()
+
+    async def async_shutdown(self) -> None:
+        self._cancel_result_refresh()
+        if self._result_refresh_task is not None:
+            await asyncio.gather(self._result_refresh_task, return_exceptions=True)
+        await super().async_shutdown()
 
     def _in_quiet_hours(self) -> bool:
         start = _parse_hhmm(self.config_entry.options.get(CONF_QUIET_START))
@@ -155,14 +189,17 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             if self._in_quiet_hours() and self.data is not None and not self._force_refresh:
                 return self.data
             self._force_refresh = False
+            self._followup_blocked = False
             try:
                 status = await self.client.get_status(self.vin)
                 if manager := getattr(self, "capabilities", None):
                     manager.observe(status)
                 return status
             except AuthExpiredError as err:
+                self._followup_blocked = True
                 raise ConfigEntryAuthFailed(str(err)) from err
             except RateLimitedError as err:
+                self._followup_blocked = True
                 # Held back by the request limits (or the service asked us to slow
                 # down): keep showing the last reading rather than going unavailable.
                 if self.data is not None:
@@ -171,3 +208,5 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 raise UpdateFailed(str(err)) from err
             except GacError as err:
                 raise UpdateFailed(str(err)) from err
+            finally:
+                self._last_status_refresh = monotonic()

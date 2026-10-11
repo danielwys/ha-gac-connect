@@ -109,7 +109,6 @@ class GacChargeSwitch(GacEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._send(self.coordinator.client.charge_now(self.coordinator.vin), command="charge-now")
-        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         raise ServiceValidationError(PAUSE_UNSUPPORTED)
@@ -205,7 +204,6 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
                 else:
                     self._end_command(command_session_id(resp))
                     self._arm_expiry()
-        await self.coordinator.async_request_refresh()
 
     async def _set(self, on: bool) -> None:
         cmd = self.entity_description.on_cmd if on else self.entity_description.off_cmd

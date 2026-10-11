@@ -40,7 +40,6 @@ class GacLock(GacEntity, LockEntity):
         finally:
             self._attr_is_locking = False
             self.async_write_ha_state()
-        await self.coordinator.async_request_refresh()
 
     async def async_unlock(self, **kwargs: Any) -> None:
         if not self.coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False):
@@ -54,4 +53,3 @@ class GacLock(GacEntity, LockEntity):
         finally:
             self._attr_is_unlocking = False
             self.async_write_ha_state()
-        await self.coordinator.async_request_refresh()

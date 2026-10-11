@@ -40,6 +40,7 @@ def coord(data):
         last_update_success=True,
         config_entry=SimpleNamespace(entry_id="test", data={"model": "Aion V", "vin": "TESTVIN"}, options={}),
         async_request_refresh=AsyncMock(),
+        async_schedule_command_refresh=Mock(),
     )
 
 

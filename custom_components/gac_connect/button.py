@@ -60,7 +60,6 @@ class GacButtonEntity(GacEntity, ButtonEntity):
             raise ServiceValidationError(PAUSE_UNSUPPORTED)
         await self._send(self.entity_description.press(self.coordinator.client, self.coordinator.vin),
                          command=self.entity_description.command)
-        await self.coordinator.async_request_refresh()
 
 
 class GacRefreshButton(GacEntity, ButtonEntity):

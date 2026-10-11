@@ -175,7 +175,6 @@ class CabinController:
     async def async_set_power(self, on: bool) -> None:
         async with self.lock:
             await self._command(on)
-        await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, target: float, *, on: bool | None = None) -> None:
         async with self.lock:
@@ -184,7 +183,6 @@ class CabinController:
                 self._notify()
                 return
             await self._command(self.on is True if on is None else on, target)
-        await self.coordinator.async_request_refresh()
 
     async def _command(self, on: bool, target: float | None = None) -> None:
         """Send one command under the shared lock; undo transport failures or cancellation."""

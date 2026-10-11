@@ -69,9 +69,7 @@ class GacCoverEntity(GacEntity, CoverEntity):
     async def async_open_cover(self, **kwargs: Any) -> None:
         command = self.entity_description.open_cmd
         await self._send(self.coordinator.client.command(self.coordinator.vin, command), command=command)
-        await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         command = self.entity_description.close_cmd
         await self._send(self.coordinator.client.command(self.coordinator.vin, command), command=command)
-        await self.coordinator.async_request_refresh()

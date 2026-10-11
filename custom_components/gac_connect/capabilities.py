@@ -166,7 +166,9 @@ class CapabilityManager:
 async def async_send(coordinator, command: str, request):
     manager = getattr(coordinator, "capabilities", None)
     if manager is None:
-        return await request
-    response = await manager.send(command, request)
-    coordinator.async_update_listeners()  # also handles a result that arrived before acceptance
+        response = await request
+    else:
+        response = await manager.send(command, request)
+        coordinator.async_update_listeners()  # also handles a result that arrived before acceptance
+    coordinator.async_schedule_command_refresh()
     return response
