@@ -19,14 +19,37 @@ from gac_connect.errors import CaptchaError, GacError, LoginError, RateLimitedEr
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import UnknownFlow
 
 from .const import DOMAIN
 
 CAPTCHA_URL = "/api/gac_connect/captcha"
+CAPTCHA_SECONDS = 600
 
 
 def flow_state(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
     return hass.data.setdefault(DOMAIN, {}).setdefault("flows", {})
+
+
+def discard_flow_state(hass: HomeAssistant, flow_id: str) -> None:
+    state = flow_state(hass).pop(flow_id, None)
+    task = state.get("verification_task") if state else None
+    if task is not None and task is not asyncio.current_task() and not task.done():
+        task.cancel()
+
+
+def active_flow_state(hass: HomeAssistant, flow_id: str | None) -> dict | None:
+    state = flow_state(hass).get(flow_id)
+    if state is None:
+        return None
+    try:
+        active = hass.config_entries.flow.async_get(flow_id)
+    except UnknownFlow:
+        active = None
+    if not active or time.monotonic() >= state["expires"]:
+        discard_flow_state(hass, flow_id)
+        return None
+    return state
 
 
 _PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
@@ -78,7 +101,7 @@ class GacCaptchaView(HomeAssistantView):
     async def get(self, request: web.Request) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
         flow_id = request.query.get("flow_id")
-        state = flow_state(hass).get(flow_id)
+        state = active_flow_state(hass, flow_id)
         if not state:
             return web.Response(status=404, text="expired")
         if request.query.get("state"):
@@ -88,11 +111,14 @@ class GacCaptchaView(HomeAssistantView):
     async def post(self, request: web.Request) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
         flow_id = request.query.get("flow_id")
-        state = flow_state(hass).get(flow_id)
+        state = active_flow_state(hass, flow_id)
         if not state:
             return web.json_response({"ok": False}, status=404)
         try:
-            x = int((await request.json()).get("x"))
+            data = await request.json()
+            x = data.get("x") if isinstance(data, dict) else None
+            if isinstance(x, bool) or not isinstance(x, int) or not 0 <= x <= 263:
+                raise ValueError("invalid puzzle offset")
         except (ValueError, TypeError):
             return web.json_response({"ok": False}, status=400)
 
@@ -102,6 +128,7 @@ class GacCaptchaView(HomeAssistantView):
             return web.json_response({"ok": False, "busy": True}, status=409)
         client = state["client"]
         state["busy"] = True
+        state["verification_task"] = asyncio.current_task()
         try:
             if state.get("need_new"):
                 # the last puzzle was rejected but no new one could be fetched: fetch
@@ -132,6 +159,7 @@ class GacCaptchaView(HomeAssistantView):
             return web.json_response({"ok": False})
         finally:
             state["busy"] = False
+            state.pop("verification_task", None)
         state["status"] = "ok"
         hass.async_create_task(
             hass.config_entries.flow.async_configure(flow_id=flow_id, user_input={})

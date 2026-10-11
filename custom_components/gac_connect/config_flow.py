@@ -6,6 +6,7 @@ options tune polling and privacy.
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,11 +26,13 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_REGION
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import UnknownFlow
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.network import get_url
 
-from .captcha_view import CAPTCHA_URL, GacCaptchaView, flow_state
+from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .session_store import ConfigEntryStore
 from .entity_filter import OMIT_OPTIONS, is_aion_ut, model_omissions
@@ -86,6 +89,37 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._region: str = "AU"
         self._vehicle: Vehicle | None = None
         self._view_registered = False
+        self._http: aiohttp.ClientSession | None = None
+        self._captcha_expiry = None
+
+    async def _new_http(self):
+        if self._http is not None:
+            await self._http.close()
+        self._http = async_create_clientsession(self.hass, auto_cleanup=False)
+        return self._http
+
+    @callback
+    def _clear_puzzle(self) -> None:
+        if self._captcha_expiry is not None:
+            self._captcha_expiry()
+            self._captcha_expiry = None
+        discard_flow_state(self.hass, self.flow_id)
+
+    @callback
+    def _expire_puzzle(self, _now) -> None:
+        self._clear_puzzle()
+        try:
+            self.hass.config_entries.flow.async_abort(self.flow_id)
+        except UnknownFlow:
+            pass
+
+    @callback
+    def async_remove(self) -> None:
+        self._clear_puzzle()
+        if self._http is not None:
+            self.hass.async_create_task(self._http.close())
+            self._http = None
+        super().async_remove()
 
     # ---- step 1: region + mobile ----------------------------------------
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -100,7 +134,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors[CONF_MOBILE] = "invalid_thai_mobile"
             if not errors:
                 try:
-                    http = async_create_clientsession(self.hass)
+                    http = await self._new_http()
                     self._client = await async_build_client(self.hass, self._region, http)
                     await self._client.start_captcha()
                 except RateLimitedError:
@@ -121,18 +155,21 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # An external step may only transition to an external-step-done, which
             # then hands off to the SMS step.
-            flow_state(self.hass).pop(self.flow_id, None)
+            self._clear_puzzle()
             return self.async_external_step_done(next_step_id="sms")
 
         if not self._view_registered:
             self.hass.http.register_view(GacCaptchaView())
             self._view_registered = True
+        self._clear_puzzle()
+        self._captcha_expiry = async_call_later(self.hass, CAPTCHA_SECONDS, self._expire_puzzle)
         flow_state(self.hass)[self.flow_id] = {
             "client": self._client,
             "mobile": self._mobile,
             "captcha": self._client._captcha,  # already fetched in step 1
             "attempt": 1,
             "status": "pending",
+            "expires": time.monotonic() + CAPTCHA_SECONDS,
         }
         # This URL is opened in the user's own browser, so it must be one the
         # browser can resolve. Prefer the external URL and fall back to internal;
@@ -255,7 +292,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id="reauth_confirm")
         errors: dict[str, str] = {}
         try:
-            http = async_create_clientsession(self.hass)
+            http = await self._new_http()
             self._client = await async_build_client(self.hass, self._region, http)
             await self._client.start_captcha()
         except RateLimitedError:

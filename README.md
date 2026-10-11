@@ -55,6 +55,9 @@ You sign in with the mobile number on your GAC account:
 If the puzzle is off by a little it just shows a new one — keep going until it
 takes.
 
+The puzzle expires after ten minutes. Canceling setup closes its connection and
+invalidates its verification URL; start setup again if the page has expired.
+
 ## Entities
 
 - **Sensors**: battery, range, odometer, cabin temperature and PM2.5, 12 V battery,
