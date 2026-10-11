@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 import aiohttp
 from gac_connect.client import GacClient as LibraryClient
 from gac_connect.commands import CATALOG
-from gac_connect.const import ERR_REFRESH_SPENT, HTTP_TIMEOUT
+from gac_connect.const import CODE_COMMAND_ACCEPTED, ERR_REFRESH_SPENT, ERR_TOKEN_INVALID, HTTP_TIMEOUT
 from gac_connect.crypto import decrypt_envelope
-from gac_connect.errors import CommandError, GacError, RateLimitedError
+from gac_connect.errors import CommandError, GacError, RateLimitedError, TokenInvalidError
 from gac_connect.limits import parse_retry_after
 from gac_connect.models import VehicleStatus
 
@@ -31,6 +31,18 @@ PAUSE_UNSUPPORTED = (
     "Use Set charge window to choose an explicit charging schedule."
 )
 _CLOCK = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]\Z")
+
+
+def command_result(response: Any) -> dict:
+    """Require an explicit acceptance result from the pinned transport."""
+    if not isinstance(response, dict):
+        raise CommandError("command response must be an object with an acceptance result")
+    code = response.get("code")
+    if code == ERR_TOKEN_INVALID:
+        raise TokenInvalidError("token invalid; refresh and reissue the command")
+    if response.get("success") is True or code in (CODE_COMMAND_ACCEPTED, str(CODE_COMMAND_ACCEPTED), "0000"):
+        return response
+    raise CommandError(f"command rejected: {str(response.get('msg') or code)[:200]}")
 
 
 def validate_clock(value: Any) -> str:
@@ -124,6 +136,8 @@ class GacClient(LibraryClient):
     async def _iov_call(self, path: str, body: Any, *, sensitive: dict | None = None,
                         kind: str = "request") -> Any:
         response = await super()._iov_call(path, body, sensitive=sensitive, kind=kind)
+        if kind == "command":
+            return command_result(response)
         if path == "/refresh/token":
             data = self._data(response)
             spent = isinstance(response, dict) and response.get("code") == ERR_REFRESH_SPENT

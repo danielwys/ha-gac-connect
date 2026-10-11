@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from gac_connect.client import GacClient, _command_result
+from gac_connect.client import GacClient
 from gac_connect.commands import CATALOG, build_body
+
+from .client import command_result
 
 
 async def async_try_pinless_unlock(client: GacClient, vin: str) -> Any:
@@ -22,4 +24,4 @@ async def async_try_pinless_unlock(client: GacClient, vin: str) -> Any:
         sensitive={"vin": vin},
         kind="command",
     )
-    return _command_result(response)
+    return command_result(response)
