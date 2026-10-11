@@ -94,6 +94,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._mobile: str | None = None
         self._region: str = "AU"
         self._vehicle: Vehicle | None = None
+        self._allow_unlock = False
         self._view_registered = False
         self._http: aiohttp.ClientSession | None = None
         self._captcha_expiry = None
@@ -241,6 +242,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     # ---- step 5: choose a capability profile ----------------------------
     async def async_step_profile(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
+            self._allow_unlock = user_input.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)
             profile = user_input["profile"]
             if profile == PROFILE_CUSTOM:
                 return await self.async_step_profile_custom()
@@ -258,7 +260,10 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(
             step_id="profile",
-            data_schema=vol.Schema({vol.Required("profile", default=suggested): vol.In(PROFILES)}),
+            data_schema=vol.Schema({
+                vol.Required("profile", default=suggested): vol.In(PROFILES),
+                vol.Required(CONF_EXPERIMENTAL_PINLESS_UNLOCK, default=self._allow_unlock): bool,
+            }),
             description_placeholders={"model": self._vehicle.model or "your vehicle"},
         )
 
@@ -286,7 +291,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_MODEL: veh.model,
                 CONF_SESSION: self._client.session.to_dict(),
             },
-            options=options,
+            options={**options, CONF_EXPERIMENTAL_PINLESS_UNLOCK: self._allow_unlock},
         )
 
     # ---- reauth ----------------------------------------------------------

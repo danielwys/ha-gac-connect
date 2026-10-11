@@ -1,13 +1,38 @@
 import asyncio
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.gac_connect.config_flow import GacOptionsFlow
+from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
 from custom_components.gac_connect.coordinator import GacCoordinator
 from test_session_store import make_entry
+
+
+@pytest.mark.parametrize("allow_unlock", [None, False, True])
+def test_options_preserve_existing_unlock_preference(tmp_path, allow_unlock):
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        entry = make_entry(hass, {"vin": "VIN", "model": "Aion V"})
+        hass.config_entries._store = Mock()
+        if allow_unlock is not None:
+            hass.config_entries.async_update_entry(entry, options={CONF_EXPERIMENTAL_PINLESS_UNLOCK: allow_unlock})
+        flow = GacOptionsFlow()
+        flow.hass, flow.handler = hass, entry.entry_id
+
+        form = await flow.async_step_init()
+        # Saving an unrelated setting through the displayed form must keep the
+        # existing choice; an older entry without the option stays disabled.
+        validated = form["data_schema"]({"scan_interval": 600})
+        assert validated[CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
+        result = await flow.async_step_init(validated)
+        assert result["type"] == "create_entry"
+        assert result["data"][CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
+        assert result["data"]["scan_interval"] == 600
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("start,end,error", [

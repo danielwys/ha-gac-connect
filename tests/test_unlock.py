@@ -16,12 +16,14 @@ def transition_timer(monkeypatch):
     monkeypatch.setattr("custom_components.gac_connect.transition.async_call_later", Mock(return_value=Mock()))
 
 
-@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("enabled", [None, False, True])
 def test_unlock_calls_public_client_method_only_when_enabled(enabled):
     coordinator = coord(None)
-    coordinator.config_entry.options[CONF_EXPERIMENTAL_PINLESS_UNLOCK] = enabled
+    if enabled is not None:
+        coordinator.config_entry.options[CONF_EXPERIMENTAL_PINLESS_UNLOCK] = enabled
     coordinator.client.unlock = AsyncMock(return_value={"code": 13001})
     entity = GacLock(coordinator)
+    assert entity.code_format is None  # Enabling the control never changes a PIN requirement.
     entity.async_write_ha_state = Mock()
     if enabled:
         asyncio.run(entity.async_unlock())
@@ -29,7 +31,7 @@ def test_unlock_calls_public_client_method_only_when_enabled(enabled):
         coordinator.async_schedule_command_refresh.assert_called_once()
         assert entity.is_unlocking
     else:
-        with pytest.raises(HomeAssistantError, match="disabled"):
+        with pytest.raises(HomeAssistantError, match="Remote unlocking is disabled.*Allow remote unlocking"):
             asyncio.run(entity.async_unlock())
         coordinator.client.unlock.assert_not_called()
 

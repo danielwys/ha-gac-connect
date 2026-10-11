@@ -210,7 +210,8 @@ views:
           - type: tile
             entity: lock.aion_v_doors
             name: Doors
-            # tap → more-info → Lock. (Unlock needs the unsupported PIN.)
+            # Unlock is available with Allow remote unlocking enabled in setup
+            # or the integration options. No PIN required.
           - type: tile
             entity: cover.aion_v_windows
             name: Windows

@@ -75,6 +75,9 @@ A local number beginning with `61` keeps those digits outside Australia too.
    For another model or trim, choose **Other or custom equipment** and select
    the entities your vehicle lacks. You can change profiles and choices later in the
    integration options.
+5. On the vehicle profile screen, choose whether to **Allow remote unlocking**.
+   No PIN is required. Leave it unchecked to use the Doors control for locking
+   only; you can enable unlocking later in the integration options.
 
 If the puzzle is off by a little it just shows a new one — keep going until it
 takes.
@@ -99,7 +102,9 @@ has been verified for this service.
   pre-conditioning switch. Both controls share their requested state, which
   reverts if rejected or unconfirmed after three minutes.
 - **Lock**: lock the doors from Home Assistant. Unlocking does not require a PIN;
-  enable **Enable door unlocking** in the options to use it. Unlocking remains
+  select **Allow remote unlocking** during setup or in the options to use it. This
+  setting enables the Doors control's unlock action; it does not change a PIN
+  requirement. Unlocking remains
   off by default, and existing preferences are preserved. The control stays
   **Locking / Unlocking** until a new report confirms the action, a matching
   rejection arrives, or three minutes pass. The separate lock sensor continues
@@ -333,7 +338,8 @@ day, since any pause recorded in it is unknown; deleting
 
 - Sign-in needs a human (a slide puzzle and an SMS code); there is no headless login.
 - Door unlock does not require a PIN. The bundled library includes the corrected
-  public unlock method; enable unlocking in the integration options to use it.
+  public unlock method; select **Allow remote unlocking** during setup or in the
+  integration options to use the Doors control's unlock action.
   Remote power and charger-release remain blocked; no PIN is stored.
 - Using the official app and this integration on the same account at the same time
   can occasionally sign one of them out.
@@ -369,6 +375,8 @@ Thanks to their authors for showing what a good community integration looks like
   sensors can update after acceptance even without a push result.
   Lock and cover controls retain their in-progress state until fresh telemetry
   confirms the action; they no longer immediately revert to the previous report.
+  Setup now offers **Allow remote unlocking**, with the same label in options and
+  a clear explanation that no PIN is required. Existing unlock choices are retained.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

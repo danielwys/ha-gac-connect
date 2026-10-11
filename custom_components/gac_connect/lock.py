@@ -49,6 +49,6 @@ class GacLock(GacTransitionEntity, LockEntity):
     async def async_unlock(self, **kwargs: Any) -> None:
         if not self.coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False):
             raise HomeAssistantError(
-                "PIN-free unlock is disabled. Enable it in GAC Connect options to use it."
+                "Remote unlocking is disabled. Turn on 'Allow remote unlocking' in GAC Connect options to use it."
             )
         await self._run_transition(False, "unlock", lambda: self.coordinator.client.unlock(self.coordinator.vin))
