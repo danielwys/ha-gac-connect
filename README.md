@@ -155,12 +155,19 @@ trip computer (it reads 0.0 on some cars), so the package does not use it.
 
 ## Command results
 
-Remote commands are applied asynchronously. The integration receives each
-command's result from the service and refreshes the status straight away, so
-entities confirm within seconds rather than at the next poll. A refused command
+Remote commands are applied asynchronously. When the push feed is connected, the
+integration receives command results and requests a status refresh (subject to
+the request limits). Otherwise confirmation relies on polling. A refused command
 clears the requested state and is logged. Each result also fires a
 `gac_connect_command_result` event (`device_id`, `ok`, `code`, `event`,
 `session_id`) for automations.
+
+Push connections require TLS by default. If a regional backend supplies only a
+plaintext broker, push stays disconnected and polling continues. The **Allow
+unencrypted push connections** option explicitly permits that broker; its
+credentials and traffic can be intercepted and results forged by a network
+attacker. Enveloped messages are required, but the protocol's encryption alone
+does not authenticate the sender. Leave this option off on untrusted networks.
 
 ## Services
 

@@ -10,7 +10,7 @@ from gac_connect import GacError
 from gac_connect.client import GacClient
 from gac_connect.errors import AuthExpiredError, RateLimitedError
 from gac_connect.models import VehicleStatus
-from gac_connect.push import PushClient, PushResult
+from gac_connect.push import PushResult
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_QUIET_END,
     CONF_QUIET_START,
     CONF_SCAN_INTERVAL,
@@ -31,6 +32,7 @@ from .const import (
     EVENT_COMMAND_RESULT,
     SIGNAL_COMMAND_RESULT,
 )
+from .push import PushClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,9 +70,8 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self.vin = entry.data[CONF_VIN]
         # Command results arrive on the service's push feed; each one triggers
         # an immediate status refresh so entities show what the car actually did.
-        # The service's broker is plain TCP with short-lived credentials; opted in knowingly.
         self.push = PushClient(client.mqtt_info, self._on_command_result, decrypt=client.decrypt_push,
-                               allow_plaintext=True)
+                               allow_plaintext=entry.options.get(CONF_ALLOW_PLAINTEXT_PUSH, False) is True)
         self.last_result: PushResult | None = None
         self._force_refresh = False       # explicit refreshes may run inside quiet hours
         self._result_refresh_task: asyncio.Task | None = None

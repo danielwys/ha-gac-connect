@@ -37,6 +37,7 @@ from .helpers import async_build_client
 from .session_store import ConfigEntryStore
 from .entity_filter import OMIT_OPTIONS, is_aion_ut, model_omissions
 from .const import (
+    CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_AC_MINUTES,
     CONF_ENABLE_FRIDGE,
     CONF_ENABLE_TRACKER,
@@ -325,6 +326,8 @@ class GacOptionsFlow(OptionsFlow):
             key for key in opts.get(CONF_OMIT_ENTITIES, ()) if key in omit_options
         ]
         fields = {
+            vol.Optional(CONF_ALLOW_PLAINTEXT_PUSH,
+                         default=opts.get(CONF_ALLOW_PLAINTEXT_PUSH, False)): bool,
             vol.Optional(CONF_SCAN_INTERVAL,
                          default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)):
                 vol.All(vol.Coerce(int), vol.Clamp(min=MIN_SCAN_INTERVAL)),

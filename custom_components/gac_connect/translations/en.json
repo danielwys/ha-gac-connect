@@ -68,6 +68,7 @@
       "init": {
         "title": "GAC Connect options",
         "data": {
+          "allow_plaintext_push": "Allow unencrypted push connections (less secure)",
           "scan_interval": "Poll interval (seconds)",
           "enable_tracker": "Enable location tracking",
           "enable_fridge": "Fridge / warmer box controls",
@@ -79,6 +80,7 @@
           "ac_minutes": "A/C run time (minutes)"
         },
         "data_description": {
+          "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",
           "enable_fridge": "Shown when the car reports a fridge. Turn off to remove them, for example on a trim without one.",
           "experimental_pinless_unlock": "Allows the Doors control to send one unlock request without a PIN. Confirmed on an Aion UT in Thailand; other vehicles are untested. Off by default.",
           "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",

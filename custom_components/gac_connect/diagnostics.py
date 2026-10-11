@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from . import GacConfigEntry
 from .const import (
-    CONF_AC_MINUTES, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
+    CONF_AC_MINUTES, CONF_ALLOW_PLAINTEXT_PUSH, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES,
     CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
 )
@@ -16,7 +16,7 @@ from .const import (
 # URLs can contain passwords, signed query strings or private locations. New
 # options must be reviewed before being included in a shareable diagnostic.
 SAFE_OPTIONS = {
-    CONF_AC_MINUTES, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
+    CONF_AC_MINUTES, CONF_ALLOW_PLAINTEXT_PUSH, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES,
     CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
 }
