@@ -100,6 +100,7 @@ def decode_status(results: dict, *, online: Any = None, updated_ms: Any = None) 
         stamp = None
     status = VehicleStatus.from_results(normalized, online=None, updated_ms=stamp)
     status.raw = results
+    status.fridge_fitted = bool(_first(results, "refrigeratorAccessors"))
     status.locked = doors_locked(status)
     status.online = online if isinstance(online, bool) else {0: False, 1: True}.get(enum_code(online))
     status.charging_mode = ChargingMode(mode) if mode in (0, 1) else None
