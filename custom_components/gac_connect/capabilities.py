@@ -117,3 +117,26 @@ class CapabilityManager:
             "enable" if key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()) else "automatic")}
             for key in ENTITY_FEATURES}
         return data
+
+    def explanation(self, entity_key: str) -> str:
+        """Explain effective visibility, with overrides before passive evidence."""
+        if entity_key == "button:charge_pause":
+            return "Hidden: continuous charging pause is not supported."
+        if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
+            return "Hidden by your Omit choice."
+        if entity_key == "device_tracker:location" and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+            return "Hidden: location tracking is turned off."
+        if entity_key in FRIDGE_ENTITIES and self.entry.options.get(CONF_ENABLE_FRIDGE) is False:
+            return "Hidden: fridge controls are turned off."
+        if entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
+            return "Shown by your Always show choice; this does not prove support."
+        evidence = self.detector.feature(ENTITY_FEATURES.get(entity_key, ""))
+        if evidence.source == "observed_telemetry":
+            return "Shown: a usable vehicle reading was observed."
+        if evidence.source == "confirmed_command":
+            return "Shown: a matching successful command result was received."
+        if evidence.source == "model_default":
+            return "Hidden by the model default; positive vehicle evidence can override this."
+        if evidence.source == "vehicle_equipment":
+            return "Shown by vehicle equipment evidence." if self.includes(entity_key) else "Hidden by vehicle equipment evidence."
+        return "Hidden: no usable evidence yet. Missing data does not prove absence."

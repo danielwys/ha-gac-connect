@@ -22,12 +22,12 @@ def test_options_preserve_existing_unlock_preference(tmp_path, allow_unlock):
         flow = GacOptionsFlow()
         flow.hass, flow.handler = hass, entry.entry_id
 
-        form = await flow.async_step_init()
+        form = await flow.async_step_settings()
         # Saving an unrelated setting through the displayed form must keep the
         # existing choice; an older entry without the option stays disabled.
         validated = form["data_schema"]({"scan_interval": 600})
         assert validated[CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
-        result = await flow.async_step_init(validated)
+        result = await flow.async_step_settings(validated)
         assert result["type"] == "create_entry"
         assert result["data"][CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
         assert result["data"]["scan_interval"] == 600
@@ -48,7 +48,7 @@ def test_quiet_hours_validation(tmp_path, start, end, error):
         flow = GacOptionsFlow()
         flow.hass = hass
         flow.handler = entry.entry_id
-        result = await flow.async_step_init({"quiet_start": start, "quiet_end": end})
+        result = await flow.async_step_settings({"quiet_start": start, "quiet_end": end})
         if error:
             assert result["type"] == "form"
             assert error in result["errors"].values()

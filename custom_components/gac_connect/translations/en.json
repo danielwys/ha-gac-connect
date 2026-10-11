@@ -69,7 +69,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "settings": {
         "title": "GAC Connect options",
         "description": "Auto detect learns from usable readings and remembers them across restarts. Unknown features stay hidden unless you choose Always show. A detected state does not prove that remote commands work; command outcomes are listed separately in diagnostics. No commands are sent to test equipment.",
         "data": {
@@ -95,6 +95,17 @@
           "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials."
         }
+      },
+      "init": {
+        "title": "GAC Connect",
+        "menu_options": {
+          "settings": "Vehicle settings",
+          "equipment": "Detected equipment"
+        }
+      },
+      "equipment": {
+        "title": "Detected equipment",
+        "description": "These explanations describe integration choices, not a complete list of your car\u2019s hardware. Observing a state does not prove both remote command directions work. No test commands are sent. Hardware readings that disappear temporarily remain remembered. Home Assistant\u2019s own disabled-entity settings can still hide an included entity.\n\n{equipment}"
       }
     },
     "error": {

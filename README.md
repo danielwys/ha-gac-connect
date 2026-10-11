@@ -328,6 +328,20 @@ to a vehicle safely. Remove those explicitly from Home Assistant's **Statistics*
 page; this integration never guesses ownership from a sensor name or VIN prefix.
 Home Assistant otherwise [retains statistics after sensor deletion](https://www.home-assistant.io/docs/configuration/long-term-statistics/#good-to-know).
 
+## Equipment explanations
+
+Open **GAC Connect → Configure → Detected equipment** to see why each sensor or
+control is included or hidden. Auto detect explains observed readings, model
+defaults, missing evidence and your overrides separately. Commands with a
+matching successful result are listed individually: opening does not prove
+closing, and a state reading alone does not prove either remote action works.
+Nothing is sent to test equipment. Home Assistant’s own entity settings may
+still disable an included entity.
+
+Use **Configure → Vehicle settings** to change the profile or overrides. If the
+entry is unloaded, the explanation page says that detection evidence is
+unavailable rather than inventing a hardware assessment.
+
 ## Command progress
 
 **Last command** on the device page and example dashboard tracks controls and

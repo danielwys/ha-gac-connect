@@ -324,6 +324,17 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
 
 class GacOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="init", menu_options=["settings", "equipment"])
+
+    async def async_step_equipment(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from .equipment import equipment_summary
+
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(step_id="equipment", data_schema=vol.Schema({}),
+                                    description_placeholders={"equipment": equipment_summary(self.config_entry)})
+
+    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = {**self.config_entry.options, **user_input}
@@ -391,4 +402,4 @@ class GacOptionsFlow(OptionsFlow):
             fields[vol.Optional(CONF_ENABLE_FRIDGE,
                                 default=opts.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))] = bool
         schema = vol.Schema(fields)
-        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="settings", data_schema=schema, errors=errors)

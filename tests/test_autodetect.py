@@ -79,9 +79,9 @@ def test_existing_ut_can_switch_to_auto_without_inheriting_preset_exclusions(tmp
             hass.config_entries.async_update_entry(entry, options=options)
             flow = GacOptionsFlow()
             flow.hass, flow.handler = hass, entry.entry_id
-            form = await flow.async_step_init()
+            form = await flow.async_step_settings()
             assert "profile" in form["data_schema"].schema
-            response = await flow.async_step_init({"profile": "auto_detect"})
+            response = await flow.async_step_settings({"profile": "auto_detect"})
             assert response["type"] == "create_entry"
             assert response["data"]["omit_entities"] == ["sensor:pm25"]
             assert response["data"]["enable_fridge"] is True
@@ -95,7 +95,7 @@ def test_conflicting_manual_overrides_are_rejected(tmp_path):
         async with vehicle(tmp_path) as (hass, entry, _):
             flow = GacOptionsFlow()
             flow.hass, flow.handler = hass, entry.entry_id
-            response = await flow.async_step_init({"enable_entities": ["cover:sunroof"],
+            response = await flow.async_step_settings({"enable_entities": ["cover:sunroof"],
                                                    "omit_entities": ["cover:sunroof"]})
             assert response["errors"] == {"enable_entities": "conflicting_entity_choices"}
     asyncio.run(run())
