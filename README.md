@@ -216,6 +216,9 @@ day, since any pause recorded in it is unknown; deleting
 
 ## Notes
 
+- Temporary server failures during token refresh preserve the saved session.
+  An expired or explicitly rejected refresh token still requires reauthentication.
+
 - Sign-in needs a human (a slide puzzle and an SMS code); there is no headless login.
 - The library blocks unlock, remote power and charger-release because it marks
   them PIN-gated. The integration's PIN-free unlock option works on one tested

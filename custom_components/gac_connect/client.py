@@ -8,13 +8,19 @@ tests must be checked when updating the pinned dependency.
 from __future__ import annotations
 
 import re
+import json
+from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import aiohttp
 from gac_connect.client import GacClient as LibraryClient
 from gac_connect.commands import CATALOG
-from gac_connect.errors import CommandError
+from gac_connect.const import ERR_REFRESH_SPENT, HTTP_TIMEOUT
+from gac_connect.crypto import decrypt_envelope
+from gac_connect.errors import CommandError, GacError, RateLimitedError
+from gac_connect.limits import parse_retry_after
 from gac_connect.models import VehicleStatus
 
 from .status import decode_status, enum_code
@@ -87,6 +93,44 @@ def window_operation(
 
 class GacClient(LibraryClient):
     """Retain the library transport with corrected telemetry and reservations."""
+
+    async def _post(self, host: str, path: str, wrapper: dict, headers: dict, kind: str = "request") -> Any:
+        """Backport HTTP error classification without changing the b1 wire protocol."""
+        async with AsyncExitStack() as held:
+            for limiter in self._limiters:
+                await held.enter_async_context(limiter.slot(kind))
+            async with self._http.post(
+                f"https://{host}{path}", data=json.dumps(wrapper, separators=(",", ":")).encode(),
+                headers=headers, timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT),
+                allow_redirects=False, raise_for_status=False,
+            ) as response:
+                if response.status == 429:
+                    seconds = parse_retry_after(response.headers.get("Retry-After"))
+                    pause = max(limiter.block(seconds) for limiter in self._limiters)
+                    raise RateLimitedError("the service rate-limited the request", retry_after=pause)
+                if response.status >= 300:
+                    raise GacError(f"HTTP {response.status} from {path}; credentials retained")
+                raw = await response.read()
+        try:
+            result = json.loads(raw)
+        except ValueError as err:
+            raise GacError(f"non-JSON response from {path}") from err
+        if isinstance(result, dict) and result.get("encryptData"):
+            plain = decrypt_envelope(result, self._response_key(host))
+            if plain is not None:
+                return plain
+        return result
+
+    async def _iov_call(self, path: str, body: Any, *, sensitive: dict | None = None,
+                        kind: str = "request") -> Any:
+        response = await super()._iov_call(path, body, sensitive=sensitive, kind=kind)
+        if path == "/refresh/token":
+            data = self._data(response)
+            spent = isinstance(response, dict) and response.get("code") == ERR_REFRESH_SPENT
+            if not spent and not (isinstance(data, dict) and data.get("token")):
+                # b1 otherwise treats any error body as permanent authentication loss.
+                raise GacError("refresh response has no usable token; credentials retained")
+        return response
 
     async def get_status(self, vin: str) -> VehicleStatus:
         response = await self._iov_read(CATALOG["status"].path, {"vin": vin}, sensitive={"vin": vin})
