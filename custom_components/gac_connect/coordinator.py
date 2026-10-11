@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from datetime import time, timedelta
 from time import monotonic
 
@@ -88,6 +89,10 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self._followup_blocked = False
         self._followup_closed = False
         self._fetch_lock = asyncio.Lock()   # one status request in flight, whatever triggered it
+        self._fetch_generation = 0
+        self._fetched_status = None
+        self._rate_limit_until = float("-inf")
+        self.retry_not_before = None
         self.last_refresh_success = None
         self.last_refresh_attempt = None
         self._refresh_outcome = "waiting"
@@ -155,7 +160,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
     @callback
     def async_schedule_command_refresh(self) -> None:
         """Debounce accepted commands into at most three follow-up reads per burst."""
-        if self._followup_closed:
+        if self._followup_closed or monotonic() < self._rate_limit_until:
             return
         now = monotonic()
         self._refresh_deadlines = [now + delay for delay in COMMAND_REFRESH_DELAYS]
@@ -164,7 +169,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
     @callback
     def _schedule_result_refresh(self) -> None:
         """A push result shares pending reads, or requests one delayed read."""
-        if self._followup_closed:
+        if self._followup_closed or monotonic() < self._rate_limit_until:
             return
         if not self._refresh_deadlines:
             self._refresh_deadlines = [monotonic() + COMMAND_REFRESH_DELAYS[0]]
@@ -189,6 +194,23 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             await self.async_refresh()
             if self._followup_blocked:
                 self._refresh_deadlines.clear()  # do not retry through a rate limit or expired login
+            elif self.commands.records and not self.commands.pending:
+                # One read after a result is useful; further reads cannot confirm
+                # an already settled command. Unrelated pending actions still wait.
+                self._refresh_deadlines.clear()
+
+    @callback
+    def async_rate_limited(self, error: RateLimitedError) -> None:
+        """Share a command/status backoff without spending further request budget."""
+        delay = error.retry_after
+        if not isinstance(delay, (int, float)) or not math.isfinite(delay) or delay <= 0:
+            delay = 60
+        self._rate_limit_until = max(self._rate_limit_until, monotonic() + min(delay, 86400))
+        self.retry_not_before = dt_util.utcnow() + timedelta(seconds=self._rate_limit_until - monotonic())
+        self._refresh_outcome = "rate_limited"
+        self._followup_blocked = True
+        self._refresh_deadlines.clear()
+        self.async_update_listeners()
 
     @callback
     def _cancel_result_refresh(self) -> None:
@@ -223,18 +245,31 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         await self.async_request_refresh()
 
     async def _async_update_data(self) -> VehicleStatus:
+        generation = self._fetch_generation
         async with self._fetch_lock:
+            if generation != self._fetch_generation and self._refresh_outcome == "ok":
+                # A caller that waited for this same in-flight read shares its
+                # result, even before DataUpdateCoordinator publishes it.
+                self._force_refresh = False
+                return self._fetched_status
             # During quiet hours, keep the last reading instead of polling —
             # unless a manual action or command result asked for a refresh.
             if self._in_quiet_hours() and self.data is not None and not self._force_refresh:
                 return self.data
             self._force_refresh = False
+            if monotonic() < self._rate_limit_until:
+                self._followup_blocked = True
+                if self.data is not None:
+                    return self.data
+                raise UpdateFailed("Waiting for GAC's request limit before refreshing")
             self._followup_blocked = False
             self.last_refresh_attempt = dt_util.utcnow()
             try:
                 status = await self.client.get_status(self.vin)
                 self.last_refresh_success = dt_util.utcnow()
                 self._refresh_outcome = "ok"
+                self.retry_not_before = None
+                self._fetched_status = status
                 if manager := getattr(self, "capabilities", None):
                     manager.observe(status)
                 self.commands.observe(status)
@@ -244,8 +279,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 self._followup_blocked = True
                 raise ConfigEntryAuthFailed(str(err)) from err
             except RateLimitedError as err:
-                self._refresh_outcome = "rate_limited"
-                self._followup_blocked = True
+                self.async_rate_limited(err)
                 # Held back by the request limits (or the service asked us to slow
                 # down): keep showing the last reading rather than going unavailable.
                 if self.data is not None:
@@ -260,3 +294,4 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 raise
             finally:
                 self._last_status_refresh = monotonic()
+                self._fetch_generation += 1

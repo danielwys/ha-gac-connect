@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from ._vendor.gac_connect import command_session_id
 from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
 from ._vendor.gac_connect.models import ChargingMode
+from ._vendor.gac_connect.errors import RateLimitedError
 from .api import doors_locked
 
 REQUEST_SECONDS = 180
@@ -115,6 +116,10 @@ class CommandTracker:
             response = await request
         except asyncio.CancelledError:
             record.state = "cancelled"
+            raise
+        except RateLimitedError as err:
+            record.state = "failed"
+            self.coordinator.async_rate_limited(err)
             raise
         except Exception:
             record.state = "failed"

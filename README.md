@@ -268,7 +268,7 @@ hours. Manual refreshes and post-command checks still run during that window.
 ### Auto detect
 
 Choose **Auto detect** during setup, or open **Settings → Devices & services →
-GAC Connect → Configure** and change **Vehicle profile**. Switching away from
+GAC Connect → Configure → Vehicle settings** and change **Vehicle profile**. Switching away from
 the UT preset clears its preset omissions and allows fridge detection; unrelated
 manual omissions, location privacy and the unlock setting are preserved.
 
@@ -385,7 +385,8 @@ Results must match this vehicle and the exact command session. Early results
 are held until the request returns its session ID. A newer accepted command for
 the same feature replaces the earlier pending request; a failed replacement
 does not. Command details omit raw responses, session IDs and parameters, and
-are cleared on reload. Equipment learning uses this same result correlation.
+reset on reload; Home Assistant’s recorder can retain their state history.
+Equipment learning uses this same result correlation.
 
 ## Vehicle data freshness
 
@@ -410,8 +411,14 @@ The integration is built to go easy on GAC's service. Regular background polls
 use the configured interval (at least one minute). Commands temporarily request
 up to three follow-up reads; those reads wait at least 10 seconds after a previous
 status request finishes, so a slow request or a manual refresh can delay them.
-Push results share that sequence. A rate-limit response stops the remaining
-follow-ups, and normal scheduled polling resumes. Removing or reloading the
+Push results share that sequence. Remaining follow-ups stop once all tracked
+commands have settled, after at least one status read. Overlapping refreshes
+share an in-flight successful response instead of issuing duplicate requests.
+A rate-limit response from a status read or command stops the remaining
+follow-ups. Scheduled and manual refreshes respect its retry delay (shown in
+**Polling status** details); normal polling resumes at the next scheduled read
+after that delay. This reduces requests without shortening the chosen background
+interval or using speculative wake-up probes. Removing or reloading the
 integration cancels pending follow-ups. Underneath, every request goes through the
 `gac-connect` library's limiter, shared by all GAC Connect entries in Home
 Assistant: one request at a time, at most one a second, 20 a minute, 240 an hour
@@ -483,6 +490,12 @@ Thanks to their authors for showing what a good community integration looks like
   a clear explanation that no PIN is required. Existing unlock choices are retained.
   Permanent sensor and vehicle-entry removal now also clears their recorder
   statistics, while temporary unloads, disabling and entity renames retain them.
+  Freshness and polling diagnostics now distinguish a recent cloud response from
+  a recent vehicle report. All commands share result tracking and expose pending,
+  rejected, timed-out and confirmed outcomes. Configure includes equipment
+  explanations and a charging schedule view/editor with explicit clock and
+  readback limits. Polling shares overlapping reads, ends settled-command checks
+  early and observes server retry delays.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

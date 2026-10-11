@@ -12,8 +12,8 @@
 # settings (gear) → Unit of measurement → psi. Home Assistant converts it.
 #
 # LOCATION: the "Where" tile and the map both need the location tracker. Turn it
-# on in Settings → Devices & Services → GAC Connect → Configure → Enable
-# location tracking. With it off the tracker entity is not created at all, so
+# on in Settings → Devices & Services → GAC Connect → Configure → Vehicle settings
+# → Enable location tracking. With it off the tracker entity is not created at all, so
 # delete both cards (or the whole Location section) to avoid an error tile.
 #
 # CHARGE WINDOW: Charging schedule shows the reported mode, window and days in

@@ -16,12 +16,14 @@ def test_cloud_success_does_not_make_an_old_vehicle_report_fresh(tmp_path):
             now = datetime(2026, 10, 11, tzinfo=UTC)
             old = replace(decode_status({}), updated_ms=int((now - timedelta(hours=1)).timestamp() * 1000))
             coordinator.client.get_status.return_value = old
-            with patch('custom_components.gac_connect.coordinator.dt_util.utcnow', return_value=now):
+            with patch('custom_components.gac_connect.coordinator.dt_util.utcnow', return_value=now) as utc_clock:
                 await coordinator.async_refresh()
                 assert coordinator.last_refresh_success == now
                 assert coordinator.freshness == 'stale'
                 assert coordinator.report_age == 3600
+                utc_clock.return_value = now + timedelta(seconds=30)
                 for error, state in [(RateLimitedError('wait'), 'rate_limited'), (GacError('offline'), 'error')]:
+                    coordinator._rate_limit_until = float('-inf')  # simulate the previous cooldown having elapsed
                     coordinator.client.get_status.side_effect = error
                     await coordinator.async_refresh()
                     assert coordinator.last_refresh_success == now

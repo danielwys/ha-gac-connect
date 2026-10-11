@@ -158,3 +158,78 @@ def test_unload_cancels_followups_and_prevents_late_scheduling(tmp_path):
             assert coordinator._refresh_deadlines == []
             coordinator.client.get_status.assert_not_awaited()
     asyncio.run(run())
+
+
+def test_confirmation_stops_followups_but_an_unrelated_pending_command_keeps_them(tmp_path):
+    from dataclasses import replace
+
+    async def run():
+        async with vehicle(tmp_path) as (_, _, coordinator):
+            clock = Clock()
+            baseline = coordinator.data = replace(decode_status({}), steering_heat_on=False)
+            coordinator.client.get_status.return_value = replace(baseline, steering_heat_on=True)
+            with patch.object(coordinator, '_start_result_refresh'), clock_patch(clock), \
+                    patch('custom_components.gac_connect.coordinator.monotonic', clock.monotonic):
+                await async_send(coordinator, 'steering-on', AsyncMock(return_value=ACCEPTED)())
+                await coordinator._result_refresh()
+                assert coordinator.commands.state == 'confirmed'
+                assert coordinator.client.get_status.await_count == 1
+                await async_send(coordinator, 'horn-on', AsyncMock(return_value={'data': {'sessionId': 'horn'}})())
+                await coordinator._result_refresh()
+                assert coordinator.commands.state == 'pending'
+                assert coordinator.client.get_status.await_count == 4
+    asyncio.run(run())
+
+
+def test_overlapping_status_requests_share_one_network_read(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            started, release = asyncio.Event(), asyncio.Event()
+            report = decode_status({})
+            async def fetch(_vin):
+                started.set()
+                await release.wait()
+                return report
+            c.client.get_status.side_effect = fetch
+            first = asyncio.create_task(c._async_update_data())
+            await started.wait()
+            second = asyncio.create_task(c._async_update_data())
+            await asyncio.sleep(0)
+            release.set()
+            assert await first is report and await second is report
+            c.client.get_status.assert_awaited_once()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('from_command', [False, True])
+def test_cooldown_blocks_manual_and_background_reads_until_retry_time(tmp_path, from_command):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            clock = Clock()
+            c.data = decode_status({})
+            with patch('custom_components.gac_connect.coordinator.monotonic', clock.monotonic):
+                error = RateLimitedError('wait', retry_after=120)
+                if from_command:
+                    with pytest.raises(RateLimitedError):
+                        await async_send(c, 'lock', AsyncMock(side_effect=error)())
+                else:
+                    c.client.get_status.side_effect = error
+                    await c.async_refresh()
+                attempts = c.client.get_status.await_count
+                last_success = c.last_refresh_success
+                for now in (1, 30, 119):
+                    clock.now = now
+                    c._force_refresh = True
+                    await c.async_refresh()
+                    c.async_schedule_command_refresh()
+                    c._schedule_result_refresh()
+                    assert c._refresh_deadlines == []
+                assert c.last_refresh_success == last_success
+                assert c.client.get_status.await_count == attempts
+                assert c.polling_state == 'rate_limited' and c.retry_not_before is not None
+                clock.now = 120
+                c.client.get_status.side_effect = None
+                await c.async_refresh()
+                assert c.client.get_status.await_count == attempts + 1
+                assert c.polling_state == 'ok' and c.retry_not_before is None
+    asyncio.run(run())

@@ -207,5 +207,6 @@ class GacActivitySensor(GacEntity, SensorEntity):
             return {"report_age_seconds": round(age) if age is not None else None,
                     "stale_after_seconds": self.coordinator.stale_after}
         if self.entity_description.key == "polling_status":
-            return {"last_attempt": self.coordinator.last_refresh_attempt}
+            return {"last_attempt": self.coordinator.last_refresh_attempt,
+                    "retry_not_before": self.coordinator.retry_not_before}
         return None
