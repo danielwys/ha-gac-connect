@@ -300,6 +300,34 @@ as the horn or ventilation may need an Always show override, or a successful
 explicit service action, before they appear. Detection never tries commands on
 its own and cannot guarantee that a remote action works on every trim.
 
+## Removing sensors and statistics
+
+Permanently deleting a GAC sensor also clears its short-term and long-term
+statistics through Home Assistant's recorder. Removing a vehicle's integration
+entry clears the statistics for its sensors, including renamed and disabled
+sensors. This also applies when the UT preset removes unsupported tyre sensors
+or the fridge option removes its sensor registrations. The deleted statistics
+cannot be recovered by adding the integration or sensor again.
+
+Reloading, restarting, losing connectivity, hiding an entity, or disabling it
+keeps its statistics. The **Omit unsupported entities** list disables optional
+entities and preserves their statistics; the UT preset's permanent removals
+are different. Sensor renames keep statistics under the new entity ID. Other
+vehicles, integrations and separately created template/trip sensors are left
+alone. Ordinary state history follows the recorder's usual retention settings.
+
+Recorder must be available for automatic cleanup. Individual deletions are
+watched while GAC Connect is loaded, including after a vehicle entry is unloaded;
+entry removal also works when that entry never finished setup. Removing the HACS
+files first, or deleting a sensor while the integration has never loaded in that
+HA session, prevents its removal listener from running. Remove the vehicle entry
+before uninstalling the integration files.
+
+Statistics left by an earlier integration removal cannot always be attributed
+to a vehicle safely. Remove those explicitly from Home Assistant's **Statistics**
+page; this integration never guesses ownership from a sensor name or VIN prefix.
+Home Assistant otherwise [retains statistics after sensor deletion](https://www.home-assistant.io/docs/configuration/long-term-statistics/#good-to-know).
+
 ## Request limits
 
 The integration is built to go easy on GAC's service. Regular background polls
@@ -377,6 +405,8 @@ Thanks to their authors for showing what a good community integration looks like
   confirms the action; they no longer immediately revert to the previous report.
   Setup now offers **Allow remote unlocking**, with the same label in options and
   a clear explanation that no PIN is required. Existing unlock choices are retained.
+  Permanent sensor and vehicle-entry removal now also clears their recorder
+  statistics, while temporary unloads, disabling and entity renames retain them.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

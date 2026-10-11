@@ -2,7 +2,8 @@
   "domain": "gac_connect",
   "name": "GAC Connect (unofficial, beta)",
   "after_dependencies": [
-    "http"
+    "http",
+    "recorder"
   ],
   "codeowners": [],
   "config_flow": true,

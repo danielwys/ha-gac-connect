@@ -24,6 +24,7 @@ from .session_store import ConfigEntryStore
 from .entity_filter import apply_registry_choices
 from .fridge import FridgeController, controls_enabled, remove_entities, store_key
 from .helpers import async_build_client
+from .statistics import async_setup_cleanup
 
 type GacConfigEntry = ConfigEntry[GacRuntime]
 
@@ -34,6 +35,12 @@ class GacRuntime:
     coordinator: GacCoordinator
     options: dict = field(default_factory=dict)  # snapshot: reload only when these change
     fridge: FridgeController | None = None
+
+
+async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
+    """Watch permanent sensor removals even while vehicle entries are unloaded."""
+    async_setup_cleanup(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
@@ -86,9 +93,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None:
-    """Forget credentials, fridge preferences and learned equipment with the entry."""
+    """Remove this entry's statistics, credentials, preferences and equipment."""
     from homeassistant.helpers.storage import Store
 
+    async_setup_cleanup(hass).async_remove_entry(entry)
     await Store(hass, 1, store_key(entry.entry_id)).async_remove()
     await Store(hass, 1, capabilities_store_key(entry.entry_id)).async_remove()
     await ConfigEntryStore(hass, entry).remove()
