@@ -128,30 +128,33 @@ class GacClient(LibraryClient):
 
     async def _post(self, host: str, path: str, wrapper: dict, headers: dict, kind: str = "request") -> Any:
         """Backport HTTP error classification without changing the b1 wire protocol."""
-        async with AsyncExitStack() as held:
-            for limiter in self._limiters:
-                await held.enter_async_context(limiter.slot(kind))
-            async with self._http.post(
-                f"https://{host}{path}", data=json.dumps(wrapper, separators=(",", ":")).encode(),
-                headers=headers, timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT),
-                allow_redirects=False, raise_for_status=False,
-            ) as response:
-                if response.status == 429:
-                    seconds = parse_retry_after(response.headers.get("Retry-After"))
-                    pause = max(limiter.block(seconds) for limiter in self._limiters)
-                    raise RateLimitedError("the service rate-limited the request", retry_after=pause)
-                if response.status >= 300:
-                    raise GacError(f"HTTP {response.status} from {path}; credentials retained")
-                raw = await response.read()
         try:
-            result = json.loads(raw)
-        except ValueError as err:
-            raise GacError(f"non-JSON response from {path}") from err
-        if isinstance(result, dict) and result.get("encryptData"):
-            plain = decrypt_envelope(result, self._response_key(host))
-            if plain is not None:
-                return plain
-        return result
+            async with AsyncExitStack() as held:
+                for limiter in self._limiters:
+                    await held.enter_async_context(limiter.slot(kind))
+                async with self._http.post(
+                    f"https://{host}{path}", data=json.dumps(wrapper, separators=(",", ":")).encode(),
+                    headers=headers, timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT),
+                    allow_redirects=False, raise_for_status=False,
+                ) as response:
+                    if response.status == 429:
+                        seconds = parse_retry_after(response.headers.get("Retry-After"))
+                        pause = max(limiter.block(seconds) for limiter in self._limiters)
+                        raise RateLimitedError("the service rate-limited the request", retry_after=pause)
+                    if response.status >= 300:
+                        raise GacError(f"HTTP {response.status} from {path}; credentials retained")
+                    raw = await response.read()
+            try:
+                result = json.loads(raw)
+            except ValueError as err:
+                raise GacError(f"non-JSON response from {path}") from err
+            if isinstance(result, dict) and result.get("encryptData"):
+                plain = decrypt_envelope(result, self._response_key(host))
+                if plain is not None:
+                    return plain
+            return result
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise GacError("Could not reach GAC; credentials retained") from err
 
     async def _iov_call(self, path: str, body: Any, *, sensitive: dict | None = None,
                         kind: str = "request") -> Any:
