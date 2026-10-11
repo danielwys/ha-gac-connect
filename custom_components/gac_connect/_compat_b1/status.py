@@ -104,6 +104,8 @@ def decode_status(results: dict, *, online: Any = None, updated_ms: Any = None) 
     status.online = online if isinstance(online, bool) else {0: False, 1: True}.get(enum_code(online))
     status.charging_mode = ChargingMode(mode) if mode in (0, 1) else None
     status.charging = {0: False, 2: True}.get(enum_code(charging.get("chargingStatus")))
+    weekly = enum_code(charging.get("weeklyReservation"))
+    status.charge_weekly = weekly if weekly is not None and 0 <= weekly <= 127 else None
     charger = _first(results, "chargerAccessors")
     status.plugged_in = {0: False, 1: True}.get(enum_code(charger.get("plug")))
     status.charger_locked = {0: True, 1: False}.get(enum_code(charger.get("lock")))
