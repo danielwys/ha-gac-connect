@@ -51,6 +51,11 @@ OMIT_OPTIONS: dict[str, str] = {
     for key, label in ENTITY_CHOICES[domain].items()
 }
 
+UT_OMISSIONS = frozenset({
+    "switch:steering_heat", "cover:sunroof",
+    *(f"sensor:tyre_{i}_{kind}" for i in range(1, 5) for kind in ("pressure", "temp")),
+})
+
 
 def is_aion_ut(entry: ConfigEntry) -> bool:
     """Recognise UT entries, including ones created before profiles existed."""
@@ -60,7 +65,7 @@ def is_aion_ut(entry: ConfigEntry) -> bool:
 
 def model_omissions(entry: ConfigEntry) -> set[str]:
     """Entities known to be unsupported on this vehicle model."""
-    return {"switch:steering_heat", "cover:sunroof"} if is_aion_ut(entry) else set()
+    return set(UT_OMISSIONS) if is_aion_ut(entry) else set()
 
 
 def effective_omissions(entry: ConfigEntry) -> set[str]:

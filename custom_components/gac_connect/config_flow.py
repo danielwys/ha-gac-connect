@@ -35,7 +35,7 @@ from homeassistant.helpers.network import get_url
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .session_store import ConfigEntryStore
-from .entity_filter import OMIT_OPTIONS, is_aion_ut, model_omissions
+from .entity_filter import OMIT_OPTIONS, UT_OMISSIONS, is_aion_ut, model_omissions
 from .const import (
     CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_AC_MINUTES,
@@ -64,7 +64,7 @@ PROFILE_UT = "aion_ut"
 PROFILE_V = "aion_v"
 PROFILE_CUSTOM = "custom"
 PROFILES = {
-    PROFILE_UT: "Aion UT (omit fridge, steering wheel heat and sunroof)",
+    PROFILE_UT: "Aion UT (omit fridge, steering wheel heat, sunroof and tyre readings)",
     PROFILE_V: "Aion V (allow fridge)",
     PROFILE_CUSTOM: "Other or custom equipment",
 }
@@ -241,7 +241,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_profile_custom()
             options = {
                 CONF_ENABLE_FRIDGE: profile == PROFILE_V,
-                CONF_OMIT_ENTITIES: ["switch:steering_heat", "cover:sunroof"] if profile == PROFILE_UT else [],
+                CONF_OMIT_ENTITIES: sorted(UT_OMISSIONS) if profile == PROFILE_UT else [],
             }
             return self._create_vehicle_entry(options)
 

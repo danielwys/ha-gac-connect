@@ -49,7 +49,8 @@ A local number beginning with `61` keeps those digits outside Australia too.
    Verify (arrow keys nudge it a pixel).
 3. Enter the **SMS code** sent to your phone.
 4. Pick your vehicle, then choose an equipment profile. The **Aion UT** preset
-   omits the fridge, steering wheel heat and sunroof entities, including for
+   omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and
+   temperature sensors, including for
    entries created before profiles were added. **Aion V** allows the fridge
    when the car reports one.
    For another model or trim, choose **Other or custom equipment** and select
@@ -209,7 +210,7 @@ Poll interval, quiet hours (skip polling overnight),
 whether the location tracker is enabled, whether the fridge controls are shown,
 which other sensors and controls to omit, the car's picture on the map (an image
 URL or a `/local/` path), and how long an A/C run lasts. For an existing Aion UT
-entry, fridge, steering wheel heat and sunroof controls are omitted automatically,
+entry, fridge, steering wheel heat, sunroof and all eight tyre readings are omitted automatically,
 including when the entry was created before vehicle profiles were introduced.
 The poll interval is at least 60 seconds (default 5 minutes).
 Quiet hours use Home Assistant's configured time zone. Enter two different times

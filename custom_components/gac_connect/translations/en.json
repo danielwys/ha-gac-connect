@@ -27,7 +27,7 @@
       },
       "profile": {
         "title": "Choose a vehicle profile",
-        "description": "Select an equipment profile for {model}. Aion UT always omits its unsupported fridge, steering wheel heat and sunroof controls. You can change other choices later in the integration options.",
+        "description": "Select an equipment profile for {model}. Aion UT omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and temperature sensors. You can change other choices later in the integration options.",
         "data": {
           "profile": "Vehicle profile"
         }
