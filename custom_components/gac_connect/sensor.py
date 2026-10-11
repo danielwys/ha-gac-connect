@@ -14,7 +14,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
@@ -27,6 +26,13 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+try:
+    from homeassistant.const import UnitOfDensity
+except ImportError:  # HA 2025.2 predates UnitOfDensity
+    from homeassistant.const import CONCENTRATION_MICROGRAMS_PER_CUBIC_METER as PM25_UNIT
+else:
+    PM25_UNIT = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
 
 from . import GacConfigEntry, fridge
 from .entity import GacEntity
@@ -70,7 +76,7 @@ SENSORS: tuple[GacSensor, ...] = (
               native_unit_of_measurement=UnitOfElectricPotential.VOLT, state_class=SensorStateClass.MEASUREMENT,
               entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: s.charge_voltage_v),
     GacSensor(key="pm25", translation_key="pm25", device_class=SensorDeviceClass.PM25,
-              native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+              native_unit_of_measurement=PM25_UNIT,
               state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
               value=lambda s: s.pm25),
     GacSensor(key="last_report", translation_key="last_report", device_class=SensorDeviceClass.TIMESTAMP,
