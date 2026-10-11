@@ -61,6 +61,9 @@ takes.
 
 The puzzle expires after ten minutes. Canceling setup closes its connection and
 invalidates its verification URL; start setup again if the page has expired.
+The slider has a keyboard label and verification status is announced to assistive
+technology. GAC still requires solving a visual puzzle; no nonvisual alternative
+has been verified for this service.
 
 ## Entities
 
