@@ -1,4 +1,4 @@
-"""Door lock, with an opt-in test of PIN-free unlocking."""
+"""Door lock, with opt-in unlocking that does not require a PIN."""
 from __future__ import annotations
 
 from typing import Any
@@ -14,7 +14,6 @@ from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .lock_state import doors_locked
-from .pinless_unlock import async_try_pinless_unlock
 
 
 async def async_setup_entry(
@@ -51,7 +50,7 @@ class GacLock(GacEntity, LockEntity):
         self._attr_is_unlocking = True
         self.async_write_ha_state()
         try:
-            await self._send(async_try_pinless_unlock(self.coordinator.client, self.coordinator.vin))
+            await self._send(self.coordinator.client.unlock(self.coordinator.vin))
         finally:
             self._attr_is_unlocking = False
             self.async_write_ha_state()

@@ -101,7 +101,7 @@ def test_explicit_command_acceptance_is_preserved(body):
     assert http.post.call_count == 1
 
 
-@pytest.mark.parametrize("method", ["lock", "charge_now"])
+@pytest.mark.parametrize("method", ["lock", "unlock", "charge_now"])
 def test_rejected_command_is_not_replayed_but_next_explicit_attempt_refreshes(method):
     from gac_connect.errors import TokenInvalidError
     client, http, _ = make_client(Response(), valid=True)
@@ -123,7 +123,8 @@ def test_rejected_command_is_not_replayed_but_next_explicit_attempt_refreshes(me
     assert urls[1].endswith("/refresh/token")
 
 
-def test_rejection_does_not_invalidate_a_concurrently_rotated_token():
+@pytest.mark.parametrize("method", ["lock", "unlock"])
+def test_rejection_does_not_invalidate_a_concurrently_rotated_token(method):
     from gac_connect.errors import TokenInvalidError
     client, http, _ = make_client(Response(), valid=True)
     class RotatedResponse(Response):
@@ -134,7 +135,7 @@ def test_rejection_does_not_invalidate_a_concurrently_rotated_token():
     async def run():
         await client.load()
         with pytest.raises(TokenInvalidError):
-            await client.lock("VIN")
+            await getattr(client, method)("VIN")
         assert client.session.access_valid
         assert client.session.token == "new"
     asyncio.run(run())

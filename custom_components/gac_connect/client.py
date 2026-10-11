@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 from gac_connect.client import GacClient as LibraryClient
-from gac_connect.commands import CATALOG
+from gac_connect.commands import CATALOG, build_body
 from gac_connect.const import CODE_COMMAND_ACCEPTED, ERR_REFRESH_SPENT, ERR_TOKEN_INVALID, HTTP_TIMEOUT
 from gac_connect.crypto import decrypt_envelope
 from gac_connect.errors import CommandError, GacError, RateLimitedError, TokenInvalidError
@@ -212,6 +212,16 @@ class GacClient(LibraryClient):
 
     async def charge_pause(self, vin: str) -> Any:
         raise CommandError(PAUSE_UNSUPPORTED)
+
+    async def unlock(self, vin: str) -> Any:
+        """Backport the public unlock API without b1's incorrect PIN guard."""
+        command = CATALOG["unlock"]
+        await self._ensure_token()
+        # This adapter's _iov_call validates acceptance and invalidates only
+        # the rejected token, without replaying the action.
+        return await self._iov_call(
+            command.path, build_body(command, vin), sensitive={"vin": vin}, kind="command",
+        )
 
     async def set_charge_window(
         self, vin: str, start: str, stop: str, *, weekly: int = 0, until_soc: bool = False

@@ -21,6 +21,7 @@ CONF_ENABLE_FRIDGE: Final = "enable_fridge"
 CONF_AC_MINUTES: Final = "ac_minutes"
 CONF_PICTURE: Final = "picture"
 CONF_OMIT_ENTITIES: Final = "omit_entities"
+# Retain the stored key so existing unlock preferences survive the API migration.
 CONF_EXPERIMENTAL_PINLESS_UNLOCK: Final = "experimental_pinless_unlock"
 CONF_ALLOW_PLAINTEXT_PUSH: Final = "allow_plaintext_push"
 

@@ -78,9 +78,9 @@ has been verified for this service.
   selected while off is kept for the next start, including a start through the
   pre-conditioning switch. Both controls share their requested state, which
   reverts if rejected or unconfirmed after three minutes.
-- **Lock**: lock the doors from Home Assistant. An opt-in PIN-free unlock
-  request has been confirmed on an Aion UT in Thailand; it remains off by
-  default because other vehicles have not been tested. The Aion UT reports
+- **Lock**: lock the doors from Home Assistant. Unlocking does not require a PIN;
+  enable **Enable door unlocking** in the options to use it. Unlocking remains
+  off by default, and existing preferences are preserved. The Aion UT reports
   rear lock readings as unknown, but live locked/unlocked
   samples show its two front readings change reliably. The integration uses
   those front readings for the UT; other cars retain an unknown state if any
@@ -250,10 +250,9 @@ day, since any pause recorded in it is unknown; deleting
   after a successful write; removing the integration removes its credential file.
 
 - Sign-in needs a human (a slide puzzle and an SMS code); there is no headless login.
-- The library blocks unlock, remote power and charger-release because it marks
-  them PIN-gated. The integration's PIN-free unlock option works on one tested
-  Aion UT; it does not change the other commands or store a PIN. Other vehicles'
-  gateways may reject the request.
+- Door unlock does not require a PIN. The pinned b1 library incorrectly blocks
+  it, so the integration backports the corrected public unlock method.
+  Remote power and charger-release remain blocked; no PIN is stored.
 - Using the official app and this integration on the same account at the same time
   can occasionally sign one of them out.
 

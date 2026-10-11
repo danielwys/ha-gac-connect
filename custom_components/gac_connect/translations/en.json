@@ -72,7 +72,7 @@
           "scan_interval": "Poll interval (seconds)",
           "enable_tracker": "Enable location tracking",
           "enable_fridge": "Fridge / warmer box controls",
-          "experimental_pinless_unlock": "Try PIN-free unlock (experimental)",
+          "experimental_pinless_unlock": "Enable door unlocking",
           "omit_entities": "Omit unsupported entities",
           "picture": "Car picture on the map (optional)",
           "quiet_start": "Quiet hours start (HH:MM, optional)",
@@ -82,7 +82,7 @@
         "data_description": {
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",
           "enable_fridge": "Shown when the car reports a fridge. Turn off to remove them, for example on a trim without one.",
-          "experimental_pinless_unlock": "Allows the Doors control to send one unlock request without a PIN. Confirmed on an Aion UT in Thailand; other vehicles are untested. Off by default.",
+          "experimental_pinless_unlock": "Allows the Doors control to unlock the car. A PIN is not required. Off by default; existing choices are preserved.",
           "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials."
         }
