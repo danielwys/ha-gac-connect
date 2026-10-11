@@ -28,6 +28,7 @@ from . import GacConfigEntry, cabin, fridge
 from .api import PAUSE_UNSUPPORTED
 from .coordinator import GacCoordinator
 from .entity import GacEntity
+from .transition import GacTransitionEntity
 from .entity_filter import add_configured_entities
 
 
@@ -85,7 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_enti
     fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeSwitch(coordinator)], platform="switch")
 
 
-class GacChargeSwitch(GacEntity, SwitchEntity):
+class GacChargeSwitch(GacTransitionEntity, SwitchEntity):
     _attr_translation_key = "charging"
     _attr_icon = "mdi:ev-station"
 
@@ -94,6 +95,9 @@ class GacChargeSwitch(GacEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
+        return self._requested_state if self._requested_state is not None else self._reported_state()
+
+    def _reported_state(self) -> bool | None:
         if self.status is None or self.status.charging_mode not in (ChargingMode.FREE, ChargingMode.SCHEDULED):
             return None
         # Off means the car uses a schedule, not that charging is continuously paused.
@@ -108,7 +112,7 @@ class GacChargeSwitch(GacEntity, SwitchEntity):
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self._send(self.coordinator.client.charge_now(self.coordinator.vin), command="charge-now")
+        await self._run_transition(True, "charge-now", lambda: self.coordinator.client.charge_now(self.coordinator.vin))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         raise ServiceValidationError(PAUSE_UNSUPPORTED)

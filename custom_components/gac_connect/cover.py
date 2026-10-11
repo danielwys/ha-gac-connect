@@ -22,8 +22,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GacConfigEntry
 from .coordinator import GacCoordinator
-from .entity import GacEntity
 from .entity_filter import add_configured_entities
+from .transition import GacTransitionEntity
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,7 +51,7 @@ async def async_setup_entry(
                             (GacCoverEntity(coordinator, d) for d in COVERS))
 
 
-class GacCoverEntity(GacEntity, CoverEntity):
+class GacCoverEntity(GacTransitionEntity, CoverEntity):
     entity_description: GacCover
     _attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
 
@@ -66,10 +66,21 @@ class GacCoverEntity(GacEntity, CoverEntity):
         v = self.entity_description.is_open(self.status)
         return None if v is None else not v
 
+    def _reported_state(self) -> bool | None:
+        return self.is_closed
+
+    @property
+    def is_opening(self) -> bool:
+        return self._requested_state is False
+
+    @property
+    def is_closing(self) -> bool:
+        return self._requested_state is True
+
     async def async_open_cover(self, **kwargs: Any) -> None:
         command = self.entity_description.open_cmd
-        await self._send(self.coordinator.client.command(self.coordinator.vin, command), command=command)
+        await self._run_transition(False, command, lambda: self.coordinator.client.command(self.coordinator.vin, command))
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         command = self.entity_description.close_cmd
-        await self._send(self.coordinator.client.command(self.coordinator.vin, command), command=command)
+        await self._run_transition(True, command, lambda: self.coordinator.client.command(self.coordinator.vin, command))

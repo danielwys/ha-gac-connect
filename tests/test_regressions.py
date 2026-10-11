@@ -62,6 +62,7 @@ def scheduled(monkeypatch):
 
     monkeypatch.setattr("custom_components.gac_connect.cabin.async_call_later", later)
     monkeypatch.setattr("custom_components.gac_connect.switch.async_call_later", later)
+    monkeypatch.setattr("custom_components.gac_connect.transition.async_call_later", later)
     return timers
 
 

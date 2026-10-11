@@ -100,7 +100,10 @@ has been verified for this service.
   reverts if rejected or unconfirmed after three minutes.
 - **Lock**: lock the doors from Home Assistant. Unlocking does not require a PIN;
   enable **Enable door unlocking** in the options to use it. Unlocking remains
-  off by default, and existing preferences are preserved. The Aion UT reports
+  off by default, and existing preferences are preserved. The control stays
+  **Locking / Unlocking** until a new report confirms the action, a matching
+  rejection arrives, or three minutes pass. The separate lock sensor continues
+  showing the last reported state while confirmation is pending. The Aion UT reports
   rear lock readings as unknown, but live locked/unlocked
   samples show its two front readings change reliably. The integration uses
   those front readings for the UT; other cars retain an unknown state if any
@@ -109,8 +112,10 @@ has been verified for this service.
   once the GAC server has the new report. Set the poll interval to **60 seconds**
   for more frequent background checks, or press **Refresh** to check now.
 - **Covers**: windows, sunroof and tailgate (state may read unknown when the car
-  does not report it; open / close still work). Opening really opens them — treat
-  automations that touch these with care.
+  does not report it; open / close support depends on the vehicle). The control
+  shows **Opening / Closing** while waiting for a new matching report, with the
+  same three-minute timeout. Opening really opens them — treat automations that
+  touch these with care.
 - **Switches**: pre-conditioning (plain A/C on / off), scheduled charging (the
   charge gate), steering-wheel heat, cabin ventilation, flash lights. The charging
   switch is on in unrestricted mode and off in scheduled mode; off does not mean
@@ -187,6 +192,14 @@ service actions share this bounded sequence per vehicle, including when the push
 feed is disconnected. Each report updates all related sensors. Overlapping
 commands replace the pending sequence rather than adding more polling loops.
 These checks do not resend the command or assume that acceptance means success.
+
+Controls with requested settings (such as climate, fridge and reported switches)
+hold those settings while awaiting confirmation, for up to three minutes. The
+charging-mode switch now does the same. Reported sensors continue to show what
+the vehicle actually reported: setting A/C to 22 °C does not make the cabin
+temperature sensor read 22 °C. Ventilation has no verified status reading and
+continues to show an assumed last-requested state. Fresh polls cannot supply a
+reading the vehicle never reports, and GAC may still return cached telemetry.
 
 When the push feed is connected, command results share the pending refreshes or
 request one delayed read. A refused command
@@ -354,6 +367,8 @@ Thanks to their authors for showing what a good community integration looks like
   reports the exact library source revision in diagnostics.
   All command controls and services now share delayed status checks, so related
   sensors can update after acceptance even without a push result.
+  Lock and cover controls retain their in-progress state until fresh telemetry
+  confirms the action; they no longer immediately revert to the previous report.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

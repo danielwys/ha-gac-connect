@@ -11,9 +11,9 @@ from homeassistant.exceptions import HomeAssistantError
 from . import GacConfigEntry
 from .const import CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_MODEL
 from .coordinator import GacCoordinator
-from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .lock_state import doors_locked
+from .transition import GacTransitionEntity
 
 
 async def async_setup_entry(
@@ -22,7 +22,7 @@ async def async_setup_entry(
     add_configured_entities(entry, add_entities, "lock", [GacLock(entry.runtime_data.coordinator)])
 
 
-class GacLock(GacEntity, LockEntity):
+class GacLock(GacTransitionEntity, LockEntity):
     _attr_translation_key = "doors"
 
     def __init__(self, coordinator: GacCoordinator) -> None:
@@ -32,24 +32,23 @@ class GacLock(GacEntity, LockEntity):
     def is_locked(self) -> bool | None:
         return doors_locked(self.status, self.coordinator.config_entry.data.get(CONF_MODEL))
 
+    def _reported_state(self) -> bool | None:
+        return self.is_locked
+
+    @property
+    def is_locking(self) -> bool:
+        return self._requested_state is True
+
+    @property
+    def is_unlocking(self) -> bool:
+        return self._requested_state is False
+
     async def async_lock(self, **kwargs: Any) -> None:
-        self._attr_is_locking = True
-        self.async_write_ha_state()
-        try:
-            await self._send(self.coordinator.client.lock(self.coordinator.vin), command="lock")
-        finally:
-            self._attr_is_locking = False
-            self.async_write_ha_state()
+        await self._run_transition(True, "lock", lambda: self.coordinator.client.lock(self.coordinator.vin))
 
     async def async_unlock(self, **kwargs: Any) -> None:
         if not self.coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False):
             raise HomeAssistantError(
                 "PIN-free unlock is disabled. Enable it in GAC Connect options to use it."
             )
-        self._attr_is_unlocking = True
-        self.async_write_ha_state()
-        try:
-            await self._send(self.coordinator.client.unlock(self.coordinator.vin), command="unlock")
-        finally:
-            self._attr_is_unlocking = False
-            self.async_write_ha_state()
+        await self._run_transition(False, "unlock", lambda: self.coordinator.client.unlock(self.coordinator.vin))

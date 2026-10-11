@@ -335,6 +335,8 @@ def test_entity_and_service_actions_feed_the_same_discovery_evidence(tmp_path, s
                     action = entity.async_press
                 entity.async_write_ha_state = Mock()
                 entity.hass = hass
+                if surface in {"lock", "cover"}:
+                    entry.async_on_unload(entity._clear_pending)
                 await action()
             assert client.command.await_count + client._reservation.await_count == 1
             assert len(coordinator._refresh_deadlines) == 3
