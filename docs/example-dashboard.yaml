@@ -38,7 +38,7 @@
 #
 # NO REMOTE COMMANDS: if you would rather the dashboard could not send anything
 # to the car, delete the Controls section AND, in Charging, the "Charge on
-# plug-in", "Charge now" and "Pause" tiles AND, in Fridge, the Fridge, Mode and
+# plug-in" and "Charge now" tiles AND, in Fridge, the Fridge, Mode and
 # Temperature tiles — those send commands too.
 #
 # Layout: `type: sections` with 3 columns. Each section is small so Home
@@ -247,8 +247,8 @@ views:
             entity: button.aion_v_refresh
             name: Refresh
             tap_action: { action: toggle }
-            # Asks the integration to poll for a new status. It does not wake the
-            # car, and during quiet hours it keeps the last reading.
+            # Requests a fresh cloud status even during quiet hours, subject to
+            # request limits. Whether this wakes the car depends on the backend.
 
       - type: grid
         cards:

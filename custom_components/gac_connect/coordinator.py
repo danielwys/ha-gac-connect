@@ -140,7 +140,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
 
     async def _async_update_data(self) -> VehicleStatus:
         async with self._fetch_lock:
-            # During quiet hours, keep the last reading instead of waking the car —
+            # During quiet hours, keep the last reading instead of polling —
             # unless a manual action or command result asked for a refresh.
             if self._in_quiet_hours() and self.data is not None and not self._force_refresh:
                 return self.data
