@@ -32,7 +32,7 @@ from .const import (
     EVENT_COMMAND_RESULT,
     SIGNAL_COMMAND_RESULT,
 )
-from .push import PushClient
+from .api import PushClient
 
 _LOGGER = logging.getLogger(__name__)
 

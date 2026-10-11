@@ -360,7 +360,24 @@ HACS distributes the integration files from GitHub. Home Assistant installs
 then imports the installed package. The sibling `gac-connect` checkout is an
 independent library project and is not loaded automatically. Its local fixes
 require a separately published library release before ordinary installations can
-use them. The integration keeps compatibility fixes for the current pin.
+use them.
+
+`custom_components/gac_connect/api.py` is the integration's behavior boundary.
+When the installed library exposes the consolidated public `decode_status` API,
+it uses the library's clients, telemetry, lock decoding, phone normalization and
+schedule helpers directly. It does not subclass or override the updated clients.
+While the manifest remains pinned to b1, isolated backports in `_compat_b1/`
+provide those behaviors. The entity, service, configuration and storage lifecycle
+code remains in Home Assistant. The unlock option retains its original stored key
+so existing preferences survive the change.
+
+Run the HA regression suite with `python -m pytest --library-backend=pinned`
+for the declared dependency, or `--library-backend=native` after installing a
+consolidated library candidate into an isolated test environment. The latter
+fails if compatibility overrides are still selected. Both modes use the same
+behavior tests; changing only the installed library must not hide a regression.
+After publishing and validating a corrected artifact, the remaining release
+steps are to update both dependency pins and delete `_compat_b1/` and its fallback.
 
 ## License
 

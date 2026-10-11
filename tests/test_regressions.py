@@ -13,14 +13,13 @@ from gac_connect.push import PushResult
 from homeassistant.components.climate import HVACMode
 
 from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
-from custom_components.gac_connect.client import GacClient, window_operation
+from custom_components.gac_connect.api import GacClient, decode_status, window_operation
 from custom_components.gac_connect.climate import GacClimate
 from custom_components.gac_connect.coordinator import GacCoordinator
 from custom_components.gac_connect.cover import COVERS, GacCoverEntity
 from custom_components.gac_connect.fridge import FridgeController
 from custom_components.gac_connect.lock_state import doors_locked
 from custom_components.gac_connect.sensor import SENSORS, GacSensorEntity, _tyre_sensors
-from custom_components.gac_connect.status import decode_status
 from custom_components.gac_connect.switch import (
     SWITCHES,
     GacChargeSwitch,
@@ -458,15 +457,16 @@ def test_client_read_uses_corrected_decoder_and_existing_transport():
 
 @pytest.mark.parametrize("data", [[], "invalid", {"results": []}, {"results": [None]}])
 def test_malformed_report_envelope_fails_clearly(data):
-    from gac_connect.errors import CommandError
+    from gac_connect.errors import AuthExpiredError, GacError
 
     c = coord(VehicleStatus())
     c.client._iov_read = AsyncMock(return_value={"data": data})
-    with pytest.raises(CommandError, match="no valid"):
+    with pytest.raises(GacError, match="no valid") as caught:
         asyncio.run(c.client.get_status(c.vin))
+    assert not isinstance(caught.value, AuthExpiredError)
 
 
-def test_client_factory_installs_compatibility_client():
+def test_client_factory_installs_selected_client():
     from custom_components.gac_connect import helpers
 
     hass = SimpleNamespace(async_add_executor_job=AsyncMock(return_value=Mock()))
@@ -671,7 +671,7 @@ def test_pause_is_blocked_at_every_entry_point(surface):
         action = service_registry(c)["charge_pause"][0](SimpleNamespace(data={}))
     else:
         action = c.client.charge_pause(c.vin)
-    with pytest.raises((ServiceValidationError, CommandError), match="disabled"):
+    with pytest.raises((ServiceValidationError, CommandError), match="Continuous charging pause"):
         asyncio.run(action)
     c.client.command.assert_not_awaited()
 

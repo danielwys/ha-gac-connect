@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from gac_connect.const import REGIONS
 from gac_connect.errors import LoginError
-from custom_components.gac_connect.client import GacClient
-from custom_components.gac_connect.phone import local_mobile
+from custom_components.gac_connect.api import GacClient, local_mobile
 
 
 @pytest.mark.parametrize("region", list(REGIONS))

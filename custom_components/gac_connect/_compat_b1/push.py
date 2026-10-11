@@ -1,4 +1,4 @@
-"""Push validation backport for the pinned library."""
+"""Push validation backport for the pinned b1 library only."""
 from __future__ import annotations
 
 import json

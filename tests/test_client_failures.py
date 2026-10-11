@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 from gac_connect.errors import AuthExpiredError, GacError
 from gac_connect.session import MemoryStore, Session
-from custom_components.gac_connect.client import GacClient
+from custom_components.gac_connect.api import GacClient
 
 
 class Response:

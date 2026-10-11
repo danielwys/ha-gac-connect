@@ -1,8 +1,8 @@
-"""Integration-local fixes for the pinned client's read and schedule paths.
+"""Temporary transport, authentication and vehicle backports for gac-connect b1.
 
-The library still handles authentication, signing, request limits and transport.
-These overrides intentionally follow its 0.4.0b1 request shapes; regression
-tests must be checked when updating the pinned dependency.
+Selected only when the consolidated public library API is absent. Do not layer
+these overrides on the updated library: native-client tests must exercise its
+own transport, token handling, telemetry and schedules.
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ def _complete_iov_tokens(data: Any) -> bool:
 
 
 class GacClient(LibraryClient):
-    """Retain the library transport with corrected telemetry and reservations."""
+    """Adapt b1's private API until a corrected library release can be pinned."""
 
     async def _post(self, host: str, path: str, wrapper: dict, headers: dict, kind: str = "request") -> Any:
         """Backport HTTP error classification without changing the b1 wire protocol."""
@@ -213,15 +213,21 @@ class GacClient(LibraryClient):
     async def charge_pause(self, vin: str) -> Any:
         raise CommandError(PAUSE_UNSUPPORTED)
 
-    async def unlock(self, vin: str) -> Any:
-        """Backport the public unlock API without b1's incorrect PIN guard."""
-        command = CATALOG["unlock"]
+    async def command(self, vin: str, name: str, **overrides: Any) -> Any:
+        """Backport PIN-optional door unlock for named commands as well."""
+        if name != "unlock":
+            return await super().command(vin, name, **overrides)
+        command = CATALOG[name]
         await self._ensure_token()
         # This adapter's _iov_call validates acceptance and invalidates only
         # the rejected token, without replaying the action.
         return await self._iov_call(
-            command.path, build_body(command, vin), sensitive={"vin": vin}, kind="command",
+            command.path, build_body(command, vin, overrides), sensitive={"vin": vin}, kind="command",
         )
+
+    async def unlock(self, vin: str) -> Any:
+        """Backport the public unlock API without b1's incorrect PIN guard."""
+        return await self.command(vin, "unlock")
 
     async def set_charge_window(
         self, vin: str, start: str, stop: str, *, weekly: int = 0, until_soc: bool = False

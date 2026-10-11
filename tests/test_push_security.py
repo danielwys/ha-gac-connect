@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from gac_connect.push import interpret
-from custom_components.gac_connect.push import PushClient
+from custom_components.gac_connect.api import PushClient
 
 
 @pytest.mark.parametrize("payload", [b'{"success":true}', b'[]', b'garbage', b'{{', b'null'])

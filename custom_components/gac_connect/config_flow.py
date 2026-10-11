@@ -76,8 +76,8 @@ def _thai_local_mobile(mobile: str) -> str:
     match = re.fullmatch(r"(?:\+66|0066|66|0)?([689][0-9]{8})", compact)
     if match is None:
         raise ValueError("expected a Thai mobile number")
-    # Keep the trunk zero: the pinned library strips a leading 61 before it
-    # strips zeros, so a bare Thai 61… subscriber number would be truncated.
+    # Return national format after this HA form's Thai mobile validation;
+    # the client owns regional normalization for SMS and login requests.
     return f"0{match.group(1)}"
 
 

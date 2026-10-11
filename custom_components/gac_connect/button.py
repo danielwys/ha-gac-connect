@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from gac_connect.client import GacClient
 
 from . import GacConfigEntry
-from .client import PAUSE_UNSUPPORTED
+from .api import PAUSE_UNSUPPORTED
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities

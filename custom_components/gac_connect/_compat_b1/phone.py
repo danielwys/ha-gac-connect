@@ -1,4 +1,4 @@
-"""Normalize an explicit international prefix using the selected region."""
+"""Backport regional phone normalization for the pinned b1 client."""
 from __future__ import annotations
 
 import re

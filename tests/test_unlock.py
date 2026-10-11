@@ -42,7 +42,8 @@ def test_unlock_failure_clears_pending_state_and_surfaces_error():
 
 
 @pytest.mark.parametrize("body,accepted", [({"code": 13001}, True), ({"success": "false"}, False), ({}, False)])
-def test_unlock_uses_normal_transport_and_command_acceptance(body, accepted):
+@pytest.mark.parametrize("generic", [False, True])
+def test_unlock_uses_normal_transport_and_command_acceptance(body, accepted, generic):
     from gac_connect.limits import Limiter
     from unittest.mock import patch
 
@@ -51,11 +52,12 @@ def test_unlock_uses_normal_transport_and_command_acceptance(body, accepted):
 
     async def run():
         await client.load()
+        action = client.command("VIN", "unlock") if generic else client.unlock("VIN")
         if accepted:
-            assert await client.unlock("VIN") == body
+            assert await action == body
         else:
             with pytest.raises(CommandError):
-                await client.unlock("VIN")
+                await action
 
     asyncio.run(run())
     assert http.post.call_count == 1

@@ -23,7 +23,7 @@ from gac_connect.keys import Material, load_material
 from gac_connect.limits import DEFAULT_LIMITER
 from gac_connect.session import TokenStore
 
-from .client import GacClient
+from .api import GacClient
 from .const import DOMAIN
 
 LIMITS_KEY = f"{DOMAIN}.request_limits"

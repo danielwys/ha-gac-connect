@@ -1,4 +1,4 @@
-"""Compatibility fixes for telemetry decoded by gac-connect 0.4.0b1.
+"""Legacy compatibility fixes for telemetry decoded by gac-connect 0.4.0b1.
 
 Keep the original report for diagnostics and lock decoding. Normalize a copy
 before using the library so one malformed enum cannot discard other readings.

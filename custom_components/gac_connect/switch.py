@@ -25,7 +25,7 @@ from gac_connect.models import ChargingMode, VehicleStatus
 from gac_connect.push import PushResult
 
 from . import GacConfigEntry, cabin, fridge
-from .client import PAUSE_UNSUPPORTED
+from .api import PAUSE_UNSUPPORTED
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities

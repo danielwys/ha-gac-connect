@@ -9,7 +9,7 @@ from homeassistant.helpers import config_validation as cv
 
 from gac_connect.errors import GacError
 
-from .client import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
+from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
 from .const import DOMAIN
 
 ATTR_VIN = "vin"
