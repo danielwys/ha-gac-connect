@@ -344,8 +344,24 @@ The offline regression suite uses mocked vehicle responses and sends no vehicle
 commands. With Python 3.14, install `requirements-dev.txt`, then run
 `python -m pytest` and `ruff check .`. The suite is also checked against Home
 Assistant 2025.2.0 with Python 3.13 and 2026.10.0 with Python 3.14. Compatibility fixes for the pinned library
-live in the integration's `client.py` and `status.py`; review their tests before
+live in the integration's `client.py`, `status.py`, `phone.py` and `push.py`; review their tests before
 changing the `gac-connect` requirement.
+
+The validation workflow runs tests and static checks on those three HA versions
+with the exact manifest dependency. Node 22 runs the embedded CAPTCHA script's
+race and rendering tests. A manual workflow run can specify a `library_ref` from
+the same owner's `gac-connect` repository to test an upgrade candidate without
+editing the production pin. This is an offline compatibility matrix, not evidence
+of successful vehicle commands or of support for every intervening/future HA
+release. Repository administrators must make these jobs required checks in their
+branch protection settings; adding the workflow alone does not enforce that.
+
+HACS distributes the integration files from GitHub. Home Assistant installs
+`gac-connect==0.4.0b1` through its configured package installer (normally PyPI),
+then imports the installed package. The sibling `gac-connect` checkout is an
+independent library project and is not loaded automatically. Its local fixes
+require a separately published library release before ordinary installations can
+use them. The integration keeps compatibility fixes for the current pin.
 
 ## License
 
