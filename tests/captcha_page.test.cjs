@@ -38,3 +38,12 @@ test('successful POST is visible even after flow state is removed', async () => 
   await tick();
   assert.match(p.elements.m.textContent, /Verified/);
 });
+
+test('backend error markup is rendered as text', async () => {
+  const p = page();
+  const message = '<img src=x onerror="window.audit_marker=1">';
+  p.requests[0].resolve(response(200, {attempt: 1, status: 'failed', msg: message, bg: '', piece: ''}));
+  await tick();
+  assert.equal(p.elements.m.textContent, message);
+  assert.doesNotMatch(p.elements.m.innerHTML, /onerror/);
+});

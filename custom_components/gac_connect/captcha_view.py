@@ -79,7 +79,7 @@ catch(e){setTimeout(poll,2000);return}
 if(done)return;
 if(t.attempt!=at){at=t.attempt;b.src='data:image/png;base64,'+t.bg;p.src='data:image/png;base64,'+t.piece;s.value=0;u();g.disabled=false;if(at>1)m.innerHTML='<span class=bad>Not quite — new puzzle (try '+at+').</span>'}
 if(t.status=='ok'){verified();return}
-if(t.status=='failed'){done=true;g.disabled=true;m.innerHTML='<span class=bad>'+t.msg+'</span>';return}
+if(t.status=='failed'){done=true;g.disabled=true;m.textContent=t.msg;return}
 if(t.nid!=nid){nid=t.nid;m.innerHTML='';const sp=document.createElement('span');sp.className='bad';sp.textContent=t.notice;m.appendChild(sp);
 setTimeout(()=>{if(!done)g.disabled=false},Math.max(0,t.wait)*1000)}
 setTimeout(poll,500)}
