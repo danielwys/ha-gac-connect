@@ -57,13 +57,14 @@ jobs:
       - name: Build and install the optional candidate artifact
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.library_ref != '' }}
         run: |
+          python tools/sync_capabilities.py --source library-candidate/src/gac_connect/capabilities.py --check
           python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/gac-candidate-wheel" ./library-candidate
           python -m pip install "$RUNNER_TEMP"/gac-candidate-wheel/gac_connect-*.whl
       - name: Test the candidate without integration overrides
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.library_ref != '' }}
         run: python -m pytest -q --library-backend=native
       - name: Static checks
-        run: ruff check custom_components tests
+        run: ruff check custom_components tests tools
   hassfest:
     runs-on: ubuntu-latest
     steps:

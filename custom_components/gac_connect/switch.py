@@ -82,7 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_enti
     entities: list[SwitchEntity] = [GacChargeSwitch(coordinator), GacClimateSwitch(coordinator)]
     entities.extend(GacCommandSwitch(coordinator, d) for d in SWITCHES)
     add_configured_entities(entry, add_entities, "switch", entities)
-    fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeSwitch(coordinator)])
+    fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeSwitch(coordinator)], platform="switch")
 
 
 class GacChargeSwitch(GacEntity, SwitchEntity):
@@ -108,7 +108,7 @@ class GacChargeSwitch(GacEntity, SwitchEntity):
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self._send(self.coordinator.client.charge_now(self.coordinator.vin))
+        await self._send(self.coordinator.client.charge_now(self.coordinator.vin), command="charge-now")
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -180,7 +180,7 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
             self._cancel_expiry()
             self.async_write_ha_state()
 
-    async def _run(self, on: bool, make_request) -> None:
+    async def _run(self, on: bool, make_request, *, command: str) -> None:
         """Show the requested state at once; undo it if the request itself fails.
 
         Commands on one entity run one at a time (the request is only created
@@ -195,7 +195,7 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
             self.async_write_ha_state()
             resp = None
             try:
-                resp = await self._send(make_request())
+                resp = await self._send(make_request(), command=command)
             finally:
                 if resp is None:
                     self._requested, self._requested_until = prev
@@ -209,7 +209,7 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
 
     async def _set(self, on: bool) -> None:
         cmd = self.entity_description.on_cmd if on else self.entity_description.off_cmd
-        await self._run(on, lambda: self.coordinator.client.command(self.coordinator.vin, cmd))
+        await self._run(on, lambda: self.coordinator.client.command(self.coordinator.vin, cmd), command=cmd)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set(True)

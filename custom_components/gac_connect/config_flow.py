@@ -35,17 +35,20 @@ from homeassistant.helpers.network import get_url
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .session_store import ConfigEntryStore
+from .profiles import profile_for
 from .entity_filter import OMIT_OPTIONS, UT_OMISSIONS, is_aion_ut, model_omissions
 from .const import (
     CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_AC_MINUTES,
     CONF_ENABLE_FRIDGE,
+    CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK,
     CONF_MOBILE,
     CONF_MODEL,
     CONF_OMIT_ENTITIES,
     CONF_PICTURE,
+    CONF_PROFILE,
     CONF_QUIET_END,
     CONF_QUIET_START,
     CONF_SCAN_INTERVAL,
@@ -57,13 +60,15 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
+    PROFILE_AUTO,
+    PROFILE_CUSTOM,
+    PROFILE_UT,
+    PROFILE_V,
 )
 
 REGIONS = ["AU", "NZ", "GB", "SG", "TH", "AE", "GR", "IL"]
-PROFILE_UT = "aion_ut"
-PROFILE_V = "aion_v"
-PROFILE_CUSTOM = "custom"
 PROFILES = {
+    PROFILE_AUTO: "Auto detect",
     PROFILE_UT: "Aion UT (omit fridge, steering wheel heat, sunroof and tyre readings)",
     PROFILE_V: "Aion V (allow fridge)",
     PROFILE_CUSTOM: "Other or custom equipment",
@@ -240,8 +245,10 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             if profile == PROFILE_CUSTOM:
                 return await self.async_step_profile_custom()
             options = {
-                CONF_ENABLE_FRIDGE: profile == PROFILE_V,
+                CONF_PROFILE: profile,
+                CONF_ENABLE_FRIDGE: profile != PROFILE_UT,
                 CONF_OMIT_ENTITIES: sorted(UT_OMISSIONS) if profile == PROFILE_UT else [],
+                CONF_ENABLE_ENTITIES: [],
             }
             return self._create_vehicle_entry(options)
 
@@ -259,7 +266,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self._create_vehicle_entry(user_input)
+            return self._create_vehicle_entry({**user_input, CONF_PROFILE: PROFILE_CUSTOM})
         return self.async_show_form(
             step_id="profile_custom",
             data_schema=vol.Schema({
@@ -314,6 +321,22 @@ class GacOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
+            user_input = {**self.config_entry.options, **user_input}
+            previous_profile = profile_for(self.config_entry)
+            profile = user_input.setdefault(CONF_PROFILE, previous_profile)
+            if profile != previous_profile:
+                omitted = set(user_input.get(CONF_OMIT_ENTITIES, ()))
+                if previous_profile == PROFILE_UT:
+                    omitted -= UT_OMISSIONS
+                    user_input[CONF_ENABLE_FRIDGE] = True
+                if profile == PROFILE_UT:
+                    omitted |= UT_OMISSIONS
+                    user_input[CONF_ENABLE_FRIDGE] = False
+                user_input[CONF_OMIT_ENTITIES] = sorted(omitted)
+            if profile == PROFILE_AUTO and (
+                set(user_input.get(CONF_ENABLE_ENTITIES, ())) & set(user_input.get(CONF_OMIT_ENTITIES, ()))
+            ):
+                errors[CONF_ENABLE_ENTITIES] = "conflicting_entity_choices"
             picture = (user_input.get(CONF_PICTURE) or "").strip()
             if picture and not (picture.startswith("/") or picture.lower().startswith(("http://", "https://"))):
                 errors[CONF_PICTURE] = "invalid_picture"
@@ -337,6 +360,11 @@ class GacOptionsFlow(OptionsFlow):
             key for key in opts.get(CONF_OMIT_ENTITIES, ()) if key in omit_options
         ]
         fields = {
+            vol.Optional(CONF_PROFILE, default=opts.get(CONF_PROFILE, profile_for(self.config_entry))): vol.In(PROFILES),
+            vol.Optional(CONF_ENABLE_ENTITIES,
+                         default=opts.get(CONF_ENABLE_ENTITIES, [])): cv.multi_select({
+                             key: value for key, value in OMIT_OPTIONS.items() if key != "button:charge_pause"
+                         }),
             vol.Optional(CONF_ALLOW_PLAINTEXT_PUSH,
                          default=opts.get(CONF_ALLOW_PLAINTEXT_PUSH, False)): bool,
             vol.Optional(CONF_SCAN_INTERVAL,

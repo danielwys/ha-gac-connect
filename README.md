@@ -50,11 +50,12 @@ A local number beginning with `61` keeps those digits outside Australia too.
 3. Enter the **SMS code** sent to your phone.
 4. Pick your vehicle, then choose an equipment profile. The **Aion UT** preset
    omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and
-   temperature sensors, including for
-   entries created before profiles were added. **Aion V** allows the fridge
-   when the car reports one.
+   temperature sensors. This also applies to older UT entries without a stored
+   profile. **Aion V** allows the fridge when the car reports one.
+   **Auto detect** learns which readings are available and reveals related
+   controls, without sending commands to test the equipment.
    For another model or trim, choose **Other or custom equipment** and select
-   the entities your vehicle lacks. You can change custom choices later in the
+   the entities your vehicle lacks. You can change profiles and choices later in the
    integration options.
 
 If the puzzle is off by a little it just shows a new one — keep going until it
@@ -196,9 +197,10 @@ lists indirect tyre monitoring. A live Thailand UT report supplies `-1` for both
 pressure and temperature on all four tyres, even with both reading flags set to
 `1`; those paired placeholders display as unknown. A temperature of −1 °C with a
 valid pressure remains a real reading. Indirect monitoring can warn of pressure
-loss without reporting measured pressures or temperatures. Use the integration's
-"Omit unsupported entities" option to hide tyre sensors that your car does not
-report. Other UT markets can have different tyre-monitoring equipment.
+loss without reporting measured pressures or temperatures. The UT preset removes
+all eight tyre entities. Other UT markets can have different tyre-monitoring
+equipment: select Auto detect to reveal individual readings if they are reported,
+or choose a custom profile and omit the ones your car does not provide.
 
 Example alerts — low tyre pressure, low 12 V battery, left unlocked at home,
 door / window / boot left open — are in
@@ -209,13 +211,49 @@ door / window / boot left open — are in
 Poll interval, quiet hours (skip polling overnight),
 whether the location tracker is enabled, whether the fridge controls are shown,
 which other sensors and controls to omit, the car's picture on the map (an image
-URL or a `/local/` path), and how long an A/C run lasts. For an existing Aion UT
-entry, fridge, steering wheel heat, sunroof and all eight tyre readings are omitted automatically,
-including when the entry was created before vehicle profiles were introduced.
+URL or a `/local/` path), and how long an A/C run lasts. The **Vehicle profile**
+selector also lets existing installations switch to **Auto detect**. The UT
+preset removes fridge, steering wheel heat, sunroof and all eight tyre readings;
+older UT entries use that preset until you explicitly select another profile.
 The poll interval is at least 60 seconds (default 5 minutes).
 Quiet hours use Home Assistant's configured time zone. Enter two different times
 in `HH:MM` format; windows can cross midnight. Clear both fields to disable quiet
 hours. Manual refreshes and command-result refreshes still run during that window.
+
+### Auto detect
+
+Choose **Auto detect** during setup, or open **Settings → Devices & services →
+GAC Connect → Configure** and change **Vehicle profile**. Switching away from
+the UT preset clears its preset omissions and allows fridge detection; unrelated
+manual omissions, location privacy and the unlock setting are preserved.
+
+- Discovery uses the usual status polls. Valid zero/off/closed readings count;
+  missing values, invalid readings and known placeholders do not. Tyre pressure
+  and temperature are assessed separately for each tyre ID. Newly discovered
+  entities appear without a restart.
+- Known model exclusions supply defaults, but positive readings can reveal a
+  variant's equipment in Auto detect. The UT preset itself keeps its exclusions.
+- Unknown features stay hidden. **Always show (Auto detect only)** reveals a
+  sensor or control you know exists, even before useful readings arrive.
+  **Omit unsupported entities** hides a mistaken detection. The separate fridge,
+  location and unlock options remain in force. Continuous charging pause remains
+  unsupported and cannot be enabled by an override.
+- Learned evidence is saved for that vehicle and survives restarts and empty
+  reports. Existing entities keep their IDs; user-disabled registry entries stay
+  disabled. Removing the integration entry removes its learned evidence.
+- Diagnostics list each feature's evidence, manual overrides and individual
+  command results. A sunroof's reported state can reveal the cover, but does
+  **not** confirm remote opening or closing. Each action is confirmed only by a
+  matching successful result from a command you requested. HTTP acceptance and
+  generic failures do not establish support or absence. Commands without a
+  matching result remain unconfirmed, including when push is unavailable.
+
+This is best-effort detection, not a factory equipment inventory: no verified
+equipment-list endpoint is currently used. Some vehicles may report plausible
+dummy values; some supported features may never provide readings. Controls such
+as the horn or ventilation may need an Always show override, or a successful
+explicit service action, before they appear. Detection never tries commands on
+its own and cannot guarantee that a remote action works on every trim.
 
 ## Request limits
 
@@ -279,6 +317,9 @@ Thanks to their authors for showing what a good community integration looks like
   and expire unconfirmed requests independently of polling. Manual refresh works
   during quiet hours. Continuous charging pause and the charging switch's Off
   action are disabled until a true stop command is verified.
+  The UT preset removes all eight tyre readings. A new Auto detect profile learns
+  equipment from reports and confirmed user actions, with manual overrides and
+  persistent evidence; the library requirement remains `0.4.0b1`.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was
@@ -344,7 +385,7 @@ The offline regression suite uses mocked vehicle responses and sends no vehicle
 commands. With Python 3.14, install `requirements-dev.txt`, then run
 `python -m pytest` and `ruff check .`. The suite is also checked against Home
 Assistant 2025.2.0 with Python 3.13 and 2026.10.0 with Python 3.14. Compatibility fixes for the pinned library
-live in the integration's `client.py`, `status.py`, `phone.py` and `push.py`; review their tests before
+live in the integration's `_compat_b1/` directory; review their tests before
 changing the `gac-connect` requirement.
 
 The validation workflow runs tests and static checks on those three HA versions
@@ -353,6 +394,8 @@ race and rendering tests. A manual workflow run can specify a `library_ref` from
 the same owner's `gac-connect` repository to build and test an upgrade candidate's
 wheel without editing the production pin. Pinned tests always run first; candidate
 tests require the native library path and fail if the backports are selected.
+The candidate check also verifies that the bundled capability detector matches
+the canonical library source.
 This is an offline compatibility matrix, not evidence
 of successful vehicle commands or of support for every intervening/future HA
 release. Repository administrators must make these jobs required checks in their
@@ -373,6 +416,13 @@ While the manifest remains pinned to b1, isolated backports in `_compat_b1/`
 provide those behaviors. The entity, service, configuration and storage lifecycle
 code remains in Home Assistant. The unlock option retains its original stored key
 so existing preferences survive the change.
+
+Capability rules live in the library's `src/gac_connect/capabilities.py`. For the
+unchanged b1 pin, `_compat_b1/capabilities.py` is a generated copy, not a separate
+implementation. Regenerate it after changing the library with
+`python tools/sync_capabilities.py --source ../gac-connect/src/gac_connect/capabilities.py`;
+add `--check` to verify it without writing. HA owns the profile options, entity
+mapping, persistence and correlation of user-command results.
 
 Run the HA regression suite with `python -m pytest --library-backend=pinned`
 for the declared dependency, or `--library-backend=native` after installing a

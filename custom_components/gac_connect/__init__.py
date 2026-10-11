@@ -17,6 +17,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .cabin import controller as cabin_controller
+from .capabilities import store_key as capabilities_store_key
 from .const import CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS
 from .coordinator import GacCoordinator
 from .session_store import ConfigEntryStore
@@ -45,13 +46,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
         raise ConfigEntryNotReady(str(err)) from err
 
     _remove_retired_entities(hass, entry)
-    apply_registry_choices(hass, entry)
-    if not controls_enabled(entry):
-        remove_entities(hass, entry)
     coordinator = GacCoordinator(hass, entry, client)
+    if coordinator.capabilities is None and not controls_enabled(entry):
+        remove_entities(hass, entry)
+    if coordinator.capabilities is not None:
+        await coordinator.capabilities.async_load()
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = GacRuntime(client=client, coordinator=coordinator, options=dict(entry.options))
+    apply_registry_choices(hass, entry)
     cabin_controller(coordinator).async_setup(entry)
     entry.runtime_data.fridge = FridgeController(hass, entry, coordinator)
     await entry.runtime_data.fridge.async_setup(entry)
@@ -76,14 +79,18 @@ def _remove_retired_entities(hass: HomeAssistant, entry: GacConfigEntry) -> None
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded and entry.runtime_data.coordinator.capabilities is not None:
+        await entry.runtime_data.coordinator.capabilities.async_close()
+    return unloaded
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None:
-    """Forget stored fridge preferences with the entry."""
+    """Forget credentials, fridge preferences and learned equipment with the entry."""
     from homeassistant.helpers.storage import Store
 
     await Store(hass, 1, store_key(entry.entry_id)).async_remove()
+    await Store(hass, 1, capabilities_store_key(entry.entry_id)).async_remove()
     await ConfigEntryStore(hass, entry).remove()
 
 

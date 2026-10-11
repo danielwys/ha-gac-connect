@@ -26,6 +26,7 @@ from .const import (
     CONF_QUIET_START,
     CONF_SCAN_INTERVAL,
     CONF_VIN,
+    PROFILE_AUTO,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
@@ -33,6 +34,8 @@ from .const import (
     SIGNAL_COMMAND_RESULT,
 )
 from .api import PushClient
+from .capabilities import CapabilityManager
+from .profiles import profile_for
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,6 +71,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         )
         self.client = client
         self.vin = entry.data[CONF_VIN]
+        self.capabilities = CapabilityManager(hass, entry) if profile_for(entry) == PROFILE_AUTO else None
         # Command results arrive on the service's push feed; each one triggers
         # an immediate status refresh so entities show what the car actually did.
         self.push = PushClient(client.mqtt_info, self._on_command_result, decrypt=client.decrypt_push,
@@ -93,7 +97,13 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             return   # another vehicle on the account, or no vehicle named: not ours to act on
         _LOGGER.debug("command result: event=%s ok=%s code=%s", result.event, result.ok, result.code)
         self.last_result = result
-        device = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, self.vin)})
+        if (manager := getattr(self, "capabilities", None)) is not None and manager.result(result):
+            self.async_update_listeners()
+        registry = dr.async_get(self.hass)
+        if lookup := getattr(registry, "async_get_device_by_identifier", None):
+            device = lookup((DOMAIN, self.vin), self.config_entry.entry_id)
+        else:  # HA versions before device identifiers became entry-scoped
+            device = registry.async_get_device(identifiers={(DOMAIN, self.vin)})
         self.hass.bus.async_fire(EVENT_COMMAND_RESULT, {
             "device_id": device.id if device else None,
             "ok": result.ok, "code": result.code,
@@ -146,7 +156,10 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 return self.data
             self._force_refresh = False
             try:
-                return await self.client.get_status(self.vin)
+                status = await self.client.get_status(self.vin)
+                if manager := getattr(self, "capabilities", None):
+                    manager.observe(status)
+                return status
             except AuthExpiredError as err:
                 raise ConfigEntryAuthFailed(str(err)) from err
             except RateLimitedError as err:

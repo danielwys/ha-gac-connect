@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from . import GacConfigEntry
 from .const import (
     CONF_AC_MINUTES, CONF_ALLOW_PLAINTEXT_PUSH, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
-    CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES,
+    CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES, CONF_ENABLE_ENTITIES, CONF_PROFILE,
     CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
 )
 
@@ -17,7 +17,7 @@ from .const import (
 # options must be reviewed before being included in a shareable diagnostic.
 SAFE_OPTIONS = {
     CONF_AC_MINUTES, CONF_ALLOW_PLAINTEXT_PUSH, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
-    CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES,
+    CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES, CONF_ENABLE_ENTITIES, CONF_PROFILE,
     CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
 }
 
@@ -39,4 +39,5 @@ async def async_get_config_entry_diagnostics(
         "status_updated_ms": status.updated_ms if status else None,
         "status_online": status.online if status else None,
         "status_raw": async_redact_data(raw, TO_REDACT),
+        "capabilities": coordinator.capabilities.diagnostics() if getattr(coordinator, "capabilities", None) else None,
     }

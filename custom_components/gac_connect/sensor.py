@@ -131,7 +131,7 @@ async def async_setup_entry(
         (GacSensorEntity(coordinator, d) for d in (*SENSORS, *_tyre_sensors())),
     )
     fridge.async_add_when_fitted(
-        entry, coordinator, add_entities, lambda: [GacSensorEntity(coordinator, d) for d in FRIDGE_SENSORS])
+        entry, coordinator, add_entities, lambda: [GacSensorEntity(coordinator, d) for d in FRIDGE_SENSORS], platform="sensor")
 
 
 class GacSensorEntity(GacEntity, SensorEntity):

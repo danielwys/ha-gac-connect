@@ -1,8 +1,7 @@
 """Covers: windows, sunroof and tailgate.
 
-The state is unknown when the car does not report it; open and close still work. Opening is
-exposed because the car supports it, but treat it like any other remote-open: an
-automation that opens the windows will really open them.
+The state is unknown when the car does not report it. Available remote actions
+vary by model; a state reading alone does not confirm opening or closing support.
 """
 from __future__ import annotations
 
@@ -68,9 +67,11 @@ class GacCoverEntity(GacEntity, CoverEntity):
         return None if v is None else not v
 
     async def async_open_cover(self, **kwargs: Any) -> None:
-        await self._send(self.coordinator.client.command(self.coordinator.vin, self.entity_description.open_cmd))
+        command = self.entity_description.open_cmd
+        await self._send(self.coordinator.client.command(self.coordinator.vin, command), command=command)
         await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
-        await self._send(self.coordinator.client.command(self.coordinator.vin, self.entity_description.close_cmd))
+        command = self.entity_description.close_cmd
+        await self._send(self.coordinator.client.command(self.coordinator.vin, command), command=command)
         await self.coordinator.async_request_refresh()

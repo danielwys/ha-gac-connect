@@ -27,7 +27,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: GacConfigEntry, add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data.coordinator
-    fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeTemperature(coordinator)])
+    fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeTemperature(coordinator)], platform="number")
 
 
 class GacFridgeTemperature(GacEntity, NumberEntity):

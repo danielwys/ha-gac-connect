@@ -22,14 +22,16 @@ from .entity_filter import add_configured_entities
 @dataclass(frozen=True, kw_only=True)
 class GacButton(ButtonEntityDescription):
     press: Callable[[GacClient, str], Awaitable[object]]
+    command: str
 
 
 BUTTONS: tuple[GacButton, ...] = (
-    GacButton(key="charge_now", translation_key="charge_now", press=lambda c, vin: c.charge_now(vin)),
-    GacButton(key="charge_pause", translation_key="charge_pause", press=lambda c, vin: c.charge_pause(vin)),
-    GacButton(key="horn", translation_key="horn", icon="mdi:bullhorn", press=lambda c, vin: c.command(vin, "horn-on")),
+    GacButton(key="charge_now", command="charge-now", translation_key="charge_now", press=lambda c, vin: c.charge_now(vin)),
+    GacButton(key="charge_pause", command="charge-pause", translation_key="charge_pause", press=lambda c, vin: c.charge_pause(vin)),
+    GacButton(key="horn", command="horn-on", translation_key="horn", icon="mdi:bullhorn", press=lambda c, vin: c.command(vin, "horn-on")),
     GacButton(
         key="precondition_battery",
+        command="battery-precondition",
         translation_key="precondition_battery",
         icon="mdi:battery-heart-variant",
         press=lambda c, vin: c.command(vin, "battery-precondition"),
@@ -56,7 +58,8 @@ class GacButtonEntity(GacEntity, ButtonEntity):
     async def async_press(self) -> None:
         if self.entity_description.key == "charge_pause":
             raise ServiceValidationError(PAUSE_UNSUPPORTED)
-        await self._send(self.entity_description.press(self.coordinator.client, self.coordinator.vin))
+        await self._send(self.entity_description.press(self.coordinator.client, self.coordinator.vin),
+                         command=self.entity_description.command)
         await self.coordinator.async_request_refresh()
 
 

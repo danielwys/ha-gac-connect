@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_MODEL, DOMAIN, SIGNAL_COMMAND_RESULT
 from .coordinator import GacCoordinator
+from .capabilities import async_send
 
 
 class GacEntity(CoordinatorEntity[GacCoordinator]):
@@ -93,9 +94,9 @@ class GacEntity(CoordinatorEntity[GacCoordinator]):
     def status(self):
         return self.coordinator.data
 
-    async def _send(self, coro: Awaitable[Any]) -> Any:
+    async def _send(self, coro: Awaitable[Any], *, command: str | None = None) -> Any:
         """Run a vehicle command, surfacing library errors as HA errors."""
         try:
-            return await coro
+            return await async_send(self.coordinator, command, coro) if command else await coro
         except GacError as err:
             raise HomeAssistantError(str(err)) from err

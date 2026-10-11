@@ -36,7 +36,7 @@ class GacLock(GacEntity, LockEntity):
         self._attr_is_locking = True
         self.async_write_ha_state()
         try:
-            await self._send(self.coordinator.client.lock(self.coordinator.vin))
+            await self._send(self.coordinator.client.lock(self.coordinator.vin), command="lock")
         finally:
             self._attr_is_locking = False
             self.async_write_ha_state()
@@ -50,7 +50,7 @@ class GacLock(GacEntity, LockEntity):
         self._attr_is_unlocking = True
         self.async_write_ha_state()
         try:
-            await self._send(self.coordinator.client.unlock(self.coordinator.vin))
+            await self._send(self.coordinator.client.unlock(self.coordinator.vin), command="unlock")
         finally:
             self._attr_is_unlocking = False
             self.async_write_ha_state()

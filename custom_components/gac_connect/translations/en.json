@@ -27,7 +27,7 @@
       },
       "profile": {
         "title": "Choose a vehicle profile",
-        "description": "Select an equipment profile for {model}. Aion UT omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and temperature sensors. You can change other choices later in the integration options.",
+        "description": "Select an equipment profile for {model}. Auto detect learns from vehicle reports without trying commands. Aion UT omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and temperature sensors. Profiles and manual choices can be changed later in the integration options.",
         "data": {
           "profile": "Vehicle profile"
         }
@@ -67,7 +67,10 @@
     "step": {
       "init": {
         "title": "GAC Connect options",
+        "description": "Auto detect learns from usable readings and remembers them across restarts. Unknown features stay hidden unless you choose Always show. A detected state does not prove that remote commands work; command outcomes are listed separately in diagnostics. No commands are sent to test equipment.",
         "data": {
+          "profile": "Vehicle profile",
+          "enable_entities": "Always show (Auto detect only)",
           "allow_plaintext_push": "Allow unencrypted push connections (less secure)",
           "scan_interval": "Poll interval (seconds)",
           "enable_tracker": "Enable location tracking",
@@ -80,8 +83,10 @@
           "ac_minutes": "A/C run time (minutes)"
         },
         "data_description": {
+          "profile": "Switch profiles here. Leaving the Aion UT preset clears its preset exclusions; Auto detect then uses reports to identify equipment, including variants.",
+          "enable_entities": "Show these entities even without detection evidence. Omit choices and the separate fridge and location settings still take priority. This does not enable door unlocking or prove a command is supported.",
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",
-          "enable_fridge": "Shown when the car reports a fridge. Turn off to remove them, for example on a trim without one.",
+          "enable_fridge": "Allow fridge controls when detected. Turn off to remove them, for example on a trim without one. With Auto detect, Always show can reveal controls before usable fridge readings arrive.",
           "experimental_pinless_unlock": "Allows the Doors control to unlock the car. A PIN is not required. Off by default; existing choices are preserved.",
           "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials."
@@ -89,6 +94,7 @@
       }
     },
     "error": {
+      "conflicting_entity_choices": "An entity cannot be in both Always show and Omit. Remove it from one list.",
       "invalid_picture": "Enter an image URL (https://…) or a path that starts with /, for example /local/my-car.png.",
       "invalid_quiet_time": "Enter a time from 00:00 to 23:59 in HH:MM format.",
       "quiet_pair_required": "Set both quiet-hour times, or clear both to disable quiet hours.",

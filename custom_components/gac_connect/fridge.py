@@ -30,7 +30,10 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
 from .const import CONF_ENABLE_FRIDGE, CONF_VIN, DEFAULT_ENABLE_FRIDGE, DOMAIN, SIGNAL_COMMAND_RESULT
-from .entity_filter import is_aion_ut
+from .entity_filter import is_aion_ut, add_configured_entities
+from .capabilities import async_send
+from .profiles import profile_for
+from .const import PROFILE_AUTO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -330,10 +333,9 @@ class FridgeController:
         self._notify()
         resp, sent = None, False
         try:
-            if option == "off":
-                resp = await client.fridge_off(vin)
-            else:
-                resp = await client.fridge_on(vin, mode=option, temperature=temp)
+            resp = await async_send(self.coordinator, "fridge-off" if option == "off" else "fridge-on",
+                                    client.fridge_off(vin) if option == "off" else
+                                    client.fridge_on(vin, mode=option, temperature=temp))
             sent = True
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
@@ -365,12 +367,15 @@ def controller(coordinator) -> FridgeController:
     return coordinator.config_entry.runtime_data.fridge
 
 
-def async_add_when_fitted(entry: ConfigEntry, coordinator, add_entities, make: Callable[[], list]) -> None:
+def async_add_when_fitted(entry: ConfigEntry, coordinator, add_entities, make: Callable[[], list], *, platform: str) -> None:
     """Add the fridge entities now if the car has one, or when a report first shows one."""
     if not controls_enabled(entry):
         return
+    if profile_for(entry) == PROFILE_AUTO:
+        add_configured_entities(entry, add_entities, platform, make())
+        return
     if fitted(coordinator):
-        add_entities(make())
+        add_configured_entities(entry, add_entities, platform, make())
         return
     unsub: Callable[[], None] | None = None
 
@@ -380,7 +385,7 @@ def async_add_when_fitted(entry: ConfigEntry, coordinator, add_entities, make: C
         if unsub is not None and fitted(coordinator):
             remove, unsub = unsub, None
             remove()
-            add_entities(make())
+            add_configured_entities(entry, add_entities, platform, make())
 
     unsub = coordinator.async_add_listener(_check)
 

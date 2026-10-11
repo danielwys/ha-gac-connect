@@ -18,6 +18,7 @@ from . import GacConfigEntry
 from .const import CONF_ENABLE_TRACKER, CONF_MODEL, CONF_PICTURE, DEFAULT_ENABLE_TRACKER, DOMAIN
 from .coordinator import GacCoordinator
 from .entity import GacEntity
+from .entity_filter import add_configured_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ async def async_setup_entry(
     if not entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
         return
     picture = await _async_picture(hass, entry)
-    add_entities([GacDeviceTracker(entry.runtime_data.coordinator, picture)])
+    add_configured_entities(entry, add_entities, "device_tracker", [GacDeviceTracker(entry.runtime_data.coordinator, picture)])
 
 
 async def _async_picture(hass: HomeAssistant, entry: GacConfigEntry) -> str | None:

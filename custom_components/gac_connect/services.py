@@ -10,6 +10,7 @@ from homeassistant.helpers import config_validation as cv
 from gac_connect.errors import GacError
 
 from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
+from .capabilities import async_send
 from .const import DOMAIN
 
 ATTR_VIN = "vin"
@@ -21,22 +22,22 @@ ATTR_COMMAND = "command"
 ATTR_PARAMS = "params"
 
 
-def _clients(hass: HomeAssistant) -> dict[str, object]:
-    """Map VIN -> client across all loaded entries."""
+def _coordinators(hass: HomeAssistant) -> dict[str, object]:
+    """Map VIN -> coordinator across all loaded entries."""
     out: dict[str, object] = {}
     for entry in hass.config_entries.async_entries(DOMAIN):
         runtime = getattr(entry, "runtime_data", None)
         if runtime is not None:
-            out[runtime.coordinator.vin] = runtime.client
+            out[runtime.coordinator.vin] = runtime.coordinator
     return out
 
 
 def _resolve(hass: HomeAssistant, call: ServiceCall):
-    clients = _clients(hass)
-    vin = call.data.get(ATTR_VIN) or (next(iter(clients)) if len(clients) == 1 else None)
-    if vin not in clients:
-        raise HomeAssistantError(f"unknown or unspecified vin; known: {', '.join(clients) or 'none'}")
-    return clients[vin], vin
+    coordinators = _coordinators(hass)
+    vin = call.data.get(ATTR_VIN) or (next(iter(coordinators)) if len(coordinators) == 1 else None)
+    if vin not in coordinators:
+        raise HomeAssistantError(f"unknown or unspecified vin; known: {', '.join(coordinators) or 'none'}")
+    return coordinators[vin], vin
 
 
 def async_register_services(hass: HomeAssistant) -> None:
@@ -44,9 +45,10 @@ def async_register_services(hass: HomeAssistant) -> None:
         return
 
     async def charge_now(call: ServiceCall) -> None:
-        client, vin = _resolve(hass, call)
+        coordinator, vin = _resolve(hass, call)
         try:
-            await client.charge_now(vin, until_soc=call.data.get(ATTR_UNTIL_SOC, False))
+            await async_send(coordinator, "charge-now",
+                             coordinator.client.charge_now(vin, until_soc=call.data.get(ATTR_UNTIL_SOC, False)))
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
@@ -54,24 +56,25 @@ def async_register_services(hass: HomeAssistant) -> None:
         raise ServiceValidationError(PAUSE_UNSUPPORTED)
 
     async def set_charge_window(call: ServiceCall) -> None:
-        client, vin = _resolve(hass, call)
+        coordinator, vin = _resolve(hass, call)
         try:
-            await client.set_charge_window(
+            await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
                 vin,
                 call.data[ATTR_START],
                 call.data[ATTR_STOP],
                 weekly=call.data.get(ATTR_WEEKLY, 0),
                 until_soc=call.data.get(ATTR_UNTIL_SOC, False),
-            )
+            ))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
     async def send_command(call: ServiceCall) -> None:
-        client, vin = _resolve(hass, call)
+        coordinator, vin = _resolve(hass, call)
         try:
-            await client.command(vin, call.data[ATTR_COMMAND], **(call.data.get(ATTR_PARAMS) or {}))
+            command = call.data[ATTR_COMMAND]
+            await async_send(coordinator, command, coordinator.client.command(vin, command, **(call.data.get(ATTR_PARAMS) or {})))
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
