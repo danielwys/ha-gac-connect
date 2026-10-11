@@ -45,6 +45,8 @@ jobs:
           manifest = json.loads(Path('custom_components/gac_connect/manifest.json').read_text())
           subprocess.check_call([sys.executable, '-m', 'pip', 'install', *manifest['requirements']])
           PY
+      - name: Test the pinned library with its compatibility adapter
+        run: python -m pytest -q --library-backend=pinned
       - name: Check out an optional library candidate
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.library_ref != '' }}
         uses: actions/checkout@v4
@@ -52,11 +54,14 @@ jobs:
           repository: ${{ github.repository_owner }}/gac-connect
           ref: ${{ inputs.library_ref }}
           path: library-candidate
-      - name: Install the optional candidate without changing the manifest
+      - name: Build and install the optional candidate artifact
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.library_ref != '' }}
-        run: python -m pip install ./library-candidate
-      - name: Offline regression tests
-        run: python -m pytest -q
+        run: |
+          python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/gac-candidate-wheel" ./library-candidate
+          python -m pip install "$RUNNER_TEMP"/gac-candidate-wheel/gac_connect-*.whl
+      - name: Test the candidate without integration overrides
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.library_ref != '' }}
+        run: python -m pytest -q --library-backend=native
       - name: Static checks
         run: ruff check custom_components tests
   hassfest:

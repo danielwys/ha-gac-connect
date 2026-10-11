@@ -349,8 +349,10 @@ changing the `gac-connect` requirement.
 The validation workflow runs tests and static checks on those three HA versions
 with the exact manifest dependency. Node 22 runs the embedded CAPTCHA script's
 race and rendering tests. A manual workflow run can specify a `library_ref` from
-the same owner's `gac-connect` repository to test an upgrade candidate without
-editing the production pin. This is an offline compatibility matrix, not evidence
+the same owner's `gac-connect` repository to build and test an upgrade candidate's
+wheel without editing the production pin. Pinned tests always run first; candidate
+tests require the native library path and fail if the backports are selected.
+This is an offline compatibility matrix, not evidence
 of successful vehicle commands or of support for every intervening/future HA
 release. Repository administrators must make these jobs required checks in their
 branch protection settings; adding the workflow alone does not enforce that.

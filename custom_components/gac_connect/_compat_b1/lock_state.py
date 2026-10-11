@@ -53,5 +53,3 @@ def doors_locked(status: VehicleStatus | None, model: str | None = None) -> bool
                 and codes_by_door == {1: 0, 2: 0, 3: -1, 4: -1}):
             return True
     return None
-
-
