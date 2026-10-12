@@ -43,6 +43,7 @@ from .const import (
     CONF_ENABLE_FRIDGE,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
+    CONF_ALLOW_VEHICLE_SHUTDOWN,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK,
     CONF_MOBILE,
     CONF_MODEL,
@@ -69,7 +70,7 @@ from .const import (
 REGIONS = ["AU", "NZ", "GB", "SG", "TH", "AE", "GR", "IL"]
 PROFILES = {
     PROFILE_AUTO: "Auto detect",
-    PROFILE_UT: "Aion UT (omit fridge, steering wheel heat, sunroof and tyre readings)",
+    PROFILE_UT: "Aion UT (omit fridge, steering wheel heat, sunroof, tyre readings and rear seat ventilation)",
     PROFILE_V: "Aion V (allow fridge)",
     PROFILE_CUSTOM: "Other or custom equipment",
 }
@@ -95,6 +96,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._region: str = "AU"
         self._vehicle: Vehicle | None = None
         self._allow_unlock = False
+        self._allow_vehicle_shutdown = False
         self._view_registered = False
         self._http: aiohttp.ClientSession | None = None
         self._captcha_expiry = None
@@ -243,6 +245,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_profile(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._allow_unlock = user_input.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)
+            self._allow_vehicle_shutdown = user_input.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)
             profile = user_input["profile"]
             if profile == PROFILE_CUSTOM:
                 return await self.async_step_profile_custom()
@@ -263,6 +266,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required("profile", default=suggested): vol.In(PROFILES),
                 vol.Required(CONF_EXPERIMENTAL_PINLESS_UNLOCK, default=self._allow_unlock): bool,
+                vol.Required(CONF_ALLOW_VEHICLE_SHUTDOWN, default=self._allow_vehicle_shutdown): bool,
             }),
             description_placeholders={"model": self._vehicle.model or "your vehicle"},
         )
@@ -291,7 +295,8 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_MODEL: veh.model,
                 CONF_SESSION: self._client.session.to_dict(),
             },
-            options={**options, CONF_EXPERIMENTAL_PINLESS_UNLOCK: self._allow_unlock},
+            options={**options, CONF_EXPERIMENTAL_PINLESS_UNLOCK: self._allow_unlock,
+                     CONF_ALLOW_VEHICLE_SHUTDOWN: self._allow_vehicle_shutdown},
         )
 
     # ---- reauth ----------------------------------------------------------
@@ -361,7 +366,7 @@ class GacOptionsFlow(OptionsFlow):
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         from .api import validate_clock
-        from .charging import DAYS
+        from .charging import DAYS, window_target
         from .command_tracking import async_send
 
         if (coordinator := self._loaded_coordinator()) is None:
@@ -377,14 +382,25 @@ class GacOptionsFlow(OptionsFlow):
                     raise ValueError("unknown day")
                 weekly = sum(1 << index for index, day in enumerate(DAYS) if day in days)
                 await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
-                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False)))
+                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False)),
+                    expected=window_target(start, stop, weekly, user_input.get("until_soc", False)))
             except ValueError:
                 errors["base"] = "invalid_charge_window"
             except GacError:
                 errors["base"] = "command_failed"
             else:
                 return await self.async_step_charging()
-        values = user_input or {}
+        values = dict(user_input) if user_input is not None else {}
+        if user_input is None and (status := coordinator.data) is not None:
+            for key in ("start", "stop"):
+                try:
+                    values[key] = validate_clock(getattr(status, f"charge_window_{key}", None))
+                except ValueError:
+                    pass
+            weekly = getattr(status, "charge_weekly", None)
+            if type(weekly) is int and 0 <= weekly <= 127:
+                values["days"] = [day for index, day in enumerate(DAYS) if weekly & (1 << index)]
+            values["until_soc"] = getattr(status, "charge_end_type", None) == 1
         return self.async_show_form(step_id="charge_window", errors=errors, data_schema=vol.Schema({
             vol.Required("start", description={"suggested_value": values.get("start", "")}): str,
             vol.Required("stop", description={"suggested_value": values.get("stop", "")}): str,
@@ -446,12 +462,15 @@ class GacOptionsFlow(OptionsFlow):
         selected_omissions = [
             key for key in opts.get(CONF_OMIT_ENTITIES, ()) if key in omit_options
         ]
+        enable_options = {
+            key: value for key, value in OMIT_OPTIONS.items()
+            if key != "button:charge_pause" and key not in forced
+        }
+        selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
         fields = {
             vol.Optional(CONF_PROFILE, default=opts.get(CONF_PROFILE, profile_for(self.config_entry))): vol.In(PROFILES),
             vol.Optional(CONF_ENABLE_ENTITIES,
-                         default=opts.get(CONF_ENABLE_ENTITIES, [])): cv.multi_select({
-                             key: value for key, value in OMIT_OPTIONS.items() if key != "button:charge_pause"
-                         }),
+                         default=selected_enables): cv.multi_select(enable_options),
             vol.Optional(CONF_ALLOW_PLAINTEXT_PUSH,
                          default=opts.get(CONF_ALLOW_PLAINTEXT_PUSH, False)): bool,
             vol.Optional(CONF_SCAN_INTERVAL,
@@ -461,6 +480,8 @@ class GacOptionsFlow(OptionsFlow):
                          default=opts.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER)): bool,
             vol.Optional(CONF_EXPERIMENTAL_PINLESS_UNLOCK,
                          default=opts.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)): bool,
+            vol.Optional(CONF_ALLOW_VEHICLE_SHUTDOWN,
+                         default=opts.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)): bool,
             vol.Optional(CONF_OMIT_ENTITIES,
                          default=selected_omissions): cv.multi_select(omit_options),
             vol.Optional(CONF_PICTURE, description={"suggested_value": opts.get(CONF_PICTURE, "")}): str,

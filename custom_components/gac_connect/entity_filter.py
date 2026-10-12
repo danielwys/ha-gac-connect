@@ -7,7 +7,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_OMIT_ENTITIES, CONF_VIN, DOMAIN, PROFILE_AUTO, PROFILE_UT
+from .const import (
+    CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_ENABLE_TRACKER, CONF_OMIT_ENTITIES, CONF_VIN,
+    DEFAULT_ENABLE_TRACKER, DOMAIN, PROFILE_AUTO, PROFILE_UT,
+)
 from .profiles import profile_for
 
 # Option IDs use the platform and existing unique-id suffix so an option can be
@@ -17,6 +20,8 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "charge_schedule": "Charging schedule",
         "soc": "Battery", "range": "Range", "odometer": "Odometer",
         "cabin_temp": "Cabin temperature", "aux_voltage": "12V battery",
+        "outside_temp": "Outside temperature", "ac_fan_strength": "Cabin fan strength",
+        "gps_coordinates": "GPS coordinates",
         "charge_time": "Estimated charge time", "charge_current": "Charge current",
         "charge_power": "Charge power", "charge_voltage": "Charge voltage",
         "pm25": "Cabin PM2.5", "last_report": "Last report",
@@ -27,11 +32,16 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
            for kind, label in (("pressure", "pressure"), ("temp", "temperature"))},
     },
     "binary_sensor": {
+        "vehicle_power": "Vehicle power",
         "plugged": "Plugged in", "charging": "Charging", "locked": "Lock state",
         "door_open": "Door state", "window_open": "Window state",
         "hatch_open": "Boot state", "online": "Online", "charger_locked": "Charger lock",
+        "ac_auto": "A/C auto mode", "ac_compressor": "A/C compressor", "anti_theft": "Anti-theft enabled",
+        **{f"seat_{i}_ventilation": f"{name} seat ventilation state" for i, name in
+           enumerate(("Driver", "Front passenger", "Rear left", "Rear right"), start=1)},
     },
     "button": {
+        "vehicle_power_off": "Turn vehicle off",
         "charge_now": "Charge now", "charge_pause": "Pause charging",
         "horn": "Sound horn", "precondition_battery": "Precondition battery",
     },
@@ -39,6 +49,8 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "charge_switch": "Scheduled charging", "climate_power": "Pre-conditioning",
         "steering_heat": "Steering wheel heat", "lights": "Flash lights",
         "ventilation": "Ventilation",
+        "seat_1_ventilation": "Driver seat ventilation",
+        "seat_2_ventilation": "Front passenger seat ventilation",
         "fridge": "Fridge",
     },
     "cover": {"windows": "Windows", "sunroof": "Sunroof", "tailgate": "Tailgate"},
@@ -54,9 +66,11 @@ OMIT_OPTIONS: dict[str, str] = {
     for domain in ENTITY_CHOICES
     for key, label in ENTITY_CHOICES[domain].items()
 }
+LOCATION_ENTITIES = frozenset({"device_tracker:location", "sensor:gps_coordinates"})
 
 UT_OMISSIONS = frozenset({
     "switch:steering_heat", "cover:sunroof",
+    "binary_sensor:seat_3_ventilation", "binary_sensor:seat_4_ventilation",
     *(f"sensor:tyre_{i}_{kind}" for i in range(1, 5) for kind in ("pressure", "temp")),
 })
 
@@ -72,7 +86,12 @@ def model_omissions(entry: ConfigEntry) -> set[str]:
 
 
 def effective_omissions(entry: ConfigEntry) -> set[str]:
-    return set(entry.options.get(CONF_OMIT_ENTITIES, ())) | model_omissions(entry)
+    omitted = set(entry.options.get(CONF_OMIT_ENTITIES, ())) | model_omissions(entry)
+    if not entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+        omitted |= LOCATION_ENTITIES
+    if entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
+        omitted.add("button:vehicle_power_off")
+    return omitted
 
 
 def add_configured_entities(

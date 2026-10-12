@@ -6,6 +6,10 @@ are best-effort and may not apply to every model). The body shapes:
 
 * ``read`` / ``flat`` → ``{"vin": …, **overrides}``
 * ``ops``            → ``{"identifier": {"vin": …}, "operations": [{…ops, **overrides}]}``
+* ``seat``           → ``ops`` with identifier ``grade=2`` and ``duration=30``
+* ``air``            → ``ops`` with identifier ``grade=2`` and the requested duration
+* ``air-adjust``     → ``ops`` with identifier ``grade=2``, without starting a timed run
+* ``flat-ops``       → ``{"vin": …, "operations": [{…ops, **overrides}]}``
 * ``anti``           → ``{"identifier": {"vin": …}, "currentDuration": 30, **overrides}``
 
 PIN-gated commands are listed for completeness but the client refuses them until
@@ -19,15 +23,14 @@ from typing import Any
 
 from .const import IOV_PREFIX
 
-_AIR = {"enableAutoMode": 1, "temperature": 24.0, "temperatureUnit": 0, "currentDuration": 30,
-        "blowingMode": -1, "cyclingMode": -1, "enableAirCompressor": -1}
+_AIR = {"enableAutoMode": 1, "temperature": 24.0, "temperatureUnit": 0}
 
 
 @dataclass(frozen=True)
 class Command:
     name: str
     path: str
-    kind: str              # read | flat | ops | anti
+    kind: str              # read | flat | ops | seat | air | air-adjust | flat-ops | anti
     pin: bool = False
     stable: bool = False
     category: str = ""
@@ -44,10 +47,20 @@ CATALOG: dict[str, Command] = {c.name: c for c in [
     Command("status", _p("get_vehicle_status"), "read", stable=True, category="read", description="full telemetry"),
     Command("position", _p("get_position_status"), "read", stable=True, category="read", description="location"),
     # climate
-    Command("aircon-on", _p("air_condition/open"), "ops", stable=True, category="climate",
-            description="A/C on", ops={**_AIR, "airOperationType": "on"}),
-    Command("aircon-off", _p("air_condition/open"), "ops", stable=True, category="climate",
-            description="A/C off", ops={**_AIR, "airOperationType": "off"}),
+    Command("aircon-on", _p("air_condition/open"), "air", stable=True, category="climate",
+            description="automatic A/C on", ops=_AIR),
+    # Verified on an Aion UT: omit blower/outlet fields to retain their settings.
+    Command("aircon-manual-on", _p("air_condition/open"), "air", category="climate",
+            description="manual A/C on, optionally selecting fan speed 1–10",
+            ops={"enableAutoMode": 0, "enableAirCompressor": 1,
+                 "temperature": 24.0, "temperatureUnit": 0}),
+    Command("aircon-off", _p("air_condition/close"), "flat-ops", stable=True, category="climate",
+            description="A/C off", ops={"enableAutoMode": 0}),
+    # A partial adjustment omits Auto, compressor, blower and airflow fields.
+    # Its acceptance must be verified on the vehicle; never fall back to Auto.
+    Command("aircon-temperature", _p("air_condition/open"), "air-adjust", category="climate",
+            description="adjust running A/C temperature without requesting Auto",
+            ops={"temperature": 24.0, "temperatureUnit": 0}),
     Command("ventilate-on", _p("ventilate_mode/open"), "flat", stable=True, category="climate",
             description="cabin ventilation on"),
     Command("ventilate-off", _p("ventilate_mode/close"), "flat", category="climate", description="cabin ventilation off"),
@@ -78,7 +91,16 @@ CATALOG: dict[str, Command] = {c.name: c for c in [
             description="battery preconditioning", ops={"batteryPretreatmentMode": 1}),
     Command("power-on", _p("engine/start"), "flat", pin=True, category="power", description="remote power on (PIN)"),
     Command("power-off", _p("engine/stop"), "flat", pin=True, category="power", description="remote power off (PIN)"),
+    # The app's vehicle-shutdown branch is separate from its engine start/stop commands.
+    Command("vehicle-power-off", _p("power/off"), "flat", category="power",
+            description="vehicle shutdown (GAC 2.0.32)"),
     Command("powerkeep-stop", _p("stop/powerKeep"), "flat", stable=True, category="power", description="stop power-keep"),
+    # GAC 2.0.32 selects ventilation with enableWind=1; strength 0 switches it off.
+    # Leave temperature fields absent so a seat command does not change cabin A/C.
+    *(Command(f"seat-{seat}-ventilation-{direction}", _p("control_seat_temperature"), "seat",
+              category="climate", description=f"seat {seat} ventilation {direction}",
+              ops={"seat": seat, "enableWind": 1, "windStrength": strength})
+      for seat in range(1, 5) for direction, strength in (("on", 1), ("off", 0))),
 ]}
 
 
@@ -118,6 +140,20 @@ def validate_climate(temperature: Any, minutes: Any) -> tuple[float, int]:
     return round(t * 2) / 2, m
 
 
+def validate_fan_speed(speed: Any) -> int:
+    """Accept the ten manual cabin blower speeds; Off uses climate_off instead."""
+    if type(speed) is not int or not 1 <= speed <= 10:
+        raise ValueError("fan speed must be an integer from 1 to 10")
+    return speed
+
+
+def validate_blowing_mode(mode: Any) -> int:
+    """Accept a positive raw outlet code; its meaning is vehicle-specific."""
+    if type(mode) is not int or mode <= 0:
+        raise ValueError("blowing mode must be a positive integer outlet code")
+    return mode
+
+
 def build_body(cmd: Command, vin: str, overrides: dict[str, Any] | None = None) -> dict:
     overrides = overrides or {}
     if cmd.kind in ("read", "flat"):
@@ -126,6 +162,24 @@ def build_body(cmd: Command, vin: str, overrides: dict[str, Any] | None = None) 
         return {"identifier": {"vin": vin}, "currentDuration": 30, **overrides}
     if cmd.kind == "ops":
         return {"identifier": {"vin": vin}, "operations": [{**cmd.ops, **overrides}]}
+    if cmd.kind in ("air", "air-adjust"):
+        operation = {**cmd.ops, **overrides}
+        minutes = operation.pop("currentDuration", 30)
+        temperature, duration = validate_climate(operation["temperature"], minutes)
+        operation["temperature"] = temperature
+        if cmd.name == "aircon-manual-on" and "windStrength" in operation:
+            operation["windStrength"] = validate_fan_speed(operation["windStrength"])
+        if cmd.name == "aircon-manual-on" and "blowingMode" in operation:
+            operation["blowingMode"] = validate_blowing_mode(operation["blowingMode"])
+        identifier = {"vin": vin, "grade": 2}
+        if cmd.kind == "air":
+            identifier["duration"] = duration
+        return {"identifier": identifier, "operations": [operation]}
+    if cmd.kind == "flat-ops":
+        return {"vin": vin, "operations": [{**cmd.ops, **overrides}]}
+    if cmd.kind == "seat":
+        return {"identifier": {"vin": vin, "grade": 2, "duration": 30},
+                "operations": [{**cmd.ops, **overrides}]}
     raise ValueError(f"unknown command kind {cmd.kind!r}")
 
 

@@ -88,6 +88,7 @@ from custom_components.gac_connect import api, helpers
 from custom_components.gac_connect.const import PLATFORMS
 from custom_components.gac_connect._vendor import gac_connect as library
 from custom_components.gac_connect._vendor.gac_connect.crypto import encrypt_envelope
+from custom_components.gac_connect._vendor.gac_connect.commands import CATALOG, build_body
 from custom_components.gac_connect._vendor.gac_connect.keys import load_material
 from custom_components.gac_connect._vendor.gac_connect.limits import DEFAULT_LIMITER
 from custom_components.gac_connect._vendor.gac_connect.models import VehicleStatus
@@ -98,6 +99,11 @@ assert Path(library.__file__).is_relative_to(Path(sys.argv[1]))
 assert helpers.DEFAULT_LIMITER is DEFAULT_LIMITER
 assert api.GacClient is library.GacClient
 assert isinstance(api.decode_status({}), VehicleStatus)
+assert api.decode_status({'powerAccessors': [{'powerMode': 2}]}).power_on is True
+assert api.decode_status({'powerAccessors': [{'powerMode': 0}]}).power_on is False
+assert api.decode_status({'powerAccessors': [{'powerMode': 1}]}).power_on is None
+assert CATALOG['vehicle-power-off'].path.endswith('/power/off')
+assert build_body(CATALOG['vehicle-power-off'], 'VIN') == {'vin': 'VIN'}
 assert files(library).joinpath("py.typed").is_file()
 for region, bundle in [("AU", "_material.pem"), ("GB", "_material_uk.pem")]:
     material = load_material(bundle)
@@ -197,3 +203,12 @@ def test_sync_removes_only_obsolete_generated_source(source_repo, tmp_path):
     assert not (target / "gac_connect/keys.py").exists()
     assert verify(target)["sha256"]
     assert snapshot(source_repo, "HEAD")["gac_connect/_material.pem"] == b"synthetic"
+
+
+def test_finder_metadata_does_not_invalidate_a_manually_copied_bundle(source_repo, tmp_path):
+    target = tmp_path / "bundle"
+    synchronize(source_repo, target, check=False)
+    metadata = target / ".DS_Store"
+    metadata.write_bytes(b"Finder metadata")
+    synchronize(source_repo, target, check=True)
+    assert metadata.read_bytes() == b"Finder metadata"

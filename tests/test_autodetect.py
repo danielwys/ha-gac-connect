@@ -219,8 +219,15 @@ def test_evidence_survives_reload_but_does_not_leak_between_vehicles(tmp_path):
             await coordinator.commands.send("sunroof-close", coordinator.client.command("VIN", "sunroof-close"))
             assert coordinator.commands.result(result())
             await manager.async_close()
-            text = (tmp_path / ".storage" / store_key(entry.entry_id)).read_text()
-            assert "VIN" not in text and "230" not in text
+            stored = json.loads((tmp_path / ".storage" / store_key(entry.entry_id)).read_text())["data"]
+            # Entry IDs and hashes can coincidentally contain digits from readings.
+            # Assert the saved data's shape and values, not arbitrary substrings.
+            assert set(stored) == {"vehicle_key", "evidence"}
+            assert len(stored["vehicle_key"]) == 64 and all(c in "0123456789abcdef" for c in stored["vehicle_key"])
+            assert stored["evidence"] == {
+                "version": 1, "readings": ["tyre_4_pressure", "tyre_4_temperature"],
+                "commands": ["sunroof-close"], "equipment": {},
+            }
             restored = CapabilityManager(hass, entry)
             await restored.async_load()
             restored.observe(decode_status({}))
@@ -290,7 +297,7 @@ def test_early_command_result_is_correlated_after_acceptance(tmp_path):
 
 @pytest.mark.parametrize("surface,command", [
     ("cover", "sunroof-close"), ("lock", "lock"), ("button", "horn-on"),
-    ("switch", "steering-on"), ("cabin", "aircon-on"), ("fridge", "fridge-off"),
+    ("switch", "steering-on"), ("cabin", "aircon-manual-on"), ("fridge", "fridge-off"),
     ("charge_button", "charge-now"), ("charge_service", "charge-now"), ("window_service", "charge-window"),
 ])
 def test_entity_and_service_actions_feed_the_same_discovery_evidence(tmp_path, surface, command):
@@ -304,6 +311,7 @@ def test_entity_and_service_actions_feed_the_same_discovery_evidence(tmp_path, s
             client = object.__new__(GacClient)
             client.command = AsyncMock(return_value=ACCEPTED)
             client._reservation = AsyncMock(return_value=ACCEPTED)
+            client._charge_time_formats = {}
             client._tz = ZoneInfo("UTC")
             coordinator.client = client
             coordinator.async_request_refresh = AsyncMock()

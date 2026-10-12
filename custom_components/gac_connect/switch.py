@@ -30,6 +30,7 @@ from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .transition import GacTransitionEntity
 from .entity_filter import add_configured_entities
+from .seats import ventilation_state
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -75,6 +76,12 @@ SWITCHES: tuple[GacSwitch, ...] = (
         off_cmd="ventilate-off",
         events=("control_ventilate_mode",),
     ),
+    *(GacSwitch(
+        key=f"seat_{seat}_ventilation", translation_key=f"seat_{seat}_ventilation",
+        icon="mdi:car-seat-cooler", on_cmd=f"seat-{seat}-ventilation-on",
+        off_cmd=f"seat-{seat}-ventilation-off", state=lambda s, seat=seat: ventilation_state(s, seat),
+        # Both seats share a result event; only a matching session can identify one.
+    ) for seat in (1, 2)),
 )
 
 

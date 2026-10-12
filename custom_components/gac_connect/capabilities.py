@@ -8,8 +8,10 @@ import logging
 from homeassistant.helpers.storage import Store
 
 from .api import Capabilities, Support, doors_locked
+from .entity_filter import LOCATION_ENTITIES
 from .const import (
     CONF_ENABLE_ENTITIES, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER, CONF_MODEL,
+    CONF_ALLOW_VEHICLE_SHUTDOWN,
     CONF_OMIT_ENTITIES, CONF_REGION, CONF_VIN, DEFAULT_ENABLE_TRACKER, DOMAIN,
 )
 
@@ -21,6 +23,8 @@ ENTITY_FEATURES = {
     "sensor:charge_schedule": "charge_control",
     "sensor:soc": "soc", "sensor:range": "range_km", "sensor:odometer": "odometer_km",
     "sensor:cabin_temp": "cabin_temp_c", "sensor:aux_voltage": "aux_voltage", "sensor:pm25": "pm25",
+    "sensor:outside_temp": "outside_temp_c", "sensor:ac_fan_strength": "ac_fan_strength",
+    "sensor:gps_coordinates": "location",
     "sensor:charge_time": "estimated_charge_minutes", "sensor:charge_current": "charge_current_a",
     "sensor:charge_voltage": "charge_voltage_v", "sensor:charge_power": "charge_power_kw",
     "sensor:last_report": "updated_ms", "sensor:charge_window_start": "charge_window_start",
@@ -32,11 +36,17 @@ ENTITY_FEATURES = {
     "binary_sensor:locked": "locked", "binary_sensor:door_open": "door_open",
     "binary_sensor:window_open": "window_open", "binary_sensor:hatch_open": "hatch_open",
     "binary_sensor:online": "online", "binary_sensor:charger_locked": "charger_locked",
+    "binary_sensor:vehicle_power": "power_on",
+    "binary_sensor:ac_auto": "ac_auto_on", "binary_sensor:ac_compressor": "ac_compressor_on",
+    "binary_sensor:anti_theft": "anti_theft_on",
+    **{f"binary_sensor:seat_{i}_ventilation": f"seat_{i}_ventilation_on" for i in range(1, 5)},
     "switch:steering_heat": "steering_heat", "switch:lights": "lights", "switch:ventilation": "ventilation",
+    **{f"switch:seat_{i}_ventilation": f"seat_{i}_ventilation" for i in (1, 2)},
     "switch:charge_switch": "charge_control", "switch:climate_power": "climate", "switch:fridge": "fridge",
     "cover:windows": "windows", "cover:sunroof": "sunroof", "cover:tailgate": "tailgate",
     "climate:climate": "climate", "lock:doors": "doors",
     "button:horn": "horn", "button:precondition_battery": "battery_precondition",
+    "button:vehicle_power_off": "vehicle_power_control",
     "button:charge_now": "charge_control", "select:fridge_mode": "fridge", "number:fridge_temperature": "fridge",
     "device_tracker:location": "location",
 }
@@ -81,7 +91,9 @@ class CapabilityManager:
             self._changed()
 
     def includes(self, entity_key: str) -> bool:
-        if entity_key == "device_tracker:location" and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+        if entity_key == "button:vehicle_power_off" and self.entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
+            return False
+        if entity_key in LOCATION_ENTITIES and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
             return False
         if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
             return False
@@ -91,6 +103,8 @@ class CapabilityManager:
             return True
         if entity_key == "button:charge_pause":
             return False  # no actual continuous-pause operation exists
+        if entity_key == "button:vehicle_power_off":
+            return True  # the separate shutdown setting is an explicit opt-in
         if entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
             return True
         feature = ENTITY_FEATURES.get(entity_key)
@@ -123,12 +137,16 @@ class CapabilityManager:
         """Explain effective visibility, with overrides before passive evidence."""
         if entity_key == "button:charge_pause":
             return "Hidden: continuous charging pause is not supported."
+        if entity_key == "button:vehicle_power_off" and self.entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
+            return "Hidden: remote vehicle shutdown is disabled in Vehicle settings."
         if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
             return "Hidden by your Omit choice."
-        if entity_key == "device_tracker:location" and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+        if entity_key in LOCATION_ENTITIES and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
             return "Hidden: location tracking is turned off."
         if entity_key in FRIDGE_ENTITIES and self.entry.options.get(CONF_ENABLE_FRIDGE) is False:
             return "Hidden: fridge controls are turned off."
+        if entity_key == "button:vehicle_power_off":
+            return "Shown: remote vehicle shutdown is enabled in Vehicle settings."
         if entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
             return "Shown by your Always show choice; this does not prove support."
         evidence = self.detector.feature(ENTITY_FEATURES.get(entity_key, ""))

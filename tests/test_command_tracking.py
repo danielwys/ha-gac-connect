@@ -85,7 +85,7 @@ def test_parameterized_cabin_request_requires_target_temperature(tmp_path):
     async def run():
         from custom_components.gac_connect.cabin import controller
         async with vehicle(tmp_path) as (_, _, c):
-            c.client.climate_on = AsyncMock(return_value=ACCEPTED)
+            c.client.climate_manual_on = AsyncMock(return_value=ACCEPTED)
             c.data = replace(decode_status({}), ac_on=False, ac_target_temp_c=24)
             cabin = controller(c)
             try:
@@ -96,4 +96,32 @@ def test_parameterized_cabin_request_requires_target_temperature(tmp_path):
                 assert c.commands.state == 'confirmed'
             finally:
                 cabin._cancel_expiry()
+    asyncio.run(run())
+
+
+def test_front_seat_requests_confirm_independently_from_fresh_seat_reports(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            def report(first, second, stamp):
+                return decode_status({'seatTemperatureAccessors': [
+                    {'seat': 2, 'enableWind': 1, 'windStrength': second},
+                    {'seat': 1, 'enableWind': 1, 'windStrength': first},
+                ]}, updated_ms=stamp)
+
+            c.data = report(0, 0, 100)
+            for seat in (1, 2):
+                await async_send(c, f'seat-{seat}-ventilation-on',
+                                 AsyncMock(return_value={'data': {'sessionId': f'seat{seat}'}})())
+            assert [r.state for r in c.commands.records] == ['pending', 'pending']
+            c.commands.result(result('seat2', ok=False))
+            assert [r.state for r in c.commands.records] == ['pending', 'rejected']
+            c.commands.observe(report(1, 0, 99))
+            assert c.commands.records[0].state == 'pending'
+            c.commands.observe(report(0, 1, 200))
+            assert c.commands.records[0].state == 'pending'
+            c.commands.observe(report(1, 0, 300))
+            assert c.commands.records[0].state == 'confirmed'
+            await async_send(c, 'seat-1-ventilation-off', AsyncMock(return_value=ACCEPTED)())
+            c.commands.observe(report(0, 0, 400))
+            assert c.commands.state == 'confirmed'
     asyncio.run(run())

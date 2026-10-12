@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
@@ -11,6 +11,8 @@ from ._vendor.gac_connect.errors import GacError
 
 from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
 from .command_tracking import async_send
+from .charging import window_target
+from .capability_report import cabin_capability_report
 from .const import DOMAIN
 
 ATTR_VIN = "vin"
@@ -64,7 +66,8 @@ def async_register_services(hass: HomeAssistant) -> None:
                 call.data[ATTR_STOP],
                 weekly=call.data.get(ATTR_WEEKLY, 0),
                 until_soc=call.data.get(ATTR_UNTIL_SOC, False),
-            ))
+            ), expected=window_target(call.data[ATTR_START], call.data[ATTR_STOP],
+                                      call.data.get(ATTR_WEEKLY, 0), call.data.get(ATTR_UNTIL_SOC, False)))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         except GacError as err:
@@ -77,6 +80,13 @@ def async_register_services(hass: HomeAssistant) -> None:
             params = call.data.get(ATTR_PARAMS) or {}
             await async_send(coordinator, command, coordinator.client.command(vin, command, **params),
                              expected={} if params else None)
+        except GacError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    async def get_control_capabilities(call: ServiceCall) -> dict:
+        coordinator, vin = _resolve(hass, call)
+        try:
+            return cabin_capability_report(await coordinator.client.get_control_capabilities(vin))
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
@@ -103,4 +113,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         "send_command",
         send_command,
         base.extend({vol.Required(ATTR_COMMAND): cv.string, vol.Optional(ATTR_PARAMS): dict}),
+    )
+    hass.services.async_register(
+        DOMAIN, "get_control_capabilities", get_control_capabilities, base,
+        supports_response=SupportsResponse.ONLY,
     )

@@ -4,23 +4,28 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from dataclasses import dataclass, field
+from inspect import iscoroutine
 from time import monotonic
 
 from homeassistant.core import callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from ._vendor.gac_connect import command_session_id
 from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
 from ._vendor.gac_connect.models import ChargingMode
-from ._vendor.gac_connect.errors import RateLimitedError
+from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError
 from .api import doors_locked
+from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, VEHICLE_SHUTDOWN_COMMANDS
+from .seats import ventilation_state
 
 REQUEST_SECONDS = 180
 ACTIVE = {"sending", "pending", "awaiting_report"}
 STATES = ["idle", "sending", "pending", "awaiting_report", "confirmed", "reported_success",
           "rejected", "failed", "timed_out", "cancelled", "superseded"]
 TARGETS = {
+    "vehicle-power-off": {"power_on": False},
     "lock": {"locked": True}, "unlock": {"locked": False},
     "charge-now": {"charging_mode": ChargingMode.FREE},
     **{f"{command}-{direction}": {field: value}
@@ -30,6 +35,8 @@ TARGETS = {
        for command, field in (("steering", "steering_heat_on"), ("flash", "lights_on"), ("aircon", "ac_on"))
        for direction, value in (("on", True), ("off", False))},
     "fridge-off": {"fridge_mode": "off"},
+    **{f"seat-{seat}-ventilation-{direction}": {f"seat_{seat}_ventilation_on": value}
+       for seat in range(1, 5) for direction, value in (("on", True), ("off", False))},
 }
 
 
@@ -43,6 +50,8 @@ class CommandRecord:
     session_id: str | None = None
     requested_at: object = field(default_factory=dt_util.utcnow)
     result_received: bool = False
+    failure_reason: str | None = None
+    response_code: str | None = None
 
 
 class CommandTracker:
@@ -68,8 +77,11 @@ class CommandTracker:
             "requested_at": last.requested_at.isoformat() if last else None,
             "pending_count": len(self.pending),
             "pending_commands": [record.command for record in self.pending],
+            "failure_reason": last.failure_reason if last else None,
+            "response_code": last.response_code if last else None,
             # No VINs, session identifiers, command parameters or API messages.
             "recent_commands": [{"command": r.command, "state": r.state,
+                                 "failure_reason": r.failure_reason, "response_code": r.response_code,
                                  "requested_at": r.requested_at.isoformat()} for r in list(self.records)[-5:]],
         }
 
@@ -119,10 +131,18 @@ class CommandTracker:
             raise
         except RateLimitedError as err:
             record.state = "failed"
+            record.failure_reason = "rate_limited"
             self.coordinator.async_rate_limited(err)
             raise
-        except Exception:
+        except Exception as err:
             record.state = "failed"
+            if isinstance(err, CommandError):
+                record.response_code = getattr(err, "code", None)
+                record.failure_reason = "gateway_rejected" if record.response_code else "command_error"
+            elif isinstance(err, (AuthError, TokenInvalidError)):
+                record.failure_reason = "authentication"
+            else:
+                record.failure_reason = "request_error"
             raise
         else:
             if self._closed or record.state == "timed_out":
@@ -181,8 +201,14 @@ class CommandTracker:
             if before is not None and status.updated_ms is not None and status.updated_ms < before:
                 continue
             model = self.coordinator.config_entry.data.get("model")
-            if all((doors_locked(status, model) if key == "locked" else getattr(status, key, None)) == value
-                   for key, value in record.expected.items()):
+            def reading(key):
+                if key == "locked":
+                    return doors_locked(status, model)
+                if key.startswith("seat_") and key.endswith("_ventilation_on"):
+                    return ventilation_state(status, int(key.split("_")[1]))
+                return getattr(status, key, None)
+
+            if all(reading(key) == value for key, value in record.expected.items()):
                 record.state = "confirmed"
                 changed = True
         if changed:
@@ -190,6 +216,14 @@ class CommandTracker:
 
 
 async def async_send(coordinator, command: str, request, *, expected=None):
+    if (command in VEHICLE_SHUTDOWN_COMMANDS
+            and coordinator.config_entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True):
+        if iscoroutine(request):
+            request.close()
+        raise ServiceValidationError(
+            "Remote vehicle shutdown is disabled. Turn on 'Allow remote vehicle shutdown' "
+            "in GAC Connect Vehicle settings to use it."
+        )
     if (tracker := getattr(coordinator, "commands", None)) is not None:
         return await tracker.send(command, request, expected=expected)
     response = await request

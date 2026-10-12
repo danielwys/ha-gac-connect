@@ -26,7 +26,10 @@ def schedule_attributes(status) -> dict:
         "reported_stop": status.charge_window_stop if status else None,
         "reported_days": reported_days(status.charge_weekly if status else None),
         "reported_clock_verified": False,
-        "stopping_rule": "Not available from decoded telemetry",
+        "reported_clock_consistent": getattr(status, "charge_clock_consistent", None),
+        "reported_time_format": getattr(status, "charge_time_format", None),
+        "stopping_rule": {0: "Stop time", 1: "Vehicle target charge level"}.get(
+            getattr(status, "charge_end_type", None), "Not reported"),
     }
 
 
@@ -40,13 +43,23 @@ def schedule_summary(coordinator) -> str:
     refresh = {"waiting": "No refresh yet", "ok": "Last request succeeded", "quiet_hours": "Quiet hours",
                "rate_limited": "Waiting for request limit", "error": "Last refresh failed",
                "auth_required": "Sign in again"}[coordinator.polling_state]
+    clock_note = ("The calendar fields and timestamps disagree in the vehicle's reported time zone. "
+                  "Calendar start/stop fields are shown; verify them in the official app. "
+                  if fields["reported_clock_consistent"] is False else
+                  "The reported clock has not been independently verified against the scheduling time zone. ")
     return (f"**Reported mode:** {mode}\n\n"
             f"**Reported window:** {fields['reported_start'] or 'Not reported'} → "
             f"{fields['reported_stop'] or 'Not reported'}\n\n"
             f"**Reported days:** {fields['reported_days']}\n\n"
+            f"**Stopping rule:** {fields['stopping_rule']}\n\n"
             f"**Report age:** {age_text} · {refresh}\n\n"
             f"**Scheduling time zone:** {coordinator.client.timezone}\n\n"
             "These are cached vehicle readings. Use the Last report and Data freshness sensors to judge their age. "
             "A saved window may still be reported in unrestricted mode; that does not mean it is active. "
-            "The reported clock has not been verified against the scheduling time zone. "
-            "The stopping rule and target charge level are not available here.")
+            f"{clock_note}The target charge level is not available here.")
+
+
+def window_target(start: str, stop: str, weekly: int, until_soc: bool) -> dict:
+    """The reported fields required to confirm a requested window."""
+    return {"charging_mode": ChargingMode.SCHEDULED, "charge_window_start": start,
+            "charge_window_stop": stop, "charge_weekly": weekly, "charge_end_type": int(until_soc)}

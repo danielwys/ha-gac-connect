@@ -33,6 +33,7 @@ import dataclasses
 import logging
 import math
 import random
+import re
 import threading
 import time
 from contextlib import AsyncExitStack
@@ -143,6 +144,7 @@ class GacClient:
         self._limiters = (limiter, DEFAULT_LIMITER) if limiter not in (None, DEFAULT_LIMITER) else (DEFAULT_LIMITER,)
         self._auth_dead = False      # a refresh failed for good; only a new session clears it
         self._dead_refresh: str | None = None
+        self._charge_time_formats: dict[str, str] = {}
 
     def _zone(self) -> ZoneInfo:
         """The zone charge windows are scheduled in, loaded the first time one is.
@@ -442,11 +444,40 @@ class GacClient:
         reports = data.get("results") if isinstance(data, dict) else None
         if not isinstance(reports, list) or not reports or not isinstance(reports[0], dict):
             raise ResponseError("vehicle status response has no valid report")
-        return VehicleStatus.from_results(reports[0], online=data.get("online"), updated_ms=data.get("updateTime"))
+        status = VehicleStatus.from_results(reports[0], online=data.get("online"), updated_ms=data.get("updateTime"))
+        if status.charge_time_format is not None:
+            self._charge_time_formats[vin] = status.charge_time_format
+        return status
 
     async def get_position(self, vin: str) -> dict:
         resp = await self._iov_read(commands.CATALOG["position"].path, {"vin": vin}, sensitive={"vin": vin})
         return self._data(resp) or {}
+
+    async def get_control_capabilities(self, vin: str) -> dict:
+        """Read the app's raw capability response without issuing a control.
+
+        This endpoint uses ``v1/iov/vehicle``, unlike status/control paths.
+        Numeric capability flags are not yet calibrated; this response must
+        not automatically enable controls or establish a physical effect.
+        """
+        resp = await self._iov_read(
+            "/iov-vehicle-gateway/v1/iov/vehicle/access_gateway/get_capability",
+            {"vin": vin}, sensitive={"vin": vin},
+        )
+        data = self._data(resp)
+        code = resp.get("code") if isinstance(resp, dict) else None
+        # The app's generic read wrapper accepts "0" and other normal success
+        # codes, without requiring the main API's success boolean. Keep async
+        # command-only codes out of this metadata read and do not broaden _ok.
+        success_code = type(code) in (int, str) and str(code) in {"0", "0000", "1000", "2000", "13000"}
+        if (not isinstance(resp, dict) or resp.get("success") is False
+                or not (success_code or (code is None and self._ok(resp)))):
+            safe_code = _safe_result_code(code)
+            detail = f"result code {safe_code}" if safe_code is not None else "no recognized result code"
+            raise ResponseError(f"vehicle capability query was not accepted ({detail})")
+        if not isinstance(data, dict):
+            raise ResponseError("vehicle capability response has no valid data")
+        return data
 
     async def _iov_read(self, path: str, body: Any, *, sensitive: dict | None = None) -> Any:
         """A read that refreshes-and-retries once on an invalid token."""
@@ -478,6 +509,8 @@ class GacClient:
             raise CommandError(f"unknown command {name!r}")
         if cmd.pin:
             raise PinRequiredError(f"{name} needs the remote-control PIN, not yet supported")
+        if name == "vehicle-power-off" and overrides:
+            raise CommandError("vehicle shutdown accepts no parameters")
         body = commands.build_body(cmd, vin, overrides)
         return await self._dispatch_command(cmd.path, body, vin)
 
@@ -503,8 +536,52 @@ class GacClient:
         t, m = commands.validate_climate(temperature, minutes)
         return await self.command(vin, "aircon-on", temperature=t, currentDuration=m)
 
+    async def climate_manual_on(
+        self, vin: str, *, temperature: float = 24.0, minutes: int = 30,
+        fan_speed: int | None = None, blowing_mode: int | None = None,
+    ) -> Any:
+        """Start manual A/C, optionally selecting the blower or outlet code.
+
+        Omitted fan_speed/blowing_mode fields preserve the vehicle's settings.
+        A selection starts or renews the timed run at the supplied temperature.
+        Fan speed uses 1–10; outlet codes must be calibrated for the vehicle.
+        Manual startup and fan writes were verified on an Aion UT. Outlet codes
+        1–4 worked with that car fully on (ready to drive); 3 had no effect
+        before then and 5 was rejected. Other codes/models remain unverified.
+        """
+        target, duration = commands.validate_climate(temperature, minutes)
+        params = {"temperature": target, "currentDuration": duration}
+        if fan_speed is not None:
+            params["windStrength"] = commands.validate_fan_speed(fan_speed)
+        if blowing_mode is not None:
+            params["blowingMode"] = commands.validate_blowing_mode(blowing_mode)
+        return await self.command(vin, "aircon-manual-on", **params)
+
     async def climate_off(self, vin: str) -> Any:
         return await self.command(vin, "aircon-off")
+
+    async def climate_set_temperature(self, vin: str, temperature: float) -> Any:
+        """Adjust running A/C without requesting Auto or changing fan/airflow fields.
+
+        This partial operation is best-effort and needs vehicle confirmation.
+        It does not send a duration or automatically retry as a full A/C start.
+        """
+        target, _ = commands.validate_climate(temperature, 30)
+        return await self.command(vin, "aircon-temperature", temperature=target)
+
+    async def set_seat_ventilation(self, vin: str, seat: int, enabled: bool) -> Any:
+        """Toggle ventilation without changing seat heating or cabin settings.
+
+        Seat IDs follow the app: 1 driver, 2 front passenger, 3 rear left,
+        4 rear right. Only use seats fitted with ventilation. The app's binary
+        controls send windStrength 1 for on and 0 for off, both with enableWind 1.
+        An accepted request still needs a result or a fresh vehicle report.
+        """
+        if type(seat) is not int or seat not in (1, 2, 3, 4):
+            raise ValueError("seat must be an integer from 1 to 4")
+        if not isinstance(enabled, bool):
+            raise ValueError("enabled must be a boolean")
+        return await self.command(vin, f"seat-{seat}-ventilation-{'on' if enabled else 'off'}")
 
     async def fridge_on(self, vin: str, *, mode: str = "refrigerate", temperature: float | None = None) -> Any:
         """Ask the car to run the fridge in ``mode`` ("refrigerate", "heat" or "freeze") at ``temperature`` °C.
@@ -538,8 +615,15 @@ class GacClient:
 
     async def set_charge_window(self, vin: str, start: str, stop: str, *,
                                 weekly: int = 0, until_soc: bool = False) -> Any:
+        """Use the time representation learned by get_status for this vehicle.
+
+        Before any usable report, retain the legacy milliseconds-of-day format.
+        A timestamp request uses the configured scheduling zone for both dates
+        and timestamps. Acceptance still needs vehicle confirmation.
+        """
         op = vehicle.window_operation(start, stop, self._zone(),
-                                      weekly=weekly, until_soc=until_soc)
+                                      weekly=weekly, until_soc=until_soc,
+                                      timestamp_times=self._charge_time_formats.get(vin) == "timestamp")
         return await self._reservation(vin, op)
 
     async def _reservation(self, vin: str, operation: dict) -> Any:
@@ -566,7 +650,7 @@ def _command_result(resp: Any) -> Any:
             raise TokenInvalidError("token invalid; refresh and reissue the command")
         if resp.get("success") is True or code in (CODE_COMMAND_ACCEPTED, str(CODE_COMMAND_ACCEPTED), "0000"):
             return resp
-        raise CommandError(f"command rejected: {_msg(resp)}")
+        raise CommandError(f"command rejected: {_msg(resp)}", code=code)
     raise CommandError("command response must be an object with an acceptance result")
 
 
@@ -574,6 +658,14 @@ def _msg(resp: Any) -> str:
     if isinstance(resp, dict):
         return str(resp.get("msg") or resp.get("code") or resp)[:200]
     return str(resp)[:200]
+
+
+def _safe_result_code(value: Any) -> str | None:
+    """Keep only a bounded gateway code, never an arbitrary response message."""
+    if type(value) not in (int, str):
+        return None
+    code = str(value)
+    return code if re.fullmatch(r"(?:[0-9]{1,8}|[A-Z]{1,12}(?:\.[A-Z]{1,12})?\.[0-9]{1,8})", code) else None
 
 
 def _dumps(obj: Any) -> bytes:

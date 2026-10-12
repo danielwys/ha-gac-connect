@@ -59,11 +59,11 @@ def snapshot(source: Path, ref: str) -> dict[str, bytes]:
 
 
 def read_bundle(target: Path) -> dict[str, bytes]:
-    """Ignore only interpreter caches; unexpected source files must be reviewed."""
+    """Ignore interpreter caches and Finder metadata; verify every source file."""
     result = {}
     for path in target.rglob("*"):
         relative = path.relative_to(target)
-        if "__pycache__" in relative.parts or path.suffix in {".pyc", ".pyo"}:
+        if "__pycache__" in relative.parts or path.suffix in {".pyc", ".pyo"} or path.name == ".DS_Store":
             continue
         if path.is_symlink():
             raise ValueError(f"Bundled path must not be a symlink: {relative}")

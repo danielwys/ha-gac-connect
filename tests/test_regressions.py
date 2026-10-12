@@ -32,6 +32,7 @@ ACCEPTED = {"code": 13001, "data": {"identifier": {"sessionId": "s1"}}}
 def coord(data):
     client = object.__new__(GacClient)
     client.command = AsyncMock(return_value=ACCEPTED)
+    client._charge_time_formats = {}
     return SimpleNamespace(
         hass=Mock(),
         data=data,
@@ -136,7 +137,110 @@ def test_climate_valid_start_and_rounding():
         await e.async_turn_on()
 
     asyncio.run(run())
-    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-on", temperature=22.5, currentDuration=30)
+    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-manual-on", temperature=22, currentDuration=30)
+
+
+@pytest.mark.parametrize("running", [False, True])
+@pytest.mark.parametrize("requested,target", [(22.3, 22), (22.5, 23), (23.5, 24), (31.5, 32)])
+def test_remote_setpoints_use_whole_degrees_and_confirm_against_sent_target(running, requested, target):
+    c, e = climate(VehicleStatus(ac_on=running, ac_target_temp_c=21))
+
+    async def run():
+        await e.async_set_temperature(temperature=requested)
+        if not running:
+            await e.async_turn_on()
+
+    asyncio.run(run())
+    command = "aircon-temperature" if running else "aircon-manual-on"
+    params = {"temperature": target, **({} if running else {"currentDuration": 30})}
+    c.client.command.assert_awaited_once_with("TESTVIN", command, **params)
+    assert e.target_temperature == target
+    c.data = VehicleStatus(ac_on=True, ac_target_temp_c=target)
+    e._handle_coordinator_update()
+    assert e._cabin._req is None and e.target_temperature == target
+
+
+@pytest.mark.parametrize("use_switch", [False, True])
+def test_start_from_console_half_degree_report_normalizes_command_but_preserves_reading(use_switch):
+    c, e = climate(VehicleStatus(ac_on=False, ac_target_temp_c=23.5))
+    assert e.target_temperature == 23.5
+    assert e.target_temperature_step == 1 and e.precision == 0.5
+    control = GacClimateSwitch(c) if use_switch else e
+    asyncio.run(control.async_turn_on())
+    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-manual-on", temperature=24, currentDuration=30)
+    assert e.target_temperature == 24
+
+
+def test_console_half_degree_temperature_report_remains_visible_while_running():
+    c, e = climate(VehicleStatus(ac_on=True, ac_target_temp_c=23.5))
+    assert e.target_temperature == 23.5
+    c.client.command.assert_not_awaited()
+    c.data = VehicleStatus(ac_on=True, ac_target_temp_c=24.5)
+    e._handle_coordinator_update()
+    assert e.target_temperature == 24.5
+
+
+@pytest.mark.parametrize("reported_auto", [False, True])
+def test_running_temperature_change_never_restarts_auto_or_copies_fan_airflow(reported_auto):
+    from custom_components.gac_connect._vendor.gac_connect.commands import build_body
+
+    c, e = climate(VehicleStatus(ac_on=True, ac_target_temp_c=21, ac_fan_strength=1,
+                                ac_blowing_mode=2, ac_auto_on=reported_auto))
+    asyncio.run(e.async_set_temperature(temperature=22))
+    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-temperature", temperature=22)
+    call = c.client.command.await_args
+    body = build_body(CATALOG[call.args[1]], call.args[0], call.kwargs)
+    assert body == {"identifier": {"vin": "TESTVIN", "grade": 2},
+                    "operations": [{"temperature": 22, "temperatureUnit": 0}]}
+    assert e.extra_state_attributes["reported_fan_strength"] == 1
+    assert e.extra_state_attributes["reported_blowing_mode"] == 2
+    c.data = VehicleStatus(ac_on=True, ac_target_temp_c=22, ac_fan_strength=1,
+                           ac_blowing_mode=2, ac_auto_on=reported_auto)
+    e._handle_coordinator_update()
+    assert e._cabin._req is None
+
+
+def test_temperature_change_before_start_is_reported_still_sends_complete_start():
+    c, e = climate(VehicleStatus(ac_on=False, ac_target_temp_c=24))
+
+    async def run():
+        await e.async_turn_on()
+        await e.async_set_temperature(temperature=22)
+
+    asyncio.run(run())
+    assert [call.args[1] for call in c.client.command.await_args_list] == ["aircon-manual-on", "aircon-manual-on"]
+    assert c.client.command.await_args.kwargs == {"temperature": 22, "currentDuration": 30}
+
+
+@pytest.mark.parametrize("preset,target", [("heating", 32), ("cooling", 18)])
+def test_app_presets_request_auto_explicitly_even_while_ac_is_running(preset, target):
+    c, e = climate(VehicleStatus(ac_on=True, ac_target_temp_c=22, ac_fan_strength=1))
+    asyncio.run(e.async_set_preset_mode(preset))
+    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-on", temperature=target, currentDuration=30)
+
+
+@pytest.mark.parametrize("preset,target", [("heating", 32.0), ("cooling", 18.0)])
+def test_app_climate_presets_start_automatic_ac_and_revert_on_rejection(preset, target):
+    c, e = climate(VehicleStatus(ac_on=False, ac_target_temp_c=22))
+    assert e.preset_mode is None
+    asyncio.run(e.async_set_preset_mode(preset))
+    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-on", temperature=target, currentDuration=30)
+    assert e.hvac_mode == HVACMode.HEAT_COOL and e.target_temperature == target
+    assert e.preset_mode == preset and preset in e.preset_modes
+    e._cabin._handle_result(PushResult(False, "13101", None, {}, session_id="s1"))
+    assert e.hvac_mode == HVACMode.OFF and e.target_temperature == 22 and e.preset_mode is None
+
+
+def test_changing_temperature_clears_extreme_preset_and_invalid_preset_never_sends():
+    from homeassistant.exceptions import ServiceValidationError
+
+    c, e = climate(VehicleStatus(ac_on=True, ac_target_temp_c=32))
+    assert e.preset_mode == "heating"
+    with pytest.raises(ServiceValidationError):
+        asyncio.run(e.async_set_preset_mode("unsupported"))
+    c.client.command.assert_not_awaited()
+    asyncio.run(e.async_set_temperature(temperature=24))
+    assert e.preset_mode is None and e.target_temperature == 24
 
 
 def test_combined_temperature_service_respects_requested_mode():
@@ -149,7 +253,7 @@ def test_combined_temperature_service_respects_requested_mode():
 def test_climate_unknown_setpoint_uses_valid_default():
     c, e = climate(VehicleStatus(ac_on=False, ac_target_temp_c=-1))
     asyncio.run(e.async_turn_on())
-    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-on", temperature=24, currentDuration=30)
+    c.client.command.assert_awaited_once_with("TESTVIN", "aircon-manual-on", temperature=24, currentDuration=30)
 
 
 def test_offline_target_survives_status_poll():
@@ -499,9 +603,10 @@ def test_invalid_temperature_never_sends_a_command(value):
 @pytest.mark.parametrize(
     "initial,mode,command",
     [
-        (False, HVACMode.HEAT_COOL, "aircon-on"),
+        (False, HVACMode.HEAT_COOL, "aircon-manual-on"),
         (True, HVACMode.OFF, "aircon-off"),
-        (True, None, "aircon-on"),
+        (True, None, "aircon-temperature"),
+        (True, HVACMode.HEAT_COOL, "aircon-temperature"),
         (False, None, None),
         (None, None, None),
     ],
@@ -552,7 +657,7 @@ def test_shared_command_queue_serializes_both_entities():
         started, release = asyncio.Event(), asyncio.Event()
 
         async def send(vin, command, **kwargs):
-            if command == "aircon-on":
+            if command == "aircon-manual-on":
                 started.set()
                 await release.wait()
             return ACCEPTED
@@ -567,7 +672,7 @@ def test_shared_command_queue_serializes_both_entities():
         await asyncio.gather(first, second)
 
     asyncio.run(run())
-    assert [call.args[1] for call in c.client.command.await_args_list] == ["aircon-on", "aircon-off"]
+    assert [call.args[1] for call in c.client.command.await_args_list] == ["aircon-manual-on", "aircon-off"]
     assert e.hvac_mode == HVACMode.OFF and sw.is_on is False
 
 
@@ -652,7 +757,7 @@ def service_registry(c):
 
     registered = {}
 
-    def register(domain, name, handler, schema):
+    def register(domain, name, handler, schema, **kwargs):
         registered[name] = (handler, schema)
 
     runtime = SimpleNamespace(coordinator=c, client=c.client)

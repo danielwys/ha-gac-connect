@@ -46,6 +46,15 @@ set_charge_window:
       name: Until target SoC
       selector: { boolean: {} }
 
+get_control_capabilities:
+  name: Read cabin control capabilities
+  description: Read the cloud's raw cabin and seat capability fields for troubleshooting. This does not send a vehicle control or change detected equipment.
+  fields:
+    vin:
+      name: VIN
+      description: Which vehicle (optional if you have only one).
+      selector: { text: {} }
+
 send_command:
   name: Send command
   description: Send a supported vehicle command by name (advanced).

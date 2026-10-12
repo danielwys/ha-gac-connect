@@ -48,6 +48,9 @@ integration does not make the GAC cloud service available offline.
 Upgrading this integration updates its bundled library at the same time. Restart
 Home Assistant after installing or changing versions. Existing accounts and
 options are retained; no new sign-in is required solely because of vendoring.
+For a manual update, copy the entire `custom_components/gac_connect/` folder,
+including `_vendor/`, before restarting. Copying only the top-level Python files
+can leave the controls and charging panel using an older vehicle library.
 Selecting an earlier integration release also selects that release's library
 arrangement, which may install an external package for older releases. Make a
 Home Assistant backup before downgrading across changes to stored data.
@@ -67,9 +70,10 @@ A local number beginning with `61` keeps those digits outside Australia too.
    Verify (arrow keys nudge it a pixel).
 3. Enter the **SMS code** sent to your phone.
 4. Pick your vehicle, then choose an equipment profile. The **Aion UT** preset
-   omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and
-   temperature sensors. This also applies to older UT entries without a stored
-   profile. **Aion V** allows the fridge when the car reports one.
+   omits the fridge, steering wheel heat, sunroof, both rear seat ventilation
+   sensors and all eight tyre pressure and temperature sensors. This also applies
+   to older UT entries without a stored profile. **Aion V** allows the fridge when
+   the car reports one.
    **Auto detect** learns which readings are available and reveals related
    controls, without sending commands to test the equipment.
    For another model or trim, choose **Other or custom equipment** and select
@@ -78,6 +82,9 @@ A local number beginning with `61` keeps those digits outside Australia too.
 5. On the vehicle profile screen, choose whether to **Allow remote unlocking**.
    No PIN is required. Leave it unchecked to use the Doors control for locking
    only; you can enable unlocking later in the integration options.
+   **Allow remote vehicle shutdown** is a separate option, off by default. It
+   enables the **Turn vehicle off** button and shutdown service calls. Changing
+   this setting does not send a command.
 
 If the puzzle is off by a little it just shows a new one — keep going until it
 takes.
@@ -90,17 +97,63 @@ has been verified for this service.
 
 ## Entities
 
-- **Sensors**: battery, range, odometer, cabin temperature and PM2.5, 12 V battery,
+- **Sensors**: battery, range, odometer, cabin/outside temperature and PM2.5, 12 V battery,
   charge power, voltage, current and estimated time, per-tyre pressure and temperature, and the
   time of the car's last report (the reported charge window is available as
   disabled-by-default diagnostics).
-- **Binary sensors**: plugged-in, charging, door / window / boot open, lock,
-  charger lock, online.
-- **Climate**: cabin pre-conditioning (A/C, auto mode) with a target temperature;
-  a run lasts the "A/C run time" option (default 30 minutes). A temperature
+- **Binary sensors**: vehicle power, plugged-in, charging, door / window / boot open, lock,
+  charger lock, online, plus read-only seat ventilation, A/C auto/compressor and
+  anti-theft enabled states. Seat IDs 1–4 are driver, front passenger, rear left
+  and rear right in the app; the UT profile exposes only the front two seats.
+  **Anti-theft enabled** appears in the device's **Diagnostic** section.
+  A zero value alone does not establish fitted
+  equipment. Seat details include reported wind strength, raw `reported_enable_wind`
+  and heating strength/mode. Smart ventilation is available on the user's console
+  only; its cloud encoding and remote request are not verified. Compare these raw
+  fields between On and Smart rather than assuming a temperature-mode code means Smart.
+- **Climate**: cabin pre-conditioning with a target temperature and fan speed;
+  the mode selector displays **On / Off**. Remote temperatures use whole-degree
+  steps, matching the app; half-degree values reported from the car console
+  remain visible. Fractional service inputs are rounded to the nearest whole
+  degree, with halves rounded up, before sending and tracking confirmation.
+  A run lasts the "A/C run time" option (default 30 minutes). A temperature
   selected while off is kept for the next start, including a start through the
   pre-conditioning switch. Both controls share their requested state, which
-  reverts if rejected or unconfirmed after three minutes.
+  reverts if rejected or unconfirmed after three minutes. **Heating** and
+  **Cooling** presets start automatic A/C at 32 °C and 18 °C, matching the app's
+  temperature-extreme shortcuts. Ordinary temperature adjustments while A/C is
+  reported running send only temperature and units; they do not request Auto,
+  fan speed, airflow, compressor changes or a new run duration. This partial
+  adjustment and starting A/C with the vehicle off were confirmed working on
+  the user's Aion UT. Start/stop use the app's request envelopes and separate
+  Open/Close endpoints. Ordinary **On** uses the verified manual start request:
+  it keeps the existing fan speed and outlet selection, including with the
+  vehicle fully off. The fan selector offers **Off** and speeds **1–7**. Choosing
+  a speed starts or renews the configured timed A/C run at the displayed target
+  temperature; fan **Off** stops A/C through the dedicated close request.
+  Numeric fan readings remain visible even when the cloud's Auto flag is set,
+  because that flag also appears in verified manual-mode reports. **Heating**
+  and **Cooling** deliberately select Auto and can reset the outlets to cabin
+  only. Later temperature adjustments preserve the active fan and outlets.
+  **Cabin fan strength** remains a separate diagnostic sensor for history and
+  automations; its value always follows telemetry, including console changes
+  to speeds **8–10**, which the cloud rejected as remote requests. Those speeds
+  remain in the Climate entity's `reported_fan_strength` attribute but are not
+  selectable fan modes.
+  The thermostat card can show the selector with a `climate-fan-modes` feature.
+  The airflow selector
+  offers **Cabin**, **Cabin + Feet**, **Feet** and **Feet + Windscreen**, using
+  codes 1–4 physically verified on the user's UT. It uses HA's swing-mode
+  dropdown. Outlet changes require a reported **Vehicle power: On**: these
+  requests worked with the car ready to drive, while code 3 had no effect
+  before switching to ready. Selecting outlets sends a manual timed start at
+  the current remote target, omitting fan speed and recirculation; it starts or
+  renews the run. Windscreen-only (5) was rejected with code 13002 even when
+  ready. The live UT capability response advertises only outlet codes 0–4;
+  code 0 is uncalibrated. All-outlets (7) has only been observed from the console,
+  and 6 remains uncalibrated; these are not offered as remote choices. Console selections
+  remain visible in `reported_airflow` and `reported_blowing_mode`. Both fan and
+  outlet changes revert if rejected or not confirmed by fresh telemetry.
 - **Lock**: lock the doors from Home Assistant. Unlocking does not require a PIN;
   select **Allow remote unlocking** during setup or in the options to use it. This
   setting enables the Doors control's unlock action; it does not change a PIN
@@ -122,10 +175,20 @@ has been verified for this service.
   same three-minute timeout. Opening really opens them — treat automations that
   touch these with care.
 - **Switches**: pre-conditioning (plain A/C on / off), scheduled charging (the
-  charge gate), steering-wheel heat, cabin ventilation, flash lights. The charging
+  charge gate), steering-wheel heat, cabin ventilation, driver and front passenger
+  seat ventilation, flash lights. Seat switches use the GAC 2.0.32 request format
+  and leave cabin temperature and seat-heating fields untouched. In Auto detect,
+  use **Always show** for the seat switches until a matching successful result
+  establishes control support; off placeholder readings do not reveal them.
+  The charging
   switch is on in unrestricted mode and off in scheduled mode; off does not mean
   charging is paused. Its **Off action is disabled**; use an explicit charge window.
-- **Buttons**: charge now, sound horn, precondition battery, refresh. The existing
+- **Buttons**: charge now, sound horn, precondition battery, refresh, and **Turn
+  vehicle off** when **Allow remote vehicle shutdown** is enabled. Shutdown is
+  a separate action; stopping A/C does not trigger it. The request follows the
+  app's `power/off` format and still needs a real vehicle test through this
+  integration. **Last command** tracks its outcome; **Vehicle power** continues
+  showing the reported state until a fresh report arrives. The existing
   **Pause charging button is disabled** and explains why when called: its old
   implementation allowed charging daily from 03:00 to 03:30. Refresh also works
   during quiet hours, subject to the request limits.
@@ -146,25 +209,57 @@ has been verified for this service.
   On the map it shows a picture of the car: a built-in render for the AION V, or
   your own image set in the options (other models show the entity's initials
   until you set one).
+  Its state stays Home/Away (or a named zone), while its attributes contain the
+  actual latitude/longitude. A separate **GPS coordinates** sensor displays the
+  coordinate pair and keeps numeric coordinates in its attributes. Both follow
+  the location privacy setting and appear together under **Sensors** on the
+  device page; downloaded diagnostics still redact coordinates. Existing entity
+  IDs are retained.
 
-## Example dashboard
+The optional A/C fan-strength sensor and Climate details expose additional
+readings, including raw airflow/recirculation codes. These are not extra command
+controls. The existing Ventilation switch controls cabin ventilation, not the
+seats. The separate seat switches and Climate presets follow the app's controls.
+Their request formats were traced from GAC Android 2.0.32; real vehicle execution
+of the seat and climate controls has been confirmed by the user. The vehicle
+shutdown control still needs confirmation.
+
+**Vehicle power** appears under **Sensors**, independently of shutdown permission.
+Paired Aion UT reports verify `powerMode=2` as on and `powerMode=0` as off. Other
+codes or missing readings show unknown; the raw code is available as the
+`power_mode` attribute. **Online** reports cloud connectivity separately.
+
+### Additional accessor groups
+
+Vehicle reports contain generic accessor groups, including placeholders for
+equipment that may not be fitted. An accessor is not proof of a working remote
+command. Detected equipment and Vehicle settings now list the additional
+entities above.
+
+| Accessor | Integration support and limits |
+| --- | --- |
+| `seatTemperatureAccessors` | Per-seat ventilation status and strength/mode attributes, plus driver/front passenger on/off switches. Strength zero means off even with `enableWind=1`. Rear seat controls and independent seat-heating controls are not exposed. |
+| `airConditionAccessors` | Cabin A/C on/off and target temperature, with Heating/Cooling presets matching the app's automatic temperature extremes. Manual start preserves existing fan/outlets; fan speed 1–7 is controllable through Climate. Console-only speeds 8–10 are still reported by the fan sensor and Climate attributes. Four verified outlet choices are available when the car reports power On: cabin, cabin + feet, feet, feet + windscreen. Windscreen-only was rejected; all-outlets is not verified remotely. Auto/compressor state and recirculation codes remain read-only. Sterilisation control is not implemented. |
+| `antiTheftAccessors` | Anti-theft enabled state is read-only. Alarm records may be historical; they are not treated as a current theft alarm. No arm/disarm control is implemented. |
+| `dialNumberAccessors` | The observed `call` and `nation` fields are metadata, with no phone number or verified calling action. They do not become controls. |
+| `gpsAuthorAccessors` | Location authorisation metadata, separate from GPS coordinates in `positionAccessors`. No authorisation-changing control is implemented. |
+| `batteryPretreatmentAccessors` | The existing preconditioning button sends a best-effort command. Unreported status and zero calendar placeholders do not prove a usable scheduled preconditioning feature. |
+| `powerAccessors` | Vehicle power on/off sensor from verified mode codes 2/0. The separate Turn vehicle off button uses the app's `power/off` request, requires the shutdown option, and is awaiting a real vehicle test. |
+| `engineAccessors` | Raw readings are retained. `enable=1` and `start=-1` were unchanged between the UT's on/off reports. Engine start/stop commands remain PIN-gated; no vehicle-power-on control is exposed. |
+| Empty fridge, steering or sentinel groups | Empty records do not prove the corresponding hardware or remote function exists. |
+
+## Dashboard cards
 
 ![Example car view](docs/images/aion-v.png)
 
 The car renders in `docs/images/` are CC BY 4.0 (see `docs/images/ATTRIBUTION.md`);
-copy them to `config/www/car/` to use them in the example.
+copy them to `config/www/car/` to use them in your dashboard.
 
-A ready-made car view using only built-in cards (no extra installs) is in
-[`docs/example-dashboard.yaml`](docs/example-dashboard.yaml). Replace the `aion_v`
-entity prefix with your vehicle's, then paste the whole file into a new
-dashboard via Dashboards → Add Dashboard → Edit → Raw configuration editor.
-
-It covers battery, range, odometer and report freshness; charging state with
-power, current and voltage while charging; the remote controls; locks, openings,
-cabin temperature and air quality; tyre pressures and temperatures; location;
-and, on cars that have one, the fridge (on/off, mode, temperature and the
-keep-running setting). The file's header comments explain how to switch tyre pressure to psi,
-enable location tracking, and remove the cards that send commands to the car.
+Home Assistant's built-in cards can display battery, range, odometer, report
+freshness, charging readings, remote controls, location and equipment fitted
+to your vehicle. A thermostat card can show the Climate entity's fan, preset
+and airflow selectors. Choose your vehicle's actual entity IDs when adding
+cards, and enable location tracking before adding the tracker to a map.
 
 ## Trips and consumption
 
@@ -226,6 +321,25 @@ start/stop window, optionally on selected days) and `send_command` (advanced, fo
 the non-PIN commands by name). Climate and lock are ordinary `climate.*` /
 `lock.*` actions on their entities.
 
+`gac_connect.get_control_capabilities` is a read-only troubleshooting action.
+It returns the cloud's raw cabin and seat capability fields, including
+`supportBlowingModes`, without credentials, VIN or location. These numeric
+flags are not interpreted as proven command support and do not change the
+detected-equipment settings. The query runs only when requested and follows
+the normal request limit. In Developer Tools → Actions, run:
+
+```yaml
+action: gac_connect.get_control_capabilities
+data: {}
+```
+
+Include `vin` if more than one vehicle is configured. The user's live UT response
+advertises outlet codes 0–4, consistent with the four tested remote choices, and front
+seat ventilation only. It also advertises a cabin fan maximum of 7, despite the
+console reporting ten speeds. The user's remote trials confirmed speed 7 and
+rejection of 8–10, so the Climate selector offers Off and 1–7 while preserving
+all console readings.
+
 `charge_pause` remains registered for existing automations, but returns an error
 without sending a command. A continuous pause has not been verified. Charge
 windows require distinct `HH:MM` start and stop times and a day mask from 0 to
@@ -255,7 +369,8 @@ door / window / boot left open — are in
 
 Poll interval, quiet hours (skip polling overnight),
 whether the location tracker is enabled, whether the fridge controls are shown,
-which other sensors and controls to omit, the car's picture on the map (an image
+whether remote unlocking and vehicle shutdown are allowed, which other sensors
+and controls to omit, the car's picture on the map (an image
 URL or a `/local/` path), and how long an A/C run lasts. The **Vehicle profile**
 selector also lets existing installations switch to **Auto detect**. The UT
 preset removes fridge, steering wheel heat, sunroof and all eight tyre readings;
@@ -265,12 +380,19 @@ Quiet hours use Home Assistant's configured time zone. Enter two different times
 in `HH:MM` format; windows can cross midnight. Clear both fields to disable quiet
 hours. Manual refreshes and post-command checks still run during that window.
 
+**Allow remote vehicle shutdown** defaults to off. Enable it in **Configure →
+Vehicle settings** to reveal **Turn vehicle off**. The same setting gates
+shutdown service calls (`vehicle-power-off`, `power-off` and `powerkeep-stop`),
+including calls from automations. Disabling it immediately blocks requests and
+hides the button while preserving its entity ID. The **Vehicle power** sensor
+remains available. **Always show** cannot override shutdown permission.
+
 ### Auto detect
 
 Choose **Auto detect** during setup, or open **Settings → Devices & services →
 GAC Connect → Configure → Vehicle settings** and change **Vehicle profile**. Switching away from
 the UT preset clears its preset omissions and allows fridge detection; unrelated
-manual omissions, location privacy and the unlock setting are preserved.
+manual omissions, location privacy, unlocking and shutdown settings are preserved.
 
 - Discovery uses the usual status polls. Valid zero/off/closed readings count;
   missing values, invalid readings and known placeholders do not. Tyre pressure
@@ -281,7 +403,7 @@ manual omissions, location privacy and the unlock setting are preserved.
 - Unknown features stay hidden. **Always show (Auto detect only)** reveals a
   sensor or control you know exists, even before useful readings arrive.
   **Omit unsupported entities** hides a mistaken detection. The separate fridge,
-  location and unlock options remain in force. Continuous charging pause remains
+  location, unlock and shutdown options remain in force. Continuous charging pause remains
   unsupported and cannot be enabled by an override.
 - Learned evidence is saved for that vehicle and survives restarts and empty
   reports. Existing entities keep their IDs; user-disabled registry entries stay
@@ -344,8 +466,9 @@ The new **Charging schedule** sensor exposes the same readings in its details;
 the example dashboard uses it instead of a charging switch with an unsupported
 Off action. Existing switch IDs and advanced actions remain available.
 
-Choose **Set a charging window** to enter start/stop times and weekdays, then
-submit to send the command. An empty day selection means every day; overnight
+Choose **Set a charging window** to edit the prefilled reported start/stop times,
+weekdays and stopping rule, then submit to send the command. An empty day selection
+means every day; overnight
 windows belong to their start day. **Charge whenever plugged in** explicitly
 switches to unrestricted charging. Opening either page sends nothing. Submitting
 reports request acceptance; **Last command** distinguishes this from a matched
@@ -353,16 +476,24 @@ vehicle result, and follow-up polls fetch reported state. Options are not saved
 or reloaded when sending these commands.
 
 This is partial schedule readback, not a complete charging-plan editor. A stored
-window can be reported while unrestricted mode is active. The stopping rule and
-target charge level are not available from decoded telemetry. The optional stop
+window can be reported while unrestricted mode is active. The stopping rule is
+shown when reported; the target charge level is still unavailable. The optional stop
 at target setting uses the car’s existing target and cannot change it.
 
 The form displays the library’s regional scheduling zone (for example,
 Australia/Brisbane), which can differ from Home Assistant’s zone or the car’s
 actual zone. If it is wrong for your vehicle, use the official app. Reported
-time-of-day fields have not been verified against that zone and are deliberately
-not copied into the edit form or used to claim a schedule was applied. Verify a
-new schedule in the car or official app. Continuous pause remains unavailable.
+times are copied into the edit form when usable. Valid `startTime` / `stopTime`
+calendar fields are preferred when the report uses full timestamps. If calendar and timestamp clocks
+disagree, the view explains the mismatch instead of silently shifting the times.
+
+The client learns the reservation time format separately for each vehicle from
+status reports. Timestamp-based vehicles receive full timestamps consistent with
+the requested calendar fields; legacy vehicles retain milliseconds-of-day.
+Acceptance is not execution: a fresh matching report confirms the requested
+window. Verify a new schedule in the car or official app. Continuous pause remains
+unavailable. Failed commands expose a bounded failure category and service code
+in Last command, without retaining private API messages.
 
 ## Equipment explanations
 
@@ -475,7 +606,9 @@ day, since any pause recorded in it is unknown; deleting
 - Door unlock does not require a PIN. The bundled library includes the corrected
   public unlock method; select **Allow remote unlocking** during setup or in the
   integration options to use the Doors control's unlock action.
-  Remote power and charger-release remain blocked; no PIN is stored.
+  Engine start/stop and charger-release remain PIN-gated; no PIN is stored.
+  The separate app shutdown request is available only with **Allow remote
+  vehicle shutdown**, off by default, and still needs a real vehicle test.
 - Using the official app and this integration on the same account at the same time
   can occasionally sign one of them out.
 
@@ -519,7 +652,15 @@ Thanks to their authors for showing what a good community integration looks like
   rejected, timed-out and confirmed outcomes. Configure includes equipment
   explanations and a charging schedule view/editor with explicit clock and
   readback limits. Polling shares overlapping reads, ends settled-command checks
-  early and observes server retry delays.
+  early and observes server retry delays. Reported charging values now prefill
+  the window editor. Location and a separate GPS coordinates sensor share the
+  Sensors panel and location privacy setting. GAC 2.0.32 app request analysis
+  adds front-seat ventilation switches and Heating/Cooling presets; additional
+  A/C, seat and anti-theft readings remain available as status diagnostics.
+  Vehicle power now shows the on/off codes verified against paired UT reports.
+  A separate Turn vehicle off button uses the app's shutdown request, with
+  visibility and all shutdown service calls gated by the new, off-by-default
+  Allow remote vehicle shutdown option.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

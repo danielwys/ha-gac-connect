@@ -67,6 +67,12 @@ class GacSensor(SensorEntityDescription):
     value: Callable[[VehicleStatus], str | float | int | datetime | None]
 
 
+def gps_coordinates(status: VehicleStatus) -> str | None:
+    if status.latitude is None or status.longitude is None:
+        return None
+    return f"{status.latitude:.6f}, {status.longitude:.6f}"
+
+
 SENSORS: tuple[GacSensor, ...] = (
     GacSensor(key="charge_schedule", translation_key="charge_schedule", device_class=SensorDeviceClass.ENUM,
               options=["unrestricted", "scheduled", "not_reported"], icon="mdi:calendar-clock",
@@ -83,6 +89,13 @@ SENSORS: tuple[GacSensor, ...] = (
     GacSensor(key="cabin_temp", translation_key="cabin_temp", device_class=SensorDeviceClass.TEMPERATURE,
               native_unit_of_measurement=UnitOfTemperature.CELSIUS,
               state_class=SensorStateClass.MEASUREMENT, value=lambda s: s.cabin_temp_c),
+    GacSensor(key="outside_temp", translation_key="outside_temp", device_class=SensorDeviceClass.TEMPERATURE,
+              native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+              state_class=SensorStateClass.MEASUREMENT, value=lambda s: getattr(s, "outside_temp_c", None)),
+    GacSensor(key="gps_coordinates", translation_key="gps_coordinates", icon="mdi:map-marker",
+              entity_category=None, value=gps_coordinates),
+    GacSensor(key="ac_fan_strength", translation_key="ac_fan_strength", icon="mdi:fan",
+              entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "ac_fan_strength", None)),
     GacSensor(key="aux_voltage", translation_key="aux_voltage", device_class=SensorDeviceClass.VOLTAGE,
               native_unit_of_measurement=UnitOfElectricPotential.VOLT,
               state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
@@ -180,6 +193,9 @@ class GacSensorEntity(GacEntity, SensorEntity):
     def extra_state_attributes(self):
         if self.entity_description.key == "charge_schedule":
             return schedule_attributes(self.status)
+        if self.entity_description.key == "gps_coordinates":
+            return {"latitude": self.status.latitude if self.status else None,
+                    "longitude": self.status.longitude if self.status else None}
         return None
 
 

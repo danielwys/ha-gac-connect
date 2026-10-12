@@ -19,11 +19,12 @@ def setup_flow(hass, entry, coordinator):
     client = coordinator.client = object.__new__(GacClient)
     client.timezone = 'Asia/Bangkok'
     client._tz = ZoneInfo(client.timezone)
+    client._charge_time_formats = {}
     client._reservation = AsyncMock(return_value=ACCEPTED)
     return flow, client
 
 
-def test_view_reports_partial_schedule_and_never_sends_or_prefills_unverified_times(tmp_path):
+def test_view_prefills_the_reported_window_without_sending_a_command(tmp_path):
     async def run():
         async with vehicle(tmp_path) as (hass, entry, c):
             flow, client = setup_flow(hass, entry, c)
@@ -36,8 +37,10 @@ def test_view_reports_partial_schedule_and_never_sends_or_prefills_unverified_ti
             assert schedule_mode(c.data) == 'unrestricted'  # a stored window is not proof scheduled mode is active
             assert schedule_attributes(c.data)['reported_clock_verified'] is False
             form = await flow.async_step_charge_window()
-            assert all(key.description.get('suggested_value') == '' for key in form['data_schema'].schema
-                       if key.schema in ('start', 'stop'))
+            suggestions = {key.schema: key.description.get('suggested_value')
+                           for key in form['data_schema'].schema if key.schema in ('start', 'stop')}
+            assert suggestions == {'start': '23:00', 'stop': '05:00'}
+            assert form['data_schema'](suggestions)['days'] == ['mon', 'tue']
             await flow.async_step_charge_now()
             client._reservation.assert_not_awaited()
             assert c.commands.state == 'idle'
@@ -84,10 +87,15 @@ def test_rejected_window_keeps_input_and_charge_now_requires_submit(tmp_path):
     async def run():
         async with vehicle(tmp_path) as (hass, entry, c):
             flow, client = setup_flow(hass, entry, c)
+            c.data = decode_status({'chargingAccessors': [{'weeklyReservation': 3, 'chargingEndType': 1,
+                'dailyReservationStartTime': 82800000, 'dailyReservationStopTime': 18000000}]})
             client._reservation.side_effect = CommandError('rejected')
-            response = await flow.async_step_charge_window({'start': '22:00', 'stop': '06:00', 'days': ['sun']})
+            response = await flow.async_step_charge_window({'start': '22:00', 'stop': '06:00', 'days': [], 'until_soc': False})
             assert response['errors']['base'] == 'command_failed'
-            assert response['data_schema']({'start': '22:00', 'stop': '06:00'})['days'] == ['sun']
+            values = response['data_schema']({'start': '22:00', 'stop': '06:00'})
+            assert values['days'] == [] and values['until_soc'] is False
+            assert {key.schema: key.description.get('suggested_value') for key in response['data_schema'].schema
+                    if key.schema in ('start', 'stop')} == {'start': '22:00', 'stop': '06:00'}
             assert c.commands.state == 'failed'
             client._reservation.reset_mock(side_effect=True)
             await flow.async_step_charge_now()
@@ -96,6 +104,24 @@ def test_rejected_window_keeps_input_and_charge_now_requires_submit(tmp_path):
             assert response['type'] == 'menu' and response['step_id'] == 'charging'
             assert client._reservation.await_args.args[1]['chargingMode'] == 0
             client._reservation.assert_awaited_once()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('weekly,days', [(0, []), (127, ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']), (64, ['sun'])])
+def test_prefill_includes_reported_days_and_stopping_rule(tmp_path, weekly, days):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            c.data = decode_status({'chargingAccessors': [{'weeklyReservation': weekly, 'chargingEndType': 1,
+                'startTime': {'year': 2026, 'month': 10, 'day': 11, 'hour': 22, 'minute': 8},
+                'stopTime': {'year': 2026, 'month': 10, 'day': 12, 'hour': 6, 'minute': 10}}]})
+            form = await flow.async_step_charge_window()
+            suggestions = {key.schema: key.description.get('suggested_value') for key in form['data_schema'].schema
+                           if key.schema in ('start', 'stop')}
+            assert suggestions == {'start': '22:08', 'stop': '06:10'}
+            values = form['data_schema'](suggestions)
+            assert values['days'] == days and values['until_soc'] is True
+            client._reservation.assert_not_awaited()
     asyncio.run(run())
 
 
@@ -113,4 +139,30 @@ def test_missing_schedule_stays_unknown_and_refresh_is_explicit(tmp_path):
             del entry.runtime_data
             for step in (flow.async_step_charging, flow.async_step_charge_window, flow.async_step_charge_now):
                 assert (await step())['reason'] == 'vehicle_not_loaded'
+    asyncio.run(run())
+
+
+def test_real_ut_schedule_reads_calendar_fields_and_confirms_after_new_report(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            client._charge_time_formats['VIN'] = 'timestamp'
+            raw = {'timezoneAccessor': {'timezone': 'Asia/Bangkok'}, 'chargingAccessors': [{
+                'chargingMode': 1, 'weeklyReservation': 0, 'chargingEndType': 0,
+                'dailyReservationStartTime': 1791727200000, 'dailyReservationStopTime': 1791756000000,
+                'startTime': {'year': 2026, 'month': 10, 'day': 11, 'hour': 22, 'minute': 0},
+                'stopTime': {'year': 2026, 'month': 10, 'day': 12, 'hour': 6, 'minute': 0},
+            }]}
+            c.data = decode_status(raw, updated_ms=1000)
+            summary = (await flow.async_step_charging())['description_placeholders']['schedule']
+            for value in ('22:00', '06:00', 'Stop time', 'disagree'):
+                assert value in summary
+            response = await flow.async_step_charge_window({'start': '23:00', 'stop': '07:00'})
+            assert response['type'] == 'menu'
+            operation = client._reservation.await_args.args[1]
+            assert operation['dailyReservationStartTime'] > 86_400_000
+            assert operation['dailyReservationStopTime'] > operation['dailyReservationStartTime']
+            assert c.commands.state == 'pending'
+            c.commands.observe(decode_status({'chargingAccessors': [operation]}, updated_ms=2000))
+            assert c.commands.state == 'confirmed'
     asyncio.run(run())

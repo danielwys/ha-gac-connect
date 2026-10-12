@@ -22,8 +22,9 @@ def test_ut_preset_omits_all_eight_tyre_readings():
 
 
 def test_old_ut_entries_get_the_same_exclusions_but_other_models_do_not():
-    assert effective_omissions(SimpleNamespace(data={"model": "Aion UT"}, options={})) == UT_OMISSIONS
-    assert not effective_omissions(SimpleNamespace(data={"model": "Aion V"}, options={}))
+    gated = {"button:vehicle_power_off"}
+    assert effective_omissions(SimpleNamespace(data={"model": "Aion UT"}, options={"enable_tracker": True})) == UT_OMISSIONS | gated
+    assert effective_omissions(SimpleNamespace(data={"model": "Aion V"}, options={"enable_tracker": True})) == gated
 
 
 def test_ut_cleanup_removes_only_its_unsupported_registrations(tmp_path):

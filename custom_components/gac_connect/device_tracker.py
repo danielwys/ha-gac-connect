@@ -9,7 +9,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from homeassistant.components.device_tracker import TrackerEntity
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -72,6 +72,9 @@ async def _ensure_pictures_served(hass: HomeAssistant, http) -> bool:
 
 class GacDeviceTracker(GacEntity, TrackerEntity):
     _attr_translation_key = "location"
+    _attr_source_type = SourceType.GPS
+    # TrackerEntity defaults to Diagnostic; keep both location readings in Sensors.
+    _attr_entity_category = None
 
     def __init__(self, coordinator: GacCoordinator, picture: str | None = None) -> None:
         super().__init__(coordinator, "location")

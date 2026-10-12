@@ -1,4 +1,4 @@
-"""Binary sensors: plugged, charging, open/closed, locked, online."""
+"""Binary sensors: vehicle power, charging, openings, locks and connectivity."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -20,6 +20,7 @@ from .const import CONF_MODEL
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .lock_state import doors_unlocked
+from .seats import reported_seat, ventilation_state
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -28,6 +29,8 @@ class GacBinary(BinarySensorEntityDescription):
 
 
 BINARY_SENSORS: tuple[GacBinary, ...] = (
+    GacBinary(key="vehicle_power", translation_key="vehicle_power", icon="mdi:car-electric",
+              value=lambda s: getattr(s, "power_on", None)),
     GacBinary(key="plugged", translation_key="plugged", device_class=BinarySensorDeviceClass.PLUG,
               value=lambda s: s.plugged_in),
     GacBinary(key="charging", translation_key="charging", device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
@@ -46,6 +49,16 @@ BINARY_SENSORS: tuple[GacBinary, ...] = (
     GacBinary(key="charger_locked", translation_key="charger_locked", device_class=BinarySensorDeviceClass.LOCK,
               entity_category=EntityCategory.DIAGNOSTIC,
               value=lambda s: (not s.charger_locked) if s.charger_locked is not None else None),
+    GacBinary(key="ac_auto", translation_key="ac_auto", icon="mdi:fan-auto",
+              entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "ac_auto_on", None)),
+    GacBinary(key="ac_compressor", translation_key="ac_compressor", icon="mdi:air-conditioner",
+              entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "ac_compressor_on", None)),
+    GacBinary(key="anti_theft", translation_key="anti_theft", icon="mdi:shield-car",
+              entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "anti_theft_on", None)),
+    *(GacBinary(key=f"seat_{i}_ventilation", translation_key=f"seat_{i}_ventilation",
+               icon="mdi:car-seat-cooler", entity_category=EntityCategory.DIAGNOSTIC,
+               value=lambda s, i=i: ventilation_state(s, i))
+      for i in range(1, 5)),
 )
 
 
@@ -71,3 +84,17 @@ class GacBinaryEntity(GacEntity, BinarySensorEntity):
         if self.entity_description.key == "locked":
             return doors_unlocked(self.status, self.coordinator.config_entry.data.get(CONF_MODEL))
         return self.entity_description.value(self.status)
+
+    @property
+    def extra_state_attributes(self):
+        key = self.entity_description.key
+        if key == "vehicle_power" and self.status is not None:
+            return {"power_mode": getattr(self.status, "power_mode", None)}
+        if key.startswith("seat_") and self.status:
+            seat_id = int(key.split("_")[1])
+            if (seat := reported_seat(self.status, seat_id)) is not None:
+                return {"seat_id": seat.position, "reported_wind_strength": seat.ventilation_strength,
+                        "reported_enable_wind": getattr(seat, "ventilation_enable_code", None),
+                        "reported_heating_strength": seat.heating_strength,
+                        "reported_temperature_mode": seat.temperature_mode}
+        return None

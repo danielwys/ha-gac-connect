@@ -2,8 +2,9 @@
 
 Missing reports never prove absence. Reading a state does not prove that a
 remote command works. This module performs no I/O and never probes the vehicle.
-Callers may provide explicit equipment flags only from a verified source; the
-current client does not fetch an equipment endpoint.
+Callers may provide explicit equipment flags only from a verified source.
+The optional client capability query returns raw metadata; this passive
+detector does not interpret its uncalibrated numeric flags.
 """
 from __future__ import annotations
 
@@ -27,13 +28,16 @@ class Capability:
 
 # Keys describe library readings/equipment, not Home Assistant entity IDs.
 READINGS = frozenset({
+    "power_on",
     "soc", "range_km", "odometer_km", "cabin_temp_c", "aux_voltage", "pm25",
+    "outside_temp_c", "ac_fan_strength", "ac_auto_on", "ac_compressor_on", "anti_theft_on",
     "charge_current_a", "charge_voltage_v", "charge_power_kw", "estimated_charge_minutes",
     "charge_window_start", "charge_window_stop", "charge_weekly", "charging_mode", "updated_ms",
     "plugged_in", "charging", "locked", "door_open", "window_open", "hatch_open", "online",
     "charger_locked", "sunroof_open", "steering_heat_on", "lights_on", "ac_on", "ac_target_temp_c",
     "fridge_mode", "fridge_temp_c", "fridge_keep_mode", "fridge_keep_minutes", "latitude", "longitude",
     *(f"tyre_{i}_{kind}" for i in range(1, 5) for kind in ("pressure", "temperature")),
+    *(f"seat_{i}_ventilation_on" for i in range(1, 5)),
 })
 EQUIPMENT_READINGS = {
     "fridge": ("fridge_mode",),
@@ -48,9 +52,15 @@ EQUIPMENT_READINGS = {
     "lights": ("lights_on",),
     "location": ("latitude", "longitude"),
     "ventilation": (), "horn": (), "battery_precondition": (),
+    # A power reading does not establish that shutdown is remotely supported.
+    "vehicle_power_control": (),
+    # Placeholder off reports do not establish that a seat can be controlled.
+    **{f"seat_{i}_ventilation": () for i in range(1, 5)},
 }
 COMMAND_FEATURES = {
-    "aircon-on": "climate", "aircon-off": "climate",
+    "vehicle-power-off": "vehicle_power_control",
+    "aircon-on": "climate", "aircon-manual-on": "climate",
+    "aircon-off": "climate", "aircon-temperature": "climate",
     "fridge-on": "fridge", "fridge-off": "fridge",
     "steering-on": "steering_heat", "steering-off": "steering_heat",
     "sunroof-open": "sunroof", "sunroof-close": "sunroof",
@@ -61,6 +71,8 @@ COMMAND_FEATURES = {
     "flash-on": "lights", "flash-off": "lights",
     "ventilate-on": "ventilation", "ventilate-off": "ventilation",
     "horn-on": "horn", "horn-off": "horn", "battery-precondition": "battery_precondition",
+    **{f"seat-{i}-ventilation-{direction}": f"seat_{i}_ventilation"
+       for i in range(1, 5) for direction in ("on", "off")},
 }
 FEATURES = READINGS | EQUIPMENT_READINGS.keys()
 
@@ -87,7 +99,7 @@ class Capabilities:
         """Remember usable decoded readings, including explicit zero/off values."""
         before = self.export_state()
         for field in READINGS:
-            if not field.startswith("tyre_") and _known(getattr(status, field, None)):
+            if not field.startswith(("tyre_", "seat_")) and _known(getattr(status, field, None)):
                 self._readings.add(field)
         # Match API IDs, never array order. The decoder already rejects flags,
         # invalid/duplicate IDs and paired unreported tyre placeholders.
@@ -98,6 +110,9 @@ class Capabilities:
                 self._readings.add(f"tyre_{tyre.position}_pressure")
             if _known(tyre.temperature_c):
                 self._readings.add(f"tyre_{tyre.position}_temperature")
+        for seat in getattr(status, "seats", ()):
+            if seat.position in ("1", "2", "3", "4") and _known(seat.ventilation_on):
+                self._readings.add(f"seat_{seat.position}_ventilation_on")
         return before != self.export_state()
 
     def observe_equipment(self, flags: dict[str, bool]) -> bool:
