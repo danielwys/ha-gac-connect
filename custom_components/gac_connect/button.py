@@ -68,5 +68,9 @@ class GacRefreshButton(GacEntity, ButtonEntity):
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "refresh")
 
+    @property
+    def available(self) -> bool:
+        return True  # Retrying a failed cloud read must remain possible.
+
     async def async_press(self) -> None:
         await self.coordinator.async_manual_refresh()

@@ -208,5 +208,7 @@ class GacActivitySensor(GacEntity, SensorEntity):
                     "stale_after_seconds": self.coordinator.stale_after}
         if self.entity_description.key == "polling_status":
             return {"last_attempt": self.coordinator.last_refresh_attempt,
-                    "retry_not_before": self.coordinator.retry_not_before}
+                    "retry_not_before": self.coordinator.retry_not_before,
+                    "last_error_reason": self.coordinator.last_refresh_error,
+                    "last_error_time": self.coordinator.last_refresh_error_at}
         return None

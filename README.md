@@ -413,6 +413,20 @@ failures, sign-in problems and request limits are shown separately. Cached or
 failed requests never advance **Last cloud refresh**. These diagnostic sensors
 remain visible when the vehicle sensors become unavailable.
 
+A failed cloud read makes vehicle sensors unavailable until a real read succeeds.
+Connection and response failures retry after one minute, then two minutes, then
+at most five minutes while polling is allowed; a shorter configured interval is
+kept. Normal polling returns to the configured interval after recovery. A failed
+explicit refresh or post-command read gets at most two recovery reads during
+quiet hours, then waits for another explicit refresh or the end of quiet hours.
+Returning cached data during quiet hours does not count as recovery.
+The **Refresh** button stays available during a cloud failure and can retry
+immediately, including during quiet hours; GAC's request limits still apply.
+**Polling status** details retain the last failure's time and a safe category
+(`dns`, `timeout`, `tls`, `connection`, `response`, `service`, `auth` or `unexpected`), including
+after recovery. Diagnostics include those details and the public account and
+vehicle hostnames. Error categories exclude credentials and raw exception text.
+
 ## Request limits
 
 The integration is built to go easy on GAC's service. Regular background polls
@@ -422,11 +436,13 @@ status request finishes, so a slow request or a manual refresh can delay them.
 Push results share that sequence. Remaining follow-ups stop once all tracked
 commands have settled, after at least one status read. Overlapping refreshes
 share an in-flight successful response instead of issuing duplicate requests.
+Connection and response failures stop rapid command follow-ups and use the
+recovery schedule above. Only reads are retried; vehicle commands are not replayed.
 A rate-limit response from a status read or command stops the remaining
 follow-ups. Scheduled and manual refreshes respect its retry delay (shown in
 **Polling status** details); normal polling resumes at the next scheduled read
-after that delay. This reduces requests without shortening the chosen background
-interval or using speculative wake-up probes. Removing or reloading the
+after that delay. Recovery reads temporarily shorten a long background interval;
+normal polling keeps the chosen interval. Removing or reloading the
 integration cancels pending follow-ups. Underneath, every request goes through the
 `gac-connect` library's limiter, shared by all GAC Connect entries in Home
 Assistant: one request at a time, at most one a second, 20 a minute, 240 an hour

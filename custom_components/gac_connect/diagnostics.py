@@ -8,10 +8,12 @@ from homeassistant.core import HomeAssistant
 
 from . import GacConfigEntry
 from ._vendor import LIBRARY_COMMIT, LIBRARY_SOURCE, LIBRARY_VERSION
+from ._vendor.gac_connect.const import REGIONS
 from .const import (
     CONF_AC_MINUTES, CONF_ALLOW_PLAINTEXT_PUSH, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES, CONF_ENABLE_ENTITIES, CONF_PROFILE,
     CONF_QUIET_END, CONF_QUIET_START, CONF_SCAN_INTERVAL,
+    CONF_REGION,
 )
 
 # URLs can contain passwords, signed query strings or private locations. New
@@ -34,6 +36,13 @@ async def async_get_config_entry_diagnostics(
     coordinator = entry.runtime_data.coordinator
     status = coordinator.data
     raw = dict(status.raw) if status else {}
+    region = REGIONS.get(entry.data.get(CONF_REGION), {})
+    polling = {"state": getattr(coordinator, "polling_state", None),
+               "last_error_reason": getattr(coordinator, "last_refresh_error", None)}
+    for name, attr in (("last_attempt", "last_refresh_attempt"), ("last_success", "last_refresh_success"),
+                       ("last_error_time", "last_refresh_error_at"), ("retry_not_before", "retry_not_before")):
+        value = getattr(coordinator, attr, None)
+        polling[name] = value.isoformat() if value is not None else None
     return {
         "library": {
             "source": LIBRARY_SOURCE,
@@ -43,6 +52,8 @@ async def async_get_config_entry_diagnostics(
         },
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
         "options": {key: value for key, value in entry.options.items() if key in SAFE_OPTIONS},
+        "endpoints": {"account_host": region.get("main"), "vehicle_host": region.get("iov")},
+        "polling": polling,
         "status_updated_ms": status.updated_ms if status else None,
         "status_online": status.online if status else None,
         "commands": coordinator.commands.attributes() if getattr(coordinator, "commands", None) else None,

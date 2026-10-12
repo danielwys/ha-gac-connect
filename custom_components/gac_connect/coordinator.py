@@ -4,12 +4,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import socket
 from datetime import time, timedelta
 from time import monotonic
 
+import aiohttp
+
 from ._vendor.gac_connect import GacError
 from ._vendor.gac_connect.client import GacClient
-from ._vendor.gac_connect.errors import AuthExpiredError, RateLimitedError
+from ._vendor.gac_connect.errors import AuthExpiredError, RateLimitedError, ResponseError
 from ._vendor.gac_connect.models import VehicleStatus
 from ._vendor.gac_connect.push import PushResult
 
@@ -46,6 +49,27 @@ _LOGGER = logging.getLogger(__name__)
 # has had time to update, sharing one bounded sequence across all controls.
 COMMAND_REFRESH_DELAYS = (5.0, 15.0, 30.0)
 RESULT_REFRESH_GAP = 10.0
+RECOVERY_DELAYS = (60.0, 120.0, 300.0)
+QUIET_RECOVERY_ATTEMPTS = 2
+
+
+def _failure_reason(error: Exception) -> str:
+    """Classify the retained cause without exposing URLs, tokens or error text."""
+    reason = "response" if isinstance(error, ResponseError) else "service"
+    cause = error
+    for _ in range(8):
+        if isinstance(cause, (socket.gaierror, getattr(aiohttp, "ClientConnectorDNSError", socket.gaierror))):
+            return "dns"
+        if isinstance(cause, (aiohttp.ClientSSLError, aiohttp.ClientConnectorCertificateError)):
+            return "tls"
+        if isinstance(cause, TimeoutError):
+            return "timeout"
+        if isinstance(cause, aiohttp.ClientConnectionError):
+            reason = "connection"
+        cause = cause.__cause__ or cause.__context__
+        if cause is None:
+            break
+    return reason
 
 
 def _parse_hhmm(value: str | None) -> time | None:
@@ -95,6 +119,11 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self.retry_not_before = None
         self.last_refresh_success = None
         self.last_refresh_attempt = None
+        self.last_refresh_error = None
+        self.last_refresh_error_at = None
+        self._refresh_failures = 0
+        self._recovery_retry_at = None
+        self._quiet_recovery_remaining = 0
         self._refresh_outcome = "waiting"
         self._freshness_timer = async_track_time_interval(hass, self._freshness_tick, timedelta(minutes=1))
         entry.async_on_unload(self._cancel_result_refresh)
@@ -128,6 +157,20 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         if self._refresh_outcome in ("error", "auth_required", "rate_limited"):
             return self._refresh_outcome
         return "quiet_hours" if self._in_quiet_hours() else self._refresh_outcome
+
+    @callback
+    def _schedule_refresh(self) -> None:
+        """Use HA's polling timer for recovery without changing the user's interval."""
+        interval = self.update_interval
+        if (self._refresh_outcome == "error" and self._recovery_retry_at is not None
+                and (not self._in_quiet_hours() or self._quiet_recovery_remaining > 0)):
+            self.update_interval = timedelta(seconds=max(1.0, self._recovery_retry_at - monotonic()))
+        try:
+            # Keeping scheduling in HA also honors disabled polling and unload,
+            # and works on versions predating UpdateFailed.retry_after.
+            super()._schedule_refresh()
+        finally:
+            self.update_interval = interval
 
     def start_push(self) -> None:
         self.config_entry.async_create_background_task(
@@ -208,6 +251,8 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self._rate_limit_until = max(self._rate_limit_until, monotonic() + min(delay, 86400))
         self.retry_not_before = dt_util.utcnow() + timedelta(seconds=self._rate_limit_until - monotonic())
         self._refresh_outcome = "rate_limited"
+        self._recovery_retry_at = None
+        self._quiet_recovery_remaining = 0
         self._followup_blocked = True
         self._refresh_deadlines.clear()
         self.async_update_listeners()
@@ -252,16 +297,28 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 # result, even before DataUpdateCoordinator publishes it.
                 self._force_refresh = False
                 return self._fetched_status
-            # During quiet hours, keep the last reading instead of polling —
-            # unless a manual action or command result asked for a refresh.
-            if self._in_quiet_hours() and self.data is not None and not self._force_refresh:
-                return self.data
+            forced = self._force_refresh
             self._force_refresh = False
+            quiet = self._in_quiet_hours()
+            recovery = (self._quiet_recovery_remaining > 0 and self._recovery_retry_at is not None
+                        and monotonic() >= self._recovery_retry_at)
+            # Explicit actions get a bounded recovery sequence during quiet
+            # hours. Otherwise cached data must not undo a failed real fetch.
+            if quiet and self.data is not None and not forced and not recovery:
+                if self._refresh_outcome == "auth_required":
+                    raise ConfigEntryAuthFailed("GAC sign-in required")
+                if self._refresh_outcome == "error":
+                    if self._quiet_recovery_remaining == 0:
+                        self.retry_not_before = None
+                    raise UpdateFailed("GAC refresh failed; waiting for an explicit refresh or quiet hours to end")
+                return self.data
             if monotonic() < self._rate_limit_until:
                 self._followup_blocked = True
                 if self.data is not None:
                     return self.data
                 raise UpdateFailed("Waiting for GAC's request limit before refreshing")
+            if recovery and not forced:
+                self._quiet_recovery_remaining -= 1
             self._followup_blocked = False
             self.last_refresh_attempt = dt_util.utcnow()
             try:
@@ -269,6 +326,9 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 self.last_refresh_success = dt_util.utcnow()
                 self._refresh_outcome = "ok"
                 self.retry_not_before = None
+                self._refresh_failures = 0
+                self._recovery_retry_at = None
+                self._quiet_recovery_remaining = 0
                 self._fetched_status = status
                 if manager := getattr(self, "capabilities", None):
                     manager.observe(status)
@@ -277,6 +337,11 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             except AuthExpiredError as err:
                 self._refresh_outcome = "auth_required"
                 self._followup_blocked = True
+                self._recovery_retry_at = None
+                self._quiet_recovery_remaining = 0
+                self.retry_not_before = None
+                self.last_refresh_error = "auth"
+                self.last_refresh_error_at = dt_util.utcnow()
                 raise ConfigEntryAuthFailed(str(err)) from err
             except RateLimitedError as err:
                 self.async_rate_limited(err)
@@ -286,11 +351,35 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                     _LOGGER.debug("status refresh skipped: %s", err)
                     return self.data
                 raise UpdateFailed(str(err)) from err
+            except ResponseError as err:
+                self._refresh_outcome = "error"
+                self._followup_blocked = True
+                self.last_refresh_error = _failure_reason(err)
+                self.last_refresh_error_at = dt_util.utcnow()
+                self._refresh_failures += 1
+                delay = min(self.update_interval.total_seconds(),
+                            RECOVERY_DELAYS[min(self._refresh_failures - 1, len(RECOVERY_DELAYS) - 1)])
+                self._recovery_retry_at = monotonic() + delay
+                if forced:
+                    self._quiet_recovery_remaining = QUIET_RECOVERY_ATTEMPTS
+                self.retry_not_before = (self.last_refresh_error_at + timedelta(seconds=delay)
+                                         if not quiet or self._quiet_recovery_remaining > 0 else None)
+                raise UpdateFailed(f"{err} ({self.last_refresh_error})") from err
             except GacError as err:
                 self._refresh_outcome = "error"
+                self._recovery_retry_at = None
+                self._quiet_recovery_remaining = 0
+                self.retry_not_before = None
+                self.last_refresh_error = _failure_reason(err)
+                self.last_refresh_error_at = dt_util.utcnow()
                 raise UpdateFailed(str(err)) from err
             except Exception:
                 self._refresh_outcome = "error"
+                self._recovery_retry_at = None
+                self._quiet_recovery_remaining = 0
+                self.retry_not_before = None
+                self.last_refresh_error = "unexpected"
+                self.last_refresh_error_at = dt_util.utcnow()
                 raise
             finally:
                 self._last_status_refresh = monotonic()

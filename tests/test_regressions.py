@@ -321,6 +321,8 @@ def test_manual_refresh_fetches_during_quiet_hours():
     c._fetch_lock = asyncio.Lock()
     c._fetch_generation = 0
     c._rate_limit_until = float("-inf")
+    c._quiet_recovery_remaining = 0
+    c._recovery_retry_at = None
     c.commands = Mock()
     c.data = VehicleStatus(soc=50)
     c.vin = "TESTVIN"
