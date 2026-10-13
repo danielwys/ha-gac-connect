@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 import aiohttp
 import voluptuous as vol
+from ._vendor.gac_connect.const import LISTED_REGIONS
 from ._vendor.gac_connect.errors import GacError, LoginError, RateLimitedError
 
 from homeassistant.config_entries import (
@@ -33,6 +34,12 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.network import get_url
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
@@ -73,7 +80,19 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-REGIONS = ["AU", "NZ", "GB", "SG", "TH", "AE", "GR", "IL"]
+# Markets where the GAC app has launched, plus the UK's separate My AION app.
+REGION_NAMES = {
+    "AE": "United Arab Emirates", "AU": "Australia", "BR": "Brazil", "ES": "Spain", "FI": "Finland",
+    "GB": "United Kingdom", "GR": "Greece", "HK": "Hong Kong", "ID": "Indonesia", "IL": "Israel",
+    "KH": "Cambodia", "KW": "Kuwait", "MO": "Macau", "MX": "Mexico", "NZ": "New Zealand",
+    "PH": "Philippines", "PL": "Poland", "PT": "Portugal", "RU": "Russia", "SA": "Saudi Arabia",
+    "SG": "Singapore", "TH": "Thailand",
+}
+REGIONS = sorted(LISTED_REGIONS | {"GB"}, key=lambda code: REGION_NAMES[code])
+REGION_SELECTOR = SelectSelector(SelectSelectorConfig(
+    options=[SelectOptionDict(value=code, label=REGION_NAMES[code]) for code in REGIONS],
+    mode=SelectSelectorMode.DROPDOWN,
+))
 PROFILES = {
     PROFILE_AUTO: "Auto detect",
     PROFILE_UT: "Aion UT (omit fridge, steering wheel heat, sunroof, tyre readings and rear seat ventilation)",
@@ -160,7 +179,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
                     return await self.async_step_captcha()
         schema = vol.Schema({
-            vol.Required(CONF_REGION, default=self._region): vol.In(REGIONS),
+            vol.Required(CONF_REGION, default=self._region): REGION_SELECTOR,
             vol.Required(CONF_MOBILE, default=self._mobile or vol.UNDEFINED): str,
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)

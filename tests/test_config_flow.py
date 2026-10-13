@@ -86,3 +86,22 @@ def test_vehicle_choice_reuses_the_list_it_showed(tmp_path):
         assert chosen["step_id"] == "profile" and flow._vehicle is vehicles[1]
         flow._client.list_vehicles.assert_awaited_once()
     asyncio.run(run())
+
+
+def test_every_launched_market_and_the_uk_can_be_chosen_by_name(tmp_path):
+    from custom_components.gac_connect._vendor.gac_connect.const import LISTED_REGIONS, REGIONS as LIBRARY_REGIONS
+    from custom_components.gac_connect.config_flow import REGION_NAMES, REGIONS
+
+    async def run():
+        flow = GacConfigFlow()
+        flow.hass = HomeAssistant(str(tmp_path))
+        form = await flow.async_step_user()
+        selector = form["data_schema"].schema["region"]
+        options = selector.config["options"]
+        assert [option["value"] for option in options] == REGIONS
+        assert set(REGIONS) == LISTED_REGIONS | {"GB"} and set(REGIONS) <= set(LIBRARY_REGIONS)
+        assert [option["label"] for option in options] == sorted(REGION_NAMES.values())
+        assert selector("TH") == "TH"
+        with pytest.raises(Exception):
+            selector("ZZ")
+    asyncio.run(run())
