@@ -13,6 +13,7 @@ import aiohttp
 
 from ._vendor.gac_connect import GacError
 from ._vendor.gac_connect.client import GacClient
+from ._vendor.gac_connect.const import REQUEST_BUDGETS
 from ._vendor.gac_connect.errors import AuthExpiredError, RateLimitedError, ResponseError
 from ._vendor.gac_connect.models import VehicleStatus
 from ._vendor.gac_connect.push import PushResult
@@ -96,6 +97,13 @@ def _parse_hhmm(value: str | None) -> time | None:
         return None
 
 
+# Every vehicle's requests come out of one shared budget. Polls may use at most this
+# share of it, leaving the rest for commands, their follow-up reads and sign-ins.
+POLL_BUDGET_SHARE = 0.8
+# The shortest poll interval one vehicle can have while staying within every budget.
+SECONDS_PER_VEHICLE_POLL = max(window / (limit * POLL_BUDGET_SHARE) for window, limit in REQUEST_BUDGETS)
+
+
 class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
     """Polls one vehicle's status."""
 
@@ -113,6 +121,8 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         )
         self.client = client
         self.vin = entry.data[CONF_VIN]
+        self._chosen_interval = interval
+        self._stretch_logged: int | None = None
         self.capabilities = CapabilityManager(hass, entry) if profile_for(entry) == PROFILE_AUTO else None
         self.commands = CommandTracker(self)
         # Command results arrive on the service's push feed; each one triggers
@@ -172,9 +182,21 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             return self._refresh_outcome
         return "quiet_hours" if self._in_quiet_hours() else self._refresh_outcome
 
+    def _shared_interval(self) -> timedelta:
+        """The chosen poll interval, stretched so all vehicles' polls fit the shared budget."""
+        vehicles = sum(1 for entry in self.hass.config_entries.async_entries(DOMAIN) if entry.disabled_by is None)
+        seconds = max(self._chosen_interval, math.ceil(SECONDS_PER_VEHICLE_POLL * max(1, vehicles)))
+        if seconds != self._chosen_interval and seconds != self._stretch_logged:
+            _LOGGER.info("polling every %d s instead of %d s so %d vehicles stay within the shared request budget",
+                         seconds, self._chosen_interval, vehicles)
+        self._stretch_logged = seconds
+        return timedelta(seconds=seconds)
+
     @callback
     def _schedule_refresh(self) -> None:
         """Use HA's polling timer for recovery without changing the user's interval."""
+        if self.update_interval is not None:   # None: polling is turned off
+            self.update_interval = self._shared_interval()
         interval = self.update_interval
         if (self._refresh_outcome == "error" and self._recovery_retry_at is not None
                 and (not self._in_quiet_hours() or self._quiet_recovery_remaining > 0)):
