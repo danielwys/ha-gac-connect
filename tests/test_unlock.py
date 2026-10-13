@@ -69,3 +69,44 @@ def test_unlock_uses_normal_transport_and_command_acceptance(body, accepted, gen
     asyncio.run(run())
     assert http.post.call_count == 1
     assert http.post.call_args.args[0].endswith("/door/unlock")
+
+
+@pytest.mark.parametrize("enabled", [None, False, "true", True])
+def test_advanced_action_unlock_honors_the_same_opt_in(enabled):
+    from types import SimpleNamespace
+
+    from homeassistant.exceptions import ServiceValidationError
+
+    from test_regressions import service_registry
+
+    coordinator = coord(None)
+    if enabled is not None:
+        coordinator.config_entry.options[CONF_EXPERIMENTAL_PINLESS_UNLOCK] = enabled
+    action = service_registry(coordinator)["send_command"][0]
+    call = SimpleNamespace(data={"command": "unlock"})
+    if enabled is True:
+        asyncio.run(action(call))
+        coordinator.client.command.assert_awaited_once_with("TESTVIN", "unlock")
+    else:
+        with pytest.raises(ServiceValidationError, match="Allow remote unlocking"):
+            asyncio.run(action(call))
+        coordinator.client.command.assert_not_awaited()
+
+
+@pytest.mark.parametrize("command,params", [("aircon-on", {"currentDuration": 90}),
+                                            ("aircon-manual-on", {"windStrength": 11}),
+                                            ("aircon-on", {"temperature": "hot"})])
+def test_advanced_action_reports_invalid_raw_parameters_as_validation_errors(command, params):
+    from types import SimpleNamespace
+
+    from homeassistant.exceptions import ServiceValidationError
+
+    from test_client_failures import make_client as client_for
+    from test_regressions import service_registry
+
+    coordinator = coord(None)
+    coordinator.client, http, _ = client_for(Response(body={"code": 13001}), valid=True)
+    action = service_registry(coordinator)["send_command"][0]
+    with pytest.raises(ServiceValidationError, match=f"Invalid parameters for {command}"):
+        asyncio.run(action(SimpleNamespace(data={"command": command, "params": params})))
+    http.post.assert_not_called()

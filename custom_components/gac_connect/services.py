@@ -80,6 +80,9 @@ def async_register_services(hass: HomeAssistant) -> None:
             params = call.data.get(ATTR_PARAMS) or {}
             await async_send(coordinator, command, coordinator.client.command(vin, command, **params),
                              expected={} if params else None)
+        except (ValueError, TypeError) as err:
+            # The library validates raw parameters (e.g. A/C duration or fan speed) before sending.
+            raise ServiceValidationError(f"Invalid parameters for {call.data[ATTR_COMMAND]}: {err}") from err
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 

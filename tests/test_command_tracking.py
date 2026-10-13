@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.command_tracking import async_send
+from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
 from custom_components.gac_connect._vendor.gac_connect.errors import GacError
 from test_autodetect import result, vehicle
 from test_regressions import ACCEPTED
@@ -39,7 +40,7 @@ def test_early_results_require_exact_vehicle_and_session_then_wait_for_telemetry
 @pytest.mark.parametrize('failure,state', [(GacError('secret response'), 'failed'), (asyncio.CancelledError(), 'cancelled')])
 def test_failed_replacement_keeps_earlier_pending_request(tmp_path, failure, state):
     async def run():
-        async with vehicle(tmp_path) as (_, _, c):
+        async with vehicle(tmp_path, options={CONF_EXPERIMENTAL_PINLESS_UNLOCK: True}) as (_, _, c):
             await async_send(c, 'lock', AsyncMock(return_value=ACCEPTED)())
             with pytest.raises(type(failure)):
                 await async_send(c, 'unlock', AsyncMock(side_effect=failure)())
@@ -51,7 +52,7 @@ def test_failed_replacement_keeps_earlier_pending_request(tmp_path, failure, sta
 
 def test_concurrent_features_and_supersession_do_not_share_outcomes(tmp_path):
     async def run():
-        async with vehicle(tmp_path) as (_, _, c):
+        async with vehicle(tmp_path, options={CONF_EXPERIMENTAL_PINLESS_UNLOCK: True}) as (_, _, c):
             for command, sid in [('lock', 'one'), ('horn-on', 'two'), ('unlock', 'three')]:
                 await async_send(c, command, AsyncMock(return_value={'data': {'sessionId': sid}})())
             assert c.commands.records[0].state == 'superseded'
@@ -66,7 +67,7 @@ def test_concurrent_features_and_supersession_do_not_share_outcomes(tmp_path):
 
 def test_timeout_and_cleanup_need_no_poll(tmp_path):
     async def run():
-        async with vehicle(tmp_path) as (hass, entry, c):
+        async with vehicle(tmp_path, options={CONF_EXPERIMENTAL_PINLESS_UNLOCK: True}) as (hass, entry, c):
             with patch('custom_components.gac_connect.command_tracking.REQUEST_SECONDS', 0.02):
                 await async_send(c, 'lock', AsyncMock(return_value=ACCEPTED)())
                 await asyncio.sleep(0.05)

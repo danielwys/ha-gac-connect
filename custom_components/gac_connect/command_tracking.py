@@ -17,7 +17,7 @@ from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
 from ._vendor.gac_connect.models import ChargingMode
 from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError
 from .api import doors_locked
-from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, VEHICLE_SHUTDOWN_COMMANDS
+from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK, VEHICLE_SHUTDOWN_COMMANDS
 from .seats import ventilation_state
 
 REQUEST_SECONDS = 180
@@ -216,14 +216,18 @@ class CommandTracker:
 
 
 async def async_send(coordinator, command: str, request, *, expected=None):
+    """Send through the shared ledger; every surface (entities, actions) honors the same opt-ins."""
+    refusal = None
     if (command in VEHICLE_SHUTDOWN_COMMANDS
             and coordinator.config_entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True):
+        refusal = ("Remote vehicle shutdown is disabled. Turn on 'Allow remote vehicle shutdown' "
+                   "in GAC Connect Vehicle settings to use it.")
+    elif command == "unlock" and coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK) is not True:
+        refusal = "Remote unlocking is disabled. Turn on 'Allow remote unlocking' in GAC Connect options to use it."
+    if refusal is not None:
         if iscoroutine(request):
             request.close()
-        raise ServiceValidationError(
-            "Remote vehicle shutdown is disabled. Turn on 'Allow remote vehicle shutdown' "
-            "in GAC Connect Vehicle settings to use it."
-        )
+        raise ServiceValidationError(refusal)
     if (tracker := getattr(coordinator, "commands", None)) is not None:
         return await tracker.send(command, request, expected=expected)
     response = await request

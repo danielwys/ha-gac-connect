@@ -47,7 +47,7 @@ class GacLock(GacTransitionEntity, LockEntity):
         await self._run_transition(True, "lock", lambda: self.coordinator.client.lock(self.coordinator.vin))
 
     async def async_unlock(self, **kwargs: Any) -> None:
-        if not self.coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False):
+        if self.coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK) is not True:
             raise HomeAssistantError(
                 "Remote unlocking is disabled. Turn on 'Allow remote unlocking' in GAC Connect options to use it."
             )
