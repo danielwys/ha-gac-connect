@@ -72,3 +72,13 @@ def test_coordinator_push_consent_defaults_to_off(tmp_path, option, allowed):
         coordinator = GacCoordinator(hass, entry, Mock())
         assert coordinator.push._allow_plaintext is allowed
     asyncio.run(run())
+
+
+def test_unrecognised_push_messages_log_field_names_only():
+    from custom_components.gac_connect.coordinator import _payload_shape
+
+    shape = _payload_shape(b'{"msgType": 7, "data": {"alarmContent": "PRIVATE-TEXT", "vin": "PRIVATE-VIN"}}')
+    assert shape == "keys=['data', 'msgType'] data_keys=['alarmContent', 'vin']"
+    assert "PRIVATE" not in shape
+    assert _payload_shape(b"\xff") == "1 bytes, not JSON"
+    assert _payload_shape(b"[1]") == "list"

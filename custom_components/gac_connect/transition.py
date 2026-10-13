@@ -100,7 +100,8 @@ class GacTransitionEntity(GacEntity):
 
     def _on_command_result(self, result: PushResult) -> None:
         if result.ok is False and self._requested_state is not None:
-            _LOGGER.warning("car did not apply %s (result code %s)", self.entity_id, result.code)
+            _LOGGER.warning("car did not apply %s (result code %s: %s)", self.entity_id, result.code,
+                            result.reason or "unknown reason")
             self._clear_pending()
             self.async_write_ha_state()
         # Success triggers shared follow-up polls. Only telemetry settles the state.

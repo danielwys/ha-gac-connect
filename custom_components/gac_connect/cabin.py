@@ -201,7 +201,8 @@ class CabinController:
     @callback
     def _on_result(self, result: PushResult) -> None:
         if result.ok is False and self._req is not None:
-            _LOGGER.warning("car did not apply the cabin A/C command (result code %s)", result.code)
+            _LOGGER.warning("car did not apply the cabin A/C command (result code %s: %s)", result.code,
+                            result.reason or "unknown reason")
             self._restore_selection(self._req)
             self._clear_pending()
             self._notify()

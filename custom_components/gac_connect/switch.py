@@ -196,7 +196,8 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
         if self._requested is None:
             return
         if result.ok is False:
-            _LOGGER.warning("car did not apply %s (result code %s)", self.entity_id, result.code)
+            _LOGGER.warning("car did not apply %s (result code %s: %s)", self.entity_id, result.code,
+                            result.reason or "unknown reason")
             self._requested = None
             self._cancel_expiry()
             self.async_write_ha_state()

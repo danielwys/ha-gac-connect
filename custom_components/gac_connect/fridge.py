@@ -261,7 +261,8 @@ class FridgeController:
     def _on_result(self, result: PushResult) -> None:
         req = self._req
         if result.ok is False and req is not None:
-            _LOGGER.warning("car did not apply the fridge request (result code %s)", result.code)
+            _LOGGER.warning("car did not apply the fridge request (result code %s: %s)", result.code,
+                            result.reason or "unknown reason")
             if req.undo is not None and req.option in FRIDGE_MODES:
                 prev_mode, prev_temp = req.undo
                 if self.mode == req.option:

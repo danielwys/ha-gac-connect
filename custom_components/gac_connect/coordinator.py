@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import socket
@@ -70,6 +71,19 @@ def _failure_reason(error: Exception) -> str:
         if cause is None:
             break
     return reason
+
+
+def _payload_shape(payload: bytes) -> str:
+    """Field names (never values) of a push message, to help identify new message types."""
+    try:
+        obj = json.loads(payload)
+    except (ValueError, UnicodeDecodeError):
+        return f"{len(payload)} bytes, not JSON"
+    if not isinstance(obj, dict):
+        return type(obj).__name__
+    data = obj.get("data")
+    data_keys = sorted(str(key) for key in data)[:40] if isinstance(data, dict) else type(data).__name__
+    return f"keys={sorted(str(key) for key in obj)[:20]} data_keys={data_keys}"
 
 
 def _parse_hhmm(value: str | None) -> time | None:
@@ -180,11 +194,13 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
 
     async def _on_command_result(self, topic: str, payload: bytes, result: PushResult) -> None:
         if result.ok is None:
-            _LOGGER.debug("ignoring unrecognised push message (%d bytes)", len(payload))
+            _LOGGER.debug("ignoring unrecognised push message (code=%s event=%s, %s)",
+                          result.code, result.event, _payload_shape(payload))
             return
         if result.vin != self.vin:
             return   # another vehicle on the account, or no vehicle named: not ours to act on
-        _LOGGER.debug("command result: event=%s ok=%s code=%s", result.event, result.ok, result.code)
+        _LOGGER.debug("command result: event=%s ok=%s code=%s reason=%s",
+                      result.event, result.ok, result.code, result.reason)
         self.last_result = result
         self.commands.result(result)
         registry = dr.async_get(self.hass)
@@ -194,7 +210,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             device = registry.async_get_device(identifiers={(DOMAIN, self.vin)})
         self.hass.bus.async_fire(EVENT_COMMAND_RESULT, {
             "device_id": device.id if device else None,
-            "ok": result.ok, "code": result.code,
+            "ok": result.ok, "code": result.code, "reason": result.reason,
             "event": result.event, "session_id": result.session_id,
         })
         async_dispatcher_send(self.hass, SIGNAL_COMMAND_RESULT.format(vin=self.vin), result)

@@ -29,13 +29,27 @@ TO_REDACT = {
     "main_token", "main_refresh_token", "latitude", "longitude", "traceId",
     "plateNo", "plate",
 }
+# Report groups whose every value may locate the car or identify people (position
+# details, emergency phone numbers, location-authorisation dates). Field names are
+# kept so unmodelled fields can still be discovered; values are masked.
+MASKED_GROUPS = {"positionAccessors", "dialNumberAccessors", "gpsAuthorAccessors"}
+
+
+def _mask(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _mask(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_mask(item) for item in value]
+    return None if value is None else "**REDACTED**"
+
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: GacConfigEntry
 ) -> dict[str, Any]:
     coordinator = entry.runtime_data.coordinator
     status = coordinator.data
-    raw = dict(status.raw) if status else {}
+    raw = {key: _mask(value) if key in MASKED_GROUPS else value
+           for key, value in (status.raw if status else {}).items()}
     region = REGIONS.get(entry.data.get(CONF_REGION), {})
     polling = {"state": getattr(coordinator, "polling_state", None),
                "last_error_reason": getattr(coordinator, "last_refresh_error", None)}
