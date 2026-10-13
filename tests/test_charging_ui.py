@@ -1,5 +1,6 @@
 """Exercise the schedule view and editor against the bundled command builder."""
 import asyncio
+from datetime import datetime
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
@@ -64,8 +65,8 @@ def test_editor_sends_validated_overnight_window_with_selected_days(tmp_path, un
             assert operation['dailyReservationStartTime'] == 82800000
             assert operation['dailyReservationStopTime'] == 18000000
             assert operation['chargingMode'] == 2 and operation['chargingEndType'] == int(until_soc)
-            assert operation['startTime'] == {'year': 2000, 'month': 0, 'day': 0, 'hour': 23, 'minute': 0,
-                                              'second': 0, 'millisecond': 0}
+            start = datetime(*(operation['startTime'][k] for k in ('year', 'month', 'day', 'hour', 'minute')))
+            assert start.weekday() in (0, 4) and (start.hour, start.minute) == (23, 0)  # dated, never undated
             assert c.commands.state == 'pending'  # acceptance did not fabricate a schedule
             assert c.data is None
             assert dict(entry.options) == before
