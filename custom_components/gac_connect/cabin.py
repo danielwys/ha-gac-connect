@@ -48,6 +48,7 @@ class _Request:
     selection_after: float | None = None
     expected: dict = field(default_factory=dict)
     baseline: object = None
+    compressor: bool | None = None   # what the request leaves running; False is fan only
 
 
 class CabinController:
@@ -134,6 +135,16 @@ class CabinController:
             return self._req.expected["ac_blowing_mode"]
         value = getattr(self.coordinator.data, "ac_blowing_mode", None)
         return value if type(value) is int and value > 0 else None
+
+    @property
+    def compressor(self) -> bool | None:
+        """Whether running A/C uses the compressor (False is the console's Fan); None when off."""
+        if self.on is not True:
+            return None
+        if self._req is not None:
+            return self._req.compressor
+        value = getattr(self.coordinator.data, "ac_compressor_on", None)
+        return value if type(value) is bool else None
 
     @property
     def cycling_mode(self) -> int | None:
@@ -229,6 +240,11 @@ class CabinController:
         async with self.lock:
             await self._command(on)
 
+    async def async_set_fan_only(self, fan_only: bool) -> None:
+        """Run the blower alone (the console's Fan) or with the compressor; starts A/C when off."""
+        async with self.lock:
+            await self._command(True, compressor=not fan_only)
+
     async def async_set_fan_speed(self, speed: int) -> None:
         if type(speed) is not int or not 1 <= speed <= REMOTE_FAN_MAX:
             raise ServiceValidationError(
@@ -270,7 +286,7 @@ class CabinController:
             await self._command(True, cycling_mode=mode)
 
     async def async_set_temperature(
-        self, target: float, *, on: bool | None = None, automatic: bool = False
+        self, target: float, *, on: bool | None = None, automatic: bool = False, compressor: bool | None = None
     ) -> None:
         target = _remote_temperature(target)
         async with self.lock:
@@ -280,17 +296,18 @@ class CabinController:
                 return
             requested_on = self.on is True if on is None else on
             data = self.coordinator.data
-            temperature_only = (requested_on and not automatic and self.on is True
+            temperature_only = (requested_on and not automatic and compressor is None and self.on is True
                                 and data is not None and data.ac_on is True)
-            await self._command(requested_on, target, temperature_only=temperature_only, automatic=automatic)
+            await self._command(requested_on, target, temperature_only=temperature_only, automatic=automatic,
+                                compressor=compressor)
 
     async def _command(
         self, on: bool, target: float | None = None, *, temperature_only: bool = False,
         automatic: bool = False, fan_speed: int | None = None, blowing_mode: int | None = None,
-        cycling_mode: int | None = None,
+        cycling_mode: int | None = None, compressor: bool | None = None,
     ) -> None:
         """Send one command under the shared lock; undo transport failures or cancellation."""
-        previous, selection = self._req, self._selected_target
+        previous, selection, compressor_now = self._req, self._selected_target, self.compressor
         setpoint = target if target is not None else self.target
         if on:
             setpoint = _remote_temperature(setpoint)
@@ -300,12 +317,17 @@ class CabinController:
         req.expected = {"ac_on": on, **({"ac_target_temp_c": setpoint} if on else {})}
         if on and not automatic:
             for key, value in (("ac_fan_strength", fan_speed), ("ac_blowing_mode", blowing_mode),
-                               ("ac_cycling_mode", cycling_mode)):
+                               ("ac_cycling_mode", cycling_mode), ("ac_compressor_on", compressor)):
                 if value is not None:
                     req.expected[key] = value
                 elif previous is not None and previous.deadline > monotonic() and key in previous.expected:
                     # Omitted fields retain pending selections without replaying cached settings.
                     req.expected[key] = previous.expected[key]
+            if compressor is None and not temperature_only:
+                # Unless chosen, running fan only stays fan only; any other start uses the compressor.
+                compressor = compressor_now is not False
+        if on:
+            req.compressor = True if automatic else compressor_now if temperature_only else compressor
         if not on and target is not None:
             self._selected_target = target
         req.selection_after = self._selected_target
@@ -323,7 +345,7 @@ class CabinController:
             elif on:
                 command, request = "aircon-manual-on", client.climate_manual_on(
                     vin, temperature=setpoint, minutes=duration, fan_speed=fan_speed, blowing_mode=blowing_mode,
-                    cycling_mode=cycling_mode,
+                    cycling_mode=cycling_mode, compressor=compressor,
                 )
             else:
                 command, request = "aircon-off", client.climate_off(vin)

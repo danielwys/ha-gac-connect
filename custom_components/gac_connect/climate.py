@@ -55,7 +55,8 @@ class GacClimate(GacEntity, ClimateEntity):
 
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "climate")
-        self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT_COOL]
+        # Fan only is the console's Fan: the blower runs without the compressor.
+        self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT_COOL, HVACMode.FAN_ONLY]
         self._cabin = cabin.controller(coordinator)
 
     async def async_added_to_hass(self) -> None:
@@ -73,11 +74,15 @@ class GacClimate(GacEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode | None:
         on = self._cabin.on
-        return None if on is None else HVACMode.HEAT_COOL if on else HVACMode.OFF
+        if on is None:
+            return None
+        if not on:
+            return HVACMode.OFF
+        return HVACMode.FAN_ONLY if self._cabin.compressor is False else HVACMode.HEAT_COOL
 
     @property
     def preset_mode(self) -> str | None:
-        if self._cabin.on is True:
+        if self._cabin.on is True and self._cabin.compressor is not False:
             return next((preset for preset, target in APP_PRESETS.items() if self._cabin.target == target), None)
         return None
 
@@ -109,12 +114,23 @@ class GacClimate(GacEntity, ClimateEntity):
 
     @staticmethod
     def _power_for_mode(mode: HVACMode) -> bool:
-        if mode not in (HVACMode.OFF, HVACMode.HEAT_COOL):
-            raise ServiceValidationError(f"Unsupported mode {mode}; choose On or Off")
-        return mode == HVACMode.HEAT_COOL
+        if mode not in (HVACMode.OFF, HVACMode.HEAT_COOL, HVACMode.FAN_ONLY):
+            raise ServiceValidationError(f"Unsupported mode {mode}; choose Off, Heat/Cool or Fan only")
+        return mode != HVACMode.OFF
+
+    def _compressor_for_mode(self, mode: HVACMode | None) -> bool | None:
+        """The compressor choice a mode asks for, or None when it would not change it."""
+        if mode == HVACMode.FAN_ONLY:
+            return False
+        if mode == HVACMode.HEAT_COOL and self._cabin.compressor is False:
+            return True
+        return None
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        await self._cabin.async_set_power(self._power_for_mode(hvac_mode))
+        if not self._power_for_mode(hvac_mode):
+            await self._cabin.async_set_power(False)
+        else:
+            await self._cabin.async_set_fan_only(hvac_mode == HVACMode.FAN_ONLY)
 
     async def async_turn_on(self) -> None:
         await self._cabin.async_set_power(True)
@@ -157,4 +173,4 @@ class GacClimate(GacEntity, ClimateEntity):
             raise ServiceValidationError(f"temperature must be a number, got {temp!r}") from None
         if isinstance(temp, bool) or not math.isfinite(value) or not MIN_TEMP_C <= value <= MAX_TEMP_C:
             raise ServiceValidationError(f"temperature must be between {MIN_TEMP_C:g} and {MAX_TEMP_C:g} °C")
-        await self._cabin.async_set_temperature(value, on=on)
+        await self._cabin.async_set_temperature(value, on=on, compressor=self._compressor_for_mode(mode))

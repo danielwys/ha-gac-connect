@@ -194,3 +194,80 @@ def test_command_ledger_requires_reported_fan_before_confirming(tmp_path):
                 cabin._cancel_expiry()
 
     asyncio.run(run())
+
+
+def sent(coordinator):
+    call = coordinator.client.command.await_args
+    return call.args[1], build_body(CATALOG[call.args[1]], call.args[0], call.kwargs)["operations"][0]
+
+
+@pytest.mark.parametrize("compressor,mode", [(False, HVACMode.FAN_ONLY), (True, HVACMode.HEAT_COOL),
+                                             (None, HVACMode.HEAT_COOL)])
+def test_reported_compressor_shows_fan_only_or_heat_cool(compressor, mode):
+    _, entity = climate(VehicleStatus(ac_on=True, ac_target_temp_c=32, ac_compressor_on=compressor))
+    assert entity.hvac_modes == [HVACMode.OFF, HVACMode.HEAT_COOL, HVACMode.FAN_ONLY]
+    assert entity.preset_modes == ["heating", "cooling"]
+    assert entity.hvac_mode == mode
+    assert entity.preset_mode == (None if mode == HVACMode.FAN_ONLY else "heating")
+
+
+@pytest.mark.parametrize("running", [False, True])
+def test_fan_only_runs_the_blower_alone_until_reported(running):
+    coordinator, entity = climate(VehicleStatus(ac_on=running, ac_target_temp_c=23, ac_compressor_on=running,
+                                              updated_ms=100))
+    asyncio.run(entity.async_set_hvac_mode(HVACMode.FAN_ONLY))
+    assert sent(coordinator) == ("aircon-manual-on", {"enableAutoMode": 0, "enableAirCompressor": 0,
+                                                      "temperature": 23, "temperatureUnit": 0})
+    assert entity.hvac_mode == HVACMode.FAN_ONLY
+    coordinator.data = replace(coordinator.data, ac_on=True, ac_compressor_on=True, updated_ms=101)
+    entity._handle_coordinator_update()
+    assert entity._cabin._req is not None and entity.hvac_mode == HVACMode.FAN_ONLY
+    coordinator.data = replace(coordinator.data, ac_compressor_on=False, updated_ms=102)
+    entity._handle_coordinator_update()
+    assert entity._cabin._req is None and entity.hvac_mode == HVACMode.FAN_ONLY
+
+
+def test_speed_change_keeps_fan_only_and_heat_cool_restores_the_compressor():
+    coordinator, entity = climate(VehicleStatus(ac_on=True, ac_target_temp_c=23, ac_compressor_on=False))
+    asyncio.run(entity.async_set_fan_mode("3"))
+    assert sent(coordinator)[1]["enableAirCompressor"] == 0 and entity.hvac_mode == HVACMode.FAN_ONLY
+    asyncio.run(entity.async_set_hvac_mode(HVACMode.HEAT_COOL))
+    assert sent(coordinator)[1]["enableAirCompressor"] == 1 and entity.hvac_mode == HVACMode.HEAT_COOL
+    assert entity._cabin._req.expected == {"ac_on": True, "ac_target_temp_c": 23, "ac_fan_strength": 3,
+                                           "ac_compressor_on": True}
+
+
+@pytest.mark.parametrize("use_switch", [False, True])
+def test_ordinary_start_from_off_uses_the_compressor(use_switch):
+    coordinator, entity = climate(VehicleStatus(ac_on=False, ac_target_temp_c=23, ac_compressor_on=False))
+    control = GacClimateSwitch(coordinator) if use_switch else entity
+    asyncio.run(control.async_turn_on())
+    assert sent(coordinator)[1]["enableAirCompressor"] == 1
+    assert entity.hvac_mode == HVACMode.HEAT_COOL
+    assert "ac_compressor_on" not in entity._cabin._req.expected   # models without the reading still confirm
+
+
+def test_temperature_with_fan_only_starts_the_blower_alone_and_plain_changes_keep_it():
+    coordinator, entity = climate(VehicleStatus(ac_on=True, ac_target_temp_c=23, ac_compressor_on=True))
+    asyncio.run(entity.async_set_temperature(temperature=21, hvac_mode=HVACMode.FAN_ONLY))
+    assert sent(coordinator) == ("aircon-manual-on", {"enableAutoMode": 0, "enableAirCompressor": 0,
+                                                      "temperature": 21, "temperatureUnit": 0})
+    coordinator, entity = climate(VehicleStatus(ac_on=True, ac_target_temp_c=23, ac_compressor_on=False))
+    asyncio.run(entity.async_set_temperature(temperature=21))
+    assert sent(coordinator)[0] == "aircon-temperature" and entity.hvac_mode == HVACMode.FAN_ONLY
+
+
+@pytest.mark.parametrize("mode", [HVACMode.COOL, HVACMode.HEAT, HVACMode.AUTO, HVACMode.DRY])
+def test_unsupported_modes_send_nothing(mode):
+    coordinator, entity = climate(VehicleStatus(ac_on=True))
+    with pytest.raises(ServiceValidationError, match="Fan only"):
+        asyncio.run(entity.async_set_hvac_mode(mode))
+    coordinator.client.command.assert_not_awaited()
+
+
+@pytest.mark.parametrize("preset", ["fan_only", "ac", "eco"])
+def test_presets_are_only_the_app_buttons(preset):
+    coordinator, entity = climate(VehicleStatus(ac_on=True))
+    with pytest.raises(ServiceValidationError, match="heating or cooling"):
+        asyncio.run(entity.async_set_preset_mode(preset))
+    coordinator.client.command.assert_not_awaited()
