@@ -24,7 +24,8 @@ def test_bundled_library_is_actually_exercised():
 @pytest.mark.parametrize("region", list(REGIONS))
 def test_factory_uses_selected_client_and_loads_correct_profile_off_loop(region):
     material = Mock()
-    hass = SimpleNamespace(async_add_executor_job=AsyncMock(return_value=material))
+    hass = SimpleNamespace(async_add_executor_job=AsyncMock(return_value=material),
+                           config=SimpleNamespace(time_zone="UTC"))
     http, store = Mock(), MemoryStore()
     with patch.object(helpers, "async_setup_limits", new=AsyncMock()) as limits:
         client = asyncio.run(helpers.async_build_client(hass, region, http, store))
@@ -32,3 +33,21 @@ def test_factory_uses_selected_client_and_loads_correct_profile_off_loop(region)
     assert client._http is http and client._store is store and client._m is material
     limits.assert_awaited_once_with(hass)
     hass.async_add_executor_job.assert_awaited_once_with(helpers.load_material, PROFILE_MATERIAL[REGIONS[region]["profile"]])
+
+
+
+@pytest.mark.parametrize("ha_zone,region,expected", [
+    ("Australia/Perth", "AU", "Australia/Perth"),      # a multi-zone country follows HA
+    ("Asia/Bangkok", "TH", "Asia/Bangkok"),
+    ("Europe/London", "TH", "Europe/London"),          # HA's choice wins even if it differs
+    ("UTC", "AU", "Australia/Brisbane"),               # looks unset: the region's zone
+    ("Etc/GMT", "TH", "Asia/Bangkok"),
+    ("Not/AZone", "TH", "Asia/Bangkok"),
+    (None, "NZ", "Pacific/Auckland"),
+])
+def test_schedules_use_home_assistants_time_zone_unless_it_looks_unset(ha_zone, region, expected):
+    hass = SimpleNamespace(async_add_executor_job=AsyncMock(return_value=Mock()),
+                           config=SimpleNamespace(time_zone=ha_zone))
+    with patch.object(helpers, "async_setup_limits", new=AsyncMock()):
+        client = asyncio.run(helpers.async_build_client(hass, region, Mock(), MemoryStore()))
+    assert client.timezone == expected and client._zone().key == expected

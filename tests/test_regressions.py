@@ -612,7 +612,8 @@ def test_malformed_report_envelope_fails_clearly(data):
 def test_client_factory_installs_selected_client():
     from custom_components.gac_connect import helpers
 
-    hass = SimpleNamespace(async_add_executor_job=AsyncMock(return_value=Mock()))
+    hass = SimpleNamespace(async_add_executor_job=AsyncMock(return_value=Mock()),
+                           config=SimpleNamespace(time_zone="Asia/Bangkok"))
     with patch.object(helpers, "async_setup_limits", new=AsyncMock()):
         client = asyncio.run(helpers.async_build_client(hass, "TH", Mock()))
     assert type(client) is GacClient

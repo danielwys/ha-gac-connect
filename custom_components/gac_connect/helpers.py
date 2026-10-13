@@ -17,6 +17,7 @@ import asyncio
 import aiohttp
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from ._vendor.gac_connect.const import PROFILE_MATERIAL, RECOVERY_PAUSE, REGIONS
 from ._vendor.gac_connect.keys import Material, load_material
@@ -62,6 +63,26 @@ async def _restore_limits(hass: HomeAssistant) -> None:
     DEFAULT_LIMITER.on_change = _changed
 
 
+# Zones HA reports when none was chosen; the car's region is then the better guess.
+_UNSET_ZONES = frozenset({"UTC", "Etc/UTC", "GMT", "Etc/GMT", "Universal", "Etc/Universal", "Zulu", "Etc/Zulu"})
+
+
+async def async_client_timezone(hass: HomeAssistant, region: str) -> str:
+    """HA's time zone for charge schedules and request headers, else the region's own.
+
+    The region table has one zone per country, which is wrong for much of a country
+    that spans several (Australia, Brazil, Mexico, ...); HA's zone is where the car
+    most likely is. A zone that looks unset (UTC) or unknown falls back to the
+    region's. The zone is loaded here, off the event loop, before the client uses it.
+    """
+    zone = hass.config.time_zone
+    if isinstance(zone, str) and zone not in _UNSET_ZONES and await dt_util.async_get_time_zone(zone) is not None:
+        return zone
+    zone = REGIONS[region]["tz"]
+    await dt_util.async_get_time_zone(zone)
+    return zone
+
+
 async def async_build_client(
     hass: HomeAssistant,
     region: str,
@@ -75,4 +96,4 @@ async def async_build_client(
     # the wrong key and the backend rejects it outright.
     bundle = PROFILE_MATERIAL[REGIONS[region]["profile"]]
     material: Material = await hass.async_add_executor_job(load_material, bundle)
-    return GacClient(region, http, store, material=material)
+    return GacClient(region, http, store, material=material, timezone=await async_client_timezone(hass, region))
