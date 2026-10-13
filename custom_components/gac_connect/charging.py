@@ -5,11 +5,14 @@ DAYS = {"mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday"
         "fri": "Friday", "sat": "Saturday", "sun": "Sunday"}
 
 
-def reported_days(mask: int | None) -> str:
+def reported_days(mask: int | None, mode=None) -> str:
+    """The app's view: no days is a one-time window (Once); 127 is every day."""
     if mask is None:
         return "Not reported"
-    if mask in (0, 127):
+    if mask == 127:
         return "Every day"
+    if mask == 0:
+        return "One time" if mode in (ChargingMode.SCHEDULED, None) else "None"
     return ", ".join(day for index, day in enumerate(DAYS.values()) if mask & (1 << index))
 
 
@@ -27,7 +30,8 @@ def schedule_attributes(status) -> dict:
     return {
         "reported_start": status.charge_window_start if status else None,
         "reported_stop": status.charge_window_stop if status else None,
-        "reported_days": reported_days(status.charge_weekly if status else None),
+        "reported_days": reported_days(status.charge_weekly if status else None,
+                                       getattr(status, "charging_mode", None)),
         "reported_schedule_type": SCHEDULE_TYPES.get(getattr(status, "charging_mode", None), "Not reported"),
         "reported_clock_verified": False,
         "reported_clock_consistent": getattr(status, "charge_clock_consistent", None),
@@ -66,6 +70,6 @@ def schedule_summary(coordinator) -> str:
 
 
 def window_target(start: str, stop: str, weekly: int, until_soc: bool) -> dict:
-    """The reported fields required to confirm a requested window (no day chosen is sent as every day)."""
+    """The reported fields required to confirm a requested window (no days is a one-time window)."""
     return {"charge_scheduled": True, "charge_window_start": start, "charge_window_stop": stop,
-            "charge_weekly": weekly or 127, "charge_end_type": int(until_soc)}
+            "charge_weekly": weekly, "charge_end_type": int(until_soc)}

@@ -388,7 +388,7 @@ def test_pause_does_not_create_recurring_charging_window():
 def test_overnight_window_struct_dates_are_ordered(hour):
     op = window_operation(
         "23:00", "05:00", ZoneInfo("Asia/Bangkok"), now=datetime(2026, 10, 9, hour, 30, tzinfo=ZoneInfo("Asia/Bangkok")),
-        once=True,
+        weekly=127,
     )
 
     def dt(v):
@@ -872,7 +872,6 @@ def test_weekday_mask_selects_next_matching_start_date():
         ZoneInfo("Asia/Bangkok"),
         weekly=1,
         now=datetime(2026, 10, 9, 2, 0, tzinfo=ZoneInfo("Asia/Bangkok")),
-        timestamp_times=True,
     )
     assert op["startTime"]["day"] == 12  # Monday
     assert op["stopTime"]["day"] == 13

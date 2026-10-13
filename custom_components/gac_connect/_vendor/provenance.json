@@ -2,7 +2,7 @@
   "format": 1,
   "source": "https://github.com/leecaochang/gac-connect",
   "upstream": "https://github.com/wattferry/gac-connect",
-  "commit": "11b422535939d86120229361753bf17ce1f92ef3",
+  "commit": "b23917375ea74fc0585efe22bbaa4a703f18d9fc",
   "version": "0.4.0b11",
   "requires_python": ">=3.11",
   "dependencies": [
@@ -14,26 +14,26 @@
     "cli.py"
   ],
   "sha256": {
-    "__init__.py": "9a8ddec2311b7f03d074ef2413f15aaf2a87b230ebad613f60f9a96982c7127e",
+    "__init__.py": "71cd92f9a5ece90d9906d6b9ed5a10df27eb2728dbf3e4a60d10e7bf072b6a01",
     "gac_connect/LICENSE": "57bc988e8f2b38d66b35f0bea5247f28978cd1bb83b91308a4d4a23b0b707108",
     "gac_connect/__init__.py": "4c73f3e3993d4f616b58b46e4c7fd89c53223dc7e94f91e13b22ca20ea5829a9",
     "gac_connect/_material.pem": "fd0f684059f51cc9df4ac60f54618ee7b7f3ae1dc0e7896d903b6729731a5e38",
     "gac_connect/_material_uk.pem": "5841e40ade597509d837fa6bf779aaf1a6b088213d802bb2e4a895fc8f67f95c",
     "gac_connect/auth.py": "c88ac6746d668f0e320ef4f4bd7eabbd24bbc73818e4f0bfe6132b3e6bb8827a",
     "gac_connect/capabilities.py": "4fd740c8986ce307d83563062faebea63fa7281df99bd89932ec5f6344582c41",
-    "gac_connect/client.py": "4760bc675ebcc0a332e3451816bca1145768c05a3a9ec86f2a41cd7cc6e123f7",
+    "gac_connect/client.py": "fe8f8dd51e18bd1dd4d4541f26a324c2cdd1eeee8c3ba045cf349e48fb21953a",
     "gac_connect/commands.py": "ed00051e56b2ace5dc2dfb3a3936aab6c77ce82a37b6adc6c1bce43d1bdef3a7",
-    "gac_connect/const.py": "79c9b0927cfa279b883a70da2a7579cc8e7fd4dbc2cf90191731b2af62c491cd",
+    "gac_connect/const.py": "600947443dc82802b270ff3e9ef8aa0f56fb41fdad96973071f5c15ed3400852",
     "gac_connect/crypto.py": "0549e8c0f2d696d460cc879654c9ab22112d0247d68e2c6dc42d705b3c86d700",
     "gac_connect/errors.py": "00708069a53cf5a843303b2a2ed8081eb8593c1a65c7402d30fae5864f48831f",
     "gac_connect/keys.py": "9a40c026b3dd4f1865d7a53e774f21578747fb7597da44490fca27e274c58ec8",
     "gac_connect/limits.py": "08b43fb32b5bfa902952265bea6bf975976b0af0c9e675c3b6e58aba7f1b3aa3",
-    "gac_connect/models.py": "3cd1e1e99946d19fa6b23e99e7f50f93dffee81d5f478711ecf1e5063dc30f3b",
+    "gac_connect/models.py": "486a82408d38c99b016cefa4e2826cbf97de767579d2a1d0f9e8ba3c5d2e7727",
     "gac_connect/phone.py": "dc21e22b67ad4e7e027476594227aca7b91ba43c50fea527030c6d77e3dc7eec",
     "gac_connect/push.py": "a1e03682d1ac4ef691b629cb8152aeae78967c9011d8dd5be392cb0154e9afea",
     "gac_connect/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "gac_connect/session.py": "f1cf8f30cb461e0813d54718596d13af13677c3dbfa8fd0c78ba23bc066626a7",
     "gac_connect/signing.py": "57acfbbe3a704a09e9a9c2930a3269d064b91a8561948e3899e9bc28ca43873f",
-    "gac_connect/vehicle.py": "3c2aacd33496cba363eda1131d35ba81ff094f9285b3d0afc319009a2069c350"
+    "gac_connect/vehicle.py": "6497f5368ab0b57aa188d2a0b99beb7b004dd3594a00f5baad22218fd2441de7"
   }
 }
