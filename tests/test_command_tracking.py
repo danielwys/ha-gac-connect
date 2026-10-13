@@ -10,6 +10,8 @@ from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.command_tracking import async_send
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
 from custom_components.gac_connect._vendor.gac_connect.errors import GacError
+from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+from homeassistant.exceptions import HomeAssistantError
 from test_autodetect import result, vehicle
 from test_regressions import ACCEPTED
 
@@ -142,4 +144,70 @@ def test_resume_and_window_requests_confirm_with_once_or_repeating_reports(tmp_p
                 'chargingMode': mode, 'dailyReservationStartTime': 82800000, 'dailyReservationStopTime': 18000000,
                 'weeklyReservation': 127, 'chargingEndType': 0}]}, updated_ms=200))
             assert c.commands.state == ('confirmed' if confirmed else 'pending')
+    asyncio.run(run())
+
+
+CONDITIONS = "the vehicle's conditions for this command are not met"
+
+
+def refusal(event=None):
+    return PushResult(False, "13005", None, {}, event=event, session_id="s1", vin="VIN", reason=CONDITIONS)
+
+
+def test_refusal_while_waiting_fails_the_action_with_its_reason(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.push.connected = True
+            asyncio.get_running_loop().call_later(0.01, c.commands.result, refusal())
+            with pytest.raises(HomeAssistantError) as err:
+                await async_send(c, 'aircon-manual-on', AsyncMock(return_value=ACCEPTED)())
+            assert str(err.value) == f"The car refused the request: {CONDITIONS} (code 13005)."
+            attributes = c.commands.attributes()
+            assert c.commands.state == 'rejected'
+            assert (attributes['failure_reason'], attributes['response_code']) == ('vehicle_rejected', '13005')
+    asyncio.run(run())
+
+
+def test_early_refusal_fails_the_action_without_a_push_wait(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            async def send():
+                c.commands.result(result(ok=False))
+                return ACCEPTED
+            with pytest.raises(HomeAssistantError, match=r"^The car refused the request: result code 13101\.$"):
+                await async_send(c, 'steering-on', send())
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('answered', [True, False])
+def test_success_or_no_answer_in_time_leaves_the_action_successful(tmp_path, answered):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.push.connected = True
+            if answered:
+                asyncio.get_running_loop().call_later(0.01, c.commands.result, result())
+            with patch('custom_components.gac_connect.command_tracking.RESULT_WAIT_SECONDS', 0.05):
+                assert await async_send(c, 'steering-on', AsyncMock(return_value=ACCEPTED)()) == ACCEPTED
+            assert c.commands.state == ('awaiting_report' if answered else 'pending')
+            assert c.commands.attributes()['failure_reason'] is None
+    asyncio.run(run())
+
+
+def test_refused_cabin_start_restores_off_and_explains(tmp_path):
+    async def run():
+        from custom_components.gac_connect.cabin import controller
+        async with vehicle(tmp_path) as (_, _, c):
+            c.push.connected = True
+            c.client.climate_manual_on = AsyncMock(return_value=ACCEPTED)
+            c.data = replace(decode_status({}), ac_on=False)
+            cabin = controller(c)
+            answer = refusal('control_air_condition')
+
+            def deliver():   # as the coordinator does: the ledger, then the controls
+                c.commands.result(answer)
+                cabin._handle_result(answer)
+            asyncio.get_running_loop().call_later(0.01, deliver)
+            with pytest.raises(HomeAssistantError, match=r"conditions .* not met \(code 13005\)"):
+                await cabin.async_set_power(True)
+            assert cabin.on is False and cabin._req is None
     asyncio.run(run())

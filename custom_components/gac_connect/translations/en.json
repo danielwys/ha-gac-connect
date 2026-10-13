@@ -152,7 +152,8 @@
       "quiet_pair_required": "Set both quiet-hour times, or clear both to disable quiet hours.",
       "quiet_times_equal": "Start and end must differ. Clear both to disable quiet hours.",
       "invalid_charge_window": "Enter different start and stop times in HH:MM format (00:00–23:59) and choose valid days.",
-      "command_failed": "The request failed. Open Last command for the failure reason and service code, and check Polling status before trying again."
+      "command_failed": "The request failed. Open Last command for the failure reason and service code, and check Polling status before trying again.",
+      "command_refused": "{reason}"
     },
     "abort": {
       "vehicle_not_loaded": "The vehicle integration is not loaded. Reconnect it before viewing or changing charging settings."

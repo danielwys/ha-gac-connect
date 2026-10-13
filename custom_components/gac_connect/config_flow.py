@@ -28,6 +28,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_REGION
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import UnknownFlow
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers import config_validation as cv
@@ -360,16 +361,19 @@ class GacOptionsFlow(OptionsFlow):
 
         if (coordinator := self._loaded_coordinator()) is None:
             return self.async_abort(reason="vehicle_not_loaded")
-        errors = {}
+        errors, refusal = {}, {"reason": ""}
         if user_input is not None:
             try:
                 await async_send(coordinator, "charge-now", coordinator.client.charge_now(coordinator.vin))
             except GacError as err:
                 _LOGGER.warning("Charge now request failed: %s", err)
                 errors["base"] = "command_failed"
+            except HomeAssistantError as err:   # the car refused it
+                errors["base"], refusal["reason"] = "command_refused", str(err)
             else:
                 return await self.async_step_charging()
-        return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors)
+        return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors,
+                                    description_placeholders=refusal)
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         from .api import validate_clock
@@ -378,7 +382,7 @@ class GacOptionsFlow(OptionsFlow):
 
         if (coordinator := self._loaded_coordinator()) is None:
             return self.async_abort(reason="vehicle_not_loaded")
-        errors = {}
+        errors, refusal = {}, {"reason": ""}
         if user_input is not None:
             try:
                 start, stop = (validate_clock(user_input[key]) for key in ("start", "stop"))
@@ -396,6 +400,8 @@ class GacOptionsFlow(OptionsFlow):
             except GacError as err:
                 _LOGGER.warning("Charging window request failed: %s", err)
                 errors["base"] = "command_failed"
+            except HomeAssistantError as err:   # the car refused it
+                errors["base"], refusal["reason"] = "command_refused", str(err)
             else:
                 return await self.async_step_charging()
         values = dict(user_input) if user_input is not None else {}
@@ -414,7 +420,7 @@ class GacOptionsFlow(OptionsFlow):
             vol.Required("stop", description={"suggested_value": values.get("stop", "")}): str,
             vol.Optional("days", default=values.get("days", [])): cv.multi_select(DAYS),
             vol.Optional("until_soc", default=values.get("until_soc", False)): bool,
-        }), description_placeholders={"timezone": coordinator.client.timezone})
+        }), description_placeholders={"timezone": coordinator.client.timezone, **refusal})
 
     async def async_step_equipment(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         from .equipment import equipment_summary

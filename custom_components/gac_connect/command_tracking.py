@@ -8,7 +8,7 @@ from inspect import iscoroutine
 from time import monotonic
 
 from homeassistant.core import callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
@@ -21,6 +21,9 @@ from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK
 from .seats import ventilation_state
 
 REQUEST_SECONDS = 180
+# How long an accepted command waits for the car's answer so a refusal can fail the action.
+# An Aion UT refused a remote A/C start about four seconds after the request.
+RESULT_WAIT_SECONDS = 10
 ACTIVE = {"sending", "pending", "awaiting_report"}
 STATES = ["idle", "sending", "pending", "awaiting_report", "confirmed", "reported_success",
           "rejected", "failed", "timed_out", "cancelled", "superseded"]
@@ -55,6 +58,15 @@ class CommandRecord:
     result_received: bool = False
     failure_reason: str | None = None
     response_code: str | None = None
+    refusal_reason: str | None = None
+    answered: asyncio.Event = field(default_factory=asyncio.Event, repr=False, compare=False)
+
+
+def refusal_message(record: CommandRecord) -> str:
+    """Explain a refusal reported by the car."""
+    code = record.response_code
+    detail = f"{record.refusal_reason} (code {code})" if record.refusal_reason else f"result code {code}"
+    return f"The car refused the request: {detail}."
 
 
 class CommandTracker:
@@ -117,6 +129,7 @@ class CommandTracker:
         self._early.clear()
         for record in self.pending:
             record.state = "cancelled"
+            record.answered.set()
 
     async def send(self, command, request, *, expected=None):
         if self._closed:
@@ -163,11 +176,28 @@ class CommandTracker:
                     break
             self.observe(self.coordinator.data)
             self.coordinator.async_schedule_command_refresh()
-            return response
         finally:
             if not any(r.state == "sending" for r in self.records):
                 self._early.clear()
             self._changed()
+        await self._await_answer(record)
+        return response
+
+    async def _await_answer(self, record: CommandRecord) -> None:
+        """Give the car a moment to answer; a refusal fails the action that asked for it.
+
+        Without a push channel, or with no answer in time, the command stays
+        pending and resolves from later reports as before.
+        """
+        push = getattr(self.coordinator, "push", None)
+        if not record.result_received and record.session_id and getattr(push, "connected", None) is True:
+            try:
+                async with asyncio.timeout(RESULT_WAIT_SECONDS):
+                    await record.answered.wait()
+            except TimeoutError:
+                return
+        if record.failure_reason == "vehicle_rejected":
+            raise HomeAssistantError(refusal_message(record))
 
     def result(self, result) -> bool:
         if self._closed or result.vin != self.coordinator.vin or not result.session_id or result.ok is None:
@@ -178,6 +208,10 @@ class CommandTracker:
             if record.result_received or monotonic() > record.started + REQUEST_SECONDS:
                 return False
             record.result_received = True
+            if not result.ok:
+                record.failure_reason, record.response_code = "vehicle_rejected", result.code
+                record.refusal_reason = result.reason
+            record.answered.set()
             if record.state in {"pending", "awaiting_report"}:
                 record.state = ("awaiting_report" if record.expected else "reported_success") if result.ok else "rejected"
             manager = self.coordinator.capabilities

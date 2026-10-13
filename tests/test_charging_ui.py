@@ -10,7 +10,7 @@ from custom_components.gac_connect.api import GacClient, decode_status
 from custom_components.gac_connect.config_flow import GacOptionsFlow
 from custom_components.gac_connect.charging import schedule_attributes, schedule_mode
 from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
-from test_autodetect import vehicle
+from test_autodetect import result, vehicle
 from test_regressions import ACCEPTED
 
 
@@ -190,4 +190,22 @@ def test_editor_days_follow_the_app_once_repeat_and_every_day(tmp_path, days, we
                 0: 'One time', 18: 'Tuesday, Friday', 127: 'Every day'}[weekly]
             c.commands.observe(c.data)
             assert c.commands.state == 'confirmed'
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('step,user_input', [('charge_now', {}),
+                                             ('charge_window', {'start': '22:00', 'stop': '06:00', 'days': []})])
+def test_car_refusal_is_shown_on_the_form(tmp_path, step, user_input):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+
+            async def refused(*_args, **_kwargs):
+                c.commands.result(result(ok=False))
+                return ACCEPTED
+            client._reservation.side_effect = refused
+            response = await getattr(flow, f'async_step_{step}')(user_input)
+            assert response['errors']['base'] == 'command_refused'
+            assert response['description_placeholders']['reason'] == 'The car refused the request: result code 13101.'
+            assert c.commands.state == 'rejected'
     asyncio.run(run())
