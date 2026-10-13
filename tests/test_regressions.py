@@ -387,7 +387,8 @@ def test_pause_does_not_create_recurring_charging_window():
 @pytest.mark.parametrize("hour", [0, 2, 5, 12, 23])
 def test_overnight_window_struct_dates_are_ordered(hour):
     op = window_operation(
-        "23:00", "05:00", ZoneInfo("Asia/Bangkok"), now=datetime(2026, 10, 9, hour, 30, tzinfo=ZoneInfo("Asia/Bangkok"))
+        "23:00", "05:00", ZoneInfo("Asia/Bangkok"), now=datetime(2026, 10, 9, hour, 30, tzinfo=ZoneInfo("Asia/Bangkok")),
+        once=True,
     )
 
     def dt(v):
@@ -828,11 +829,20 @@ def test_charge_window_service_uses_corrected_client(start, stop):
     vin, op = c.client._reservation.await_args.args
     assert vin == c.vin and op["weeklyReservation"] == 3 and op["chargingEndType"] == 1
     assert isinstance(op["weeklyReservation"], int)
+    assert op["chargingMode"] == 2
+    assert (op["startTime"]["hour"], op["startTime"]["minute"]) == tuple(map(int, start.split(":")))
+    assert (op["stopTime"]["hour"], op["stopTime"]["minute"]) == tuple(map(int, stop.split(":")))
 
-    def dt(v):
-        return datetime(**{k: v[k] for k in ("year", "month", "day", "hour", "minute", "second")})
 
-    assert dt(op["stopTime"]) > dt(op["startTime"])
+def test_charge_window_service_can_send_a_one_time_window():
+    c = coord(VehicleStatus())
+    c.client._tz = ZoneInfo("Asia/Bangkok")
+    c.client._reservation = AsyncMock(return_value=ACCEPTED)
+    handler, schema = service_registry(c)["set_charge_window"]
+    asyncio.run(handler(SimpleNamespace(data=schema({"start": "23:00", "stop": "05:00", "once": True}))))
+    op = c.client._reservation.await_args.args[1]
+    assert (op["chargingMode"], op["weeklyReservation"]) == (1, 0)
+    assert op["startTime"]["year"] > 2000 and op["startTime"]["month"] > 0
 
 
 @pytest.mark.parametrize(
@@ -873,6 +883,7 @@ def test_weekday_mask_selects_next_matching_start_date():
         ZoneInfo("Asia/Bangkok"),
         weekly=1,
         now=datetime(2026, 10, 9, 2, 0, tzinfo=ZoneInfo("Asia/Bangkok")),
+        timestamp_times=True,
     )
     assert op["startTime"]["day"] == 12  # Monday
     assert op["stopTime"]["day"] == 13

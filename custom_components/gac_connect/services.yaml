@@ -23,7 +23,7 @@ charge_pause:
 
 set_charge_window:
   name: Set charge window
-  description: Charge only inside a daily time window.
+  description: Charge only inside a time window, repeating on the chosen days (as the app's Repeat) or once.
   fields:
     vin:
       name: VIN
@@ -44,6 +44,10 @@ set_charge_window:
       selector: { number: { min: 0, max: 127, mode: box } }
     until_soc:
       name: Until target SoC
+      selector: { boolean: {} }
+    once:
+      name: One time only
+      description: Charge in the next occurrence of the window only, instead of repeating. Leave the day bitmask at 0.
       selector: { boolean: {} }
 
 get_control_capabilities:

@@ -140,6 +140,6 @@ def test_resume_and_window_requests_confirm_with_once_or_repeating_reports(tmp_p
             await async_send(c, command, AsyncMock(return_value=ACCEPTED)(), expected=expected)
             c.commands.observe(decode_status({'chargingAccessors': [{
                 'chargingMode': mode, 'dailyReservationStartTime': 82800000, 'dailyReservationStopTime': 18000000,
-                'weeklyReservation': 0, 'chargingEndType': 0}]}, updated_ms=200))
+                'weeklyReservation': 127, 'chargingEndType': 0}]}, updated_ms=200))
             assert c.commands.state == ('confirmed' if confirmed else 'pending')
     asyncio.run(run())

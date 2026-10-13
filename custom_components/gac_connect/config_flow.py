@@ -368,6 +368,7 @@ class GacOptionsFlow(OptionsFlow):
         return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors)
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from ._vendor.gac_connect.models import ChargingMode
         from .api import validate_clock
         from .charging import DAYS, window_target
         from .command_tracking import async_send
@@ -384,9 +385,10 @@ class GacOptionsFlow(OptionsFlow):
                 if not isinstance(days, list) or any(day not in DAYS for day in days):
                     raise ValueError("unknown day")
                 weekly = sum(1 << index for index, day in enumerate(DAYS) if day in days)
+                once = user_input.get("once", False)
                 await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
-                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False)),
-                    expected=window_target(start, stop, weekly, user_input.get("until_soc", False)))
+                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False),
+                    once=once), expected=window_target(start, stop, weekly, user_input.get("until_soc", False), once))
             except ValueError:
                 errors["base"] = "invalid_charge_window"
             except GacError:
@@ -404,11 +406,13 @@ class GacOptionsFlow(OptionsFlow):
             if type(weekly) is int and 0 <= weekly <= 127:
                 values["days"] = [day for index, day in enumerate(DAYS) if weekly & (1 << index)]
             values["until_soc"] = getattr(status, "charge_end_type", None) == 1
+            values["once"] = getattr(status, "charging_mode", None) == ChargingMode.SCHEDULED
         return self.async_show_form(step_id="charge_window", errors=errors, data_schema=vol.Schema({
             vol.Required("start", description={"suggested_value": values.get("start", "")}): str,
             vol.Required("stop", description={"suggested_value": values.get("stop", "")}): str,
             vol.Optional("days", default=values.get("days", [])): cv.multi_select(DAYS),
             vol.Optional("until_soc", default=values.get("until_soc", False)): bool,
+            vol.Optional("once", default=values.get("once", False)): bool,
         }), description_placeholders={"timezone": coordinator.client.timezone})
 
     async def async_step_equipment(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

@@ -20,6 +20,7 @@ ATTR_START = "start"
 ATTR_STOP = "stop"
 ATTR_WEEKLY = "weekly"
 ATTR_UNTIL_SOC = "until_soc"
+ATTR_ONCE = "once"
 ATTR_COMMAND = "command"
 ATTR_PARAMS = "params"
 
@@ -66,8 +67,10 @@ def async_register_services(hass: HomeAssistant) -> None:
                 call.data[ATTR_STOP],
                 weekly=call.data.get(ATTR_WEEKLY, 0),
                 until_soc=call.data.get(ATTR_UNTIL_SOC, False),
+                once=call.data.get(ATTR_ONCE, False),
             ), expected=window_target(call.data[ATTR_START], call.data[ATTR_STOP],
-                                      call.data.get(ATTR_WEEKLY, 0), call.data.get(ATTR_UNTIL_SOC, False)))
+                                      call.data.get(ATTR_WEEKLY, 0), call.data.get(ATTR_UNTIL_SOC, False),
+                                      call.data.get(ATTR_ONCE, False)))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         except GacError as err:
@@ -108,6 +111,7 @@ def async_register_services(hass: HomeAssistant) -> None:
                 vol.Required(ATTR_STOP): validate_clock,
                 vol.Optional(ATTR_WEEKLY): validate_weekly,
                 vol.Optional(ATTR_UNTIL_SOC): cv.boolean,
+                vol.Optional(ATTR_ONCE): cv.boolean,
             }
         ),
     )

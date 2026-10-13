@@ -63,7 +63,9 @@ def test_editor_sends_validated_overnight_window_with_selected_days(tmp_path, un
             assert operation['weeklyReservation'] == 17
             assert operation['dailyReservationStartTime'] == 82800000
             assert operation['dailyReservationStopTime'] == 18000000
-            assert operation['chargingMode'] == 1 and operation['chargingEndType'] == int(until_soc)
+            assert operation['chargingMode'] == 2 and operation['chargingEndType'] == int(until_soc)
+            assert operation['startTime'] == {'year': 2000, 'month': 0, 'day': 0, 'hour': 23, 'minute': 0,
+                                              'second': 0, 'millisecond': 0}
             assert c.commands.state == 'pending'  # acceptance did not fabricate a schedule
             assert c.data is None
             assert dict(entry.options) == before
@@ -166,4 +168,22 @@ def test_real_ut_schedule_reads_calendar_fields_and_confirms_after_new_report(tm
             assert c.commands.state == 'pending'
             c.commands.observe(decode_status({'chargingAccessors': [operation]}, updated_ms=2000))
             assert c.commands.state == 'confirmed'
+    asyncio.run(run())
+
+
+def test_editor_one_time_window_and_prefill(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            c.data = decode_status({'chargingAccessors': [{'chargingMode': 1, 'dailyReservationStartTime': 82800000,
+                                                           'dailyReservationStopTime': 18000000}]})
+            form = await flow.async_step_charge_window()
+            assert form['data_schema']({'start': '23:00', 'stop': '05:00'})['once'] is True
+            rejected = await flow.async_step_charge_window(
+                {'start': '23:00', 'stop': '05:00', 'days': ['mon'], 'until_soc': False, 'once': True})
+            assert rejected['errors']['base'] == 'invalid_charge_window'
+            client._reservation.assert_not_awaited()
+            await flow.async_step_charge_window({'start': '23:00', 'stop': '05:00', 'days': [], 'once': True})
+            operation = client._reservation.await_args.args[1]
+            assert (operation['chargingMode'], operation['weeklyReservation']) == (1, 0)
     asyncio.run(run())
