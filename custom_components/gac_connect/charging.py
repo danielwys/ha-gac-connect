@@ -65,14 +65,7 @@ def schedule_summary(coordinator) -> str:
             f"{clock_note}The target charge level is not available here.")
 
 
-def window_target(start: str, stop: str, weekly: int, until_soc: bool, once: bool = False) -> dict:
-    """The reported fields required to confirm a requested window.
-
-    A repeating window is sent with every day (127) when no day is chosen; the
-    days a one-time window reports are not established, so they are not compared.
-    """
-    target = {"charge_scheduled": True, "charge_window_start": start,
-              "charge_window_stop": stop, "charge_end_type": int(until_soc)}
-    if not once:
-        target["charge_weekly"] = weekly or 127
-    return target
+def window_target(start: str, stop: str, weekly: int, until_soc: bool) -> dict:
+    """The reported fields required to confirm a requested window (no day chosen is sent as every day)."""
+    return {"charge_scheduled": True, "charge_window_start": start, "charge_window_stop": stop,
+            "charge_weekly": weekly or 127, "charge_end_type": int(until_soc)}

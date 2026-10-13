@@ -23,7 +23,7 @@ charge_pause:
 
 set_charge_window:
   name: Set charge window
-  description: Charge only inside a time window, repeating on the chosen days (as the app's Repeat) or once.
+  description: Charge only inside a time window, repeating on the chosen days (as the app's Repeat).
   fields:
     vin:
       name: VIN
@@ -45,14 +45,10 @@ set_charge_window:
     until_soc:
       name: Until target SoC
       selector: { boolean: {} }
-    once:
-      name: One time only
-      description: Charge in the next occurrence of the window only, instead of repeating. Leave the day bitmask at 0.
-      selector: { boolean: {} }
 
 get_control_capabilities:
   name: Read cabin control capabilities
-  description: Read the cloud's raw cabin and seat capability fields for troubleshooting. This does not send a vehicle control or change detected equipment.
+  description: Read the cloud's raw cabin, seat and charging capability fields for troubleshooting. This does not send a vehicle control or change detected equipment.
   fields:
     vin:
       name: VIN

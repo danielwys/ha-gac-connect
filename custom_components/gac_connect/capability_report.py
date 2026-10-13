@@ -17,6 +17,12 @@ AIR_FIELDS = COMMON | {
     "enableAirCleanerCapability", "fragranceCapability", "airConditionAntivirusModeCapability",
     "antivirusModeDurationCapability", "minAntivirusModeCurrentDuration", "maxAntivirusModeCurrentDuration",
 }
+CHARGING_FIELDS = COMMON | {
+    "chargingModeCapability", "supportChargingModes", "chargingEndWithSocCapability",
+    "weeklyReservationCapability", "dailyReservationTimeSettingCapability", "chargingStatusCapability",
+    "chargingVoltageCapability", "chargingCurrentCapability", "estimatedChargedDurationCapability",
+    "dischargeVoltageCapability", "dischargeCurrentCapability",
+}
 SEAT_FIELDS = COMMON | {
     "seat", "enableWindCapability", "windStrengthCapability", "minWindStrength", "maxWindStrength",
     "temperatureModeCapability", "supportTemperatureModes", "temperatureStrengthCapability",
@@ -51,7 +57,8 @@ def cabin_capability_report(data: dict) -> dict:
     if not isinstance(remote, dict):
         raise HomeAssistantError("The capability response has no remote-capability section")
     result = {}
-    for name, fields in (("airConditionCapabilities", AIR_FIELDS), ("seatTemperatureCapabilities", SEAT_FIELDS)):
+    for name, fields in (("airConditionCapabilities", AIR_FIELDS), ("seatTemperatureCapabilities", SEAT_FIELDS),
+                         ("chargingCapabilities", CHARGING_FIELDS)):
         items = remote.get(name)
         result[name] = None if items is None else [
             {key: _value(value) for key, value in item.items() if key in fields}

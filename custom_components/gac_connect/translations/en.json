@@ -135,15 +135,13 @@
           "start": "Start (HH:MM)",
           "stop": "Stop (HH:MM)",
           "days": "Days the window starts",
-          "until_soc": "Stop at the car’s target charge level",
-          "once": "One time only"
+          "until_soc": "Stop at the car’s target charge level"
         },
         "data_description": {
           "start": "Use 24-hour time, for example 23:00.",
           "stop": "Use 24-hour time, for example 05:00. An earlier stop time runs into the following day. Start and stop must differ.",
           "days": "Leave empty for every day. For an overnight window, select the day charging starts.",
-          "until_soc": "Use the car’s existing target instead of the stop time. This integration cannot read or change that target; verify it in the car or official app.",
-          "once": "Charge in the next occurrence only, like the app’s one-time schedule. Leave the days empty. Otherwise the window repeats on the selected days, like the app’s Repeat."
+          "until_soc": "Use the car’s existing target instead of the stop time. This integration cannot read or change that target; verify it in the car or official app."
         }
       }
     },

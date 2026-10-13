@@ -170,21 +170,3 @@ def test_real_ut_schedule_reads_calendar_fields_and_confirms_after_new_report(tm
             c.commands.observe(decode_status({'chargingAccessors': [operation]}, updated_ms=2000))
             assert c.commands.state == 'confirmed'
     asyncio.run(run())
-
-
-def test_editor_one_time_window_and_prefill(tmp_path):
-    async def run():
-        async with vehicle(tmp_path) as (hass, entry, c):
-            flow, client = setup_flow(hass, entry, c)
-            c.data = decode_status({'chargingAccessors': [{'chargingMode': 1, 'dailyReservationStartTime': 82800000,
-                                                           'dailyReservationStopTime': 18000000}]})
-            form = await flow.async_step_charge_window()
-            assert form['data_schema']({'start': '23:00', 'stop': '05:00'})['once'] is True
-            rejected = await flow.async_step_charge_window(
-                {'start': '23:00', 'stop': '05:00', 'days': ['mon'], 'until_soc': False, 'once': True})
-            assert rejected['errors']['base'] == 'invalid_charge_window'
-            client._reservation.assert_not_awaited()
-            await flow.async_step_charge_window({'start': '23:00', 'stop': '05:00', 'days': [], 'once': True})
-            operation = client._reservation.await_args.args[1]
-            assert (operation['chargingMode'], operation['weeklyReservation']) == (1, 0)
-    asyncio.run(run())

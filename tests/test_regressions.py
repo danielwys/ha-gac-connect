@@ -834,17 +834,6 @@ def test_charge_window_service_uses_corrected_client(start, stop):
     assert (op["stopTime"]["hour"], op["stopTime"]["minute"]) == tuple(map(int, stop.split(":")))
 
 
-def test_charge_window_service_can_send_a_one_time_window():
-    c = coord(VehicleStatus())
-    c.client._tz = ZoneInfo("Asia/Bangkok")
-    c.client._reservation = AsyncMock(return_value=ACCEPTED)
-    handler, schema = service_registry(c)["set_charge_window"]
-    asyncio.run(handler(SimpleNamespace(data=schema({"start": "23:00", "stop": "05:00", "once": True}))))
-    op = c.client._reservation.await_args.args[1]
-    assert (op["chargingMode"], op["weeklyReservation"]) == (1, 0)
-    assert op["startTime"]["year"] > 2000 and op["startTime"]["month"] > 0
-
-
 @pytest.mark.parametrize(
     "data",
     [

@@ -5,6 +5,7 @@ options tune polling and privacy.
 """
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any, TYPE_CHECKING
@@ -66,6 +67,8 @@ from .const import (
     PROFILE_UT,
     PROFILE_V,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 REGIONS = ["AU", "NZ", "GB", "SG", "TH", "AE", "GR", "IL"]
 PROFILES = {
@@ -361,14 +364,14 @@ class GacOptionsFlow(OptionsFlow):
         if user_input is not None:
             try:
                 await async_send(coordinator, "charge-now", coordinator.client.charge_now(coordinator.vin))
-            except GacError:
+            except GacError as err:
+                _LOGGER.warning("Charge now request failed: %s", err)
                 errors["base"] = "command_failed"
             else:
                 return await self.async_step_charging()
         return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors)
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        from ._vendor.gac_connect.models import ChargingMode
         from .api import validate_clock
         from .charging import DAYS, window_target
         from .command_tracking import async_send
@@ -385,13 +388,13 @@ class GacOptionsFlow(OptionsFlow):
                 if not isinstance(days, list) or any(day not in DAYS for day in days):
                     raise ValueError("unknown day")
                 weekly = sum(1 << index for index, day in enumerate(DAYS) if day in days)
-                once = user_input.get("once", False)
                 await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
-                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False),
-                    once=once), expected=window_target(start, stop, weekly, user_input.get("until_soc", False), once))
+                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False)),
+                    expected=window_target(start, stop, weekly, user_input.get("until_soc", False)))
             except ValueError:
                 errors["base"] = "invalid_charge_window"
-            except GacError:
+            except GacError as err:
+                _LOGGER.warning("Charging window request failed: %s", err)
                 errors["base"] = "command_failed"
             else:
                 return await self.async_step_charging()
@@ -406,13 +409,11 @@ class GacOptionsFlow(OptionsFlow):
             if type(weekly) is int and 0 <= weekly <= 127:
                 values["days"] = [day for index, day in enumerate(DAYS) if weekly & (1 << index)]
             values["until_soc"] = getattr(status, "charge_end_type", None) == 1
-            values["once"] = getattr(status, "charging_mode", None) == ChargingMode.SCHEDULED
         return self.async_show_form(step_id="charge_window", errors=errors, data_schema=vol.Schema({
             vol.Required("start", description={"suggested_value": values.get("start", "")}): str,
             vol.Required("stop", description={"suggested_value": values.get("stop", "")}): str,
             vol.Optional("days", default=values.get("days", [])): cv.multi_select(DAYS),
             vol.Optional("until_soc", default=values.get("until_soc", False)): bool,
-            vol.Optional("once", default=values.get("once", False)): bool,
         }), description_placeholders={"timezone": coordinator.client.timezone})
 
     async def async_step_equipment(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

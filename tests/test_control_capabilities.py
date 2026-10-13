@@ -29,7 +29,7 @@ def test_capability_projection_keeps_numeric_metadata_and_excludes_private_unkno
     assert result == {"airConditionCapabilities": [{"controlCapability": 3, "blowingModeCapability": 1,
         "supportBlowingModes": [1, 2, 3, 4], "bcontrolCapability": "0011", "enableFrontDefrosterCapability": 0,
         "temperatureCapability": None, "maxTemperature": None}],
-        "seatTemperatureCapabilities": [{"seat": 1, "enableWindCapability": 2}]}
+        "seatTemperatureCapabilities": [{"seat": 1, "enableWindCapability": 2}], "chargingCapabilities": None}
     assert "PRIVATE" not in str(result)
 
 
@@ -85,7 +85,7 @@ def test_capability_action_uses_vendored_success_parser_before_scrubbing_respons
     handler, schema = service_registry(coordinator)["get_control_capabilities"]
     result = asyncio.run(handler(SimpleNamespace(data=schema({}))))
     assert result == {"airConditionCapabilities": [{"supportBlowingModes": [1, 2, 3, 4]}],
-                      "seatTemperatureCapabilities": None}
+                      "seatTemperatureCapabilities": None, "chargingCapabilities": None}
     coordinator.client._iov_read.assert_awaited_once_with(
         "/iov-vehicle-gateway/v1/iov/vehicle/access_gateway/get_capability",
         {"vin": "TESTVIN"}, sensitive={"vin": "TESTVIN"},
@@ -102,3 +102,11 @@ def test_capability_action_shows_rejection_code_without_copying_private_gateway_
     assert "PRIVATE" not in str(caught.value)
     coordinator.client._iov_read.assert_awaited_once()
     coordinator.client.command.assert_not_awaited()
+
+
+def test_charging_capabilities_are_projected_for_mode_discovery():
+    result = cabin_capability_report(report({"chargingCapabilities": [{
+        "supportChargingModes": [0, 1, 2], "chargingModeCapability": 3, "chargingEndWithSocCapability": None,
+        "weeklyReservationCapability": 3, "vin": "PRIVATE-VIN", "note": "PRIVATE-TEXT"}]}))
+    assert result["chargingCapabilities"] == [{"supportChargingModes": [0, 1, 2], "chargingModeCapability": 3,
+                                               "chargingEndWithSocCapability": None, "weeklyReservationCapability": 3}]
