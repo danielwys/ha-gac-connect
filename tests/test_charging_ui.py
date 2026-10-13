@@ -20,6 +20,7 @@ def setup_flow(hass, entry, coordinator):
     client.timezone = 'Asia/Bangkok'
     client._tz = ZoneInfo(client.timezone)
     client._charge_time_formats = {}
+    client._charge_windows = {}
     client._reservation = AsyncMock(return_value=ACCEPTED)
     return flow, client
 

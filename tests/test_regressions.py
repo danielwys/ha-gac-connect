@@ -33,6 +33,7 @@ def coord(data):
     client = object.__new__(GacClient)
     client.command = AsyncMock(return_value=ACCEPTED)
     client._charge_time_formats = {}
+    client._charge_windows = {}
     return SimpleNamespace(
         hass=Mock(),
         data=data,

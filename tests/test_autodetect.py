@@ -312,6 +312,7 @@ def test_entity_and_service_actions_feed_the_same_discovery_evidence(tmp_path, s
             client.command = AsyncMock(return_value=ACCEPTED)
             client._reservation = AsyncMock(return_value=ACCEPTED)
             client._charge_time_formats = {}
+            client._charge_windows = {}
             client._tz = ZoneInfo("UTC")
             coordinator.client = client
             coordinator.async_request_refresh = AsyncMock()

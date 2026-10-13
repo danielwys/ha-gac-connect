@@ -4,7 +4,7 @@
         client = GacClient("AU", http)
         captcha = await client.start_captcha()
         # ... user solves the puzzle, giving x ...
-        await client.request_sms(mobile, captcha, x)
+        await client.request_sms(mobile, x)
         await client.login_sms(mobile, code)
         vehicles = await client.list_vehicles()
         status = await client.get_status(vehicles[0].vin)
@@ -45,6 +45,7 @@ import aiohttp
 from . import commands, vehicle
 from .auth import Captcha
 from .const import (
+    APP_VERSION,
     CODE_COMMAND_ACCEPTED,
     ERR_REFRESH_SPENT,
     ERR_TOKEN_INVALID,
@@ -56,6 +57,7 @@ from .const import (
     PROFILE_MATERIAL,
     REGIONS,
     SSO_SERVICE_ID,
+    SUCCESS_RESULT_CODES,
     USER_AGENT,
 )
 from .crypto import decrypt_envelope, encrypt_envelope, encrypt_sensitive
@@ -139,12 +141,14 @@ class GacClient:
         self._iov_app_id = PROFILE_IOV_APP_ID.get(profile, IOV_APP_ID)
         self._session = Session(region=region)
         self._captcha: Captcha | None = None
+        self._verify_ticket: str | None = None
         # Every request passes the process-wide limiter; a caller's own limiter (for
         # example one kept in a file) is applied on top of it, never instead of it.
         self._limiters = (limiter, DEFAULT_LIMITER) if limiter not in (None, DEFAULT_LIMITER) else (DEFAULT_LIMITER,)
         self._auth_dead = False      # a refresh failed for good; only a new session clears it
         self._dead_refresh: str | None = None
         self._charge_time_formats: dict[str, str] = {}
+        self._charge_windows: dict[str, dict] = {}   # last usable reported reservation, per VIN
 
     def _zone(self) -> ZoneInfo:
         """The zone charge windows are scheduled in, loaded the first time one is.
@@ -195,14 +199,14 @@ class GacClient:
                         pause = max(limiter.block(seconds) for limiter in self._limiters)
                         raise RateLimitedError("the service rate-limited the request", retry_after=pause)
                     if 300 <= resp.status < 400:
-                        raise CommandError(f"unexpected redirect ({resp.status}) from {path}; not followed")
+                        raise ResponseError(f"unexpected redirect ({resp.status}) from {path}; not followed")
                     if resp.status >= 400:
                         raise ResponseError(f"HTTP {resp.status} from {path}")
                     raw = await resp.read()
             try:
                 outer = _loads(raw)
             except ValueError as exc:
-                raise CommandError(f"non-JSON response ({resp.status}) from {path}") from exc
+                raise ResponseError(f"non-JSON response ({resp.status}) from {path}") from exc
             if isinstance(outer, dict) and outer.get("encryptData"):
                 plain = decrypt_envelope(outer, self._response_key(host))
                 if plain is not None:
@@ -218,7 +222,7 @@ class GacClient:
         wrapper, _, _ = encrypt_envelope(body, self._m.main.public)
         headers = {
             "user-agent": USER_AGENT, "fnc-app-type": "android", "locale": "en",
-            "fnc-fnc-os-version-type": "2.0.25", "fnc-app-id": MAIN_APP_ID,
+            "fnc-fnc-os-version-type": APP_VERSION, "fnc-app-id": MAIN_APP_ID,
             "fnc-timestamp": _now_ms(), "region": self.region,
             "fnc-client-timezone": self.timezone, "fnc-requestId": _request_id(),
             "content-type": "application/json; charset=utf-8",
@@ -233,7 +237,7 @@ class GacClient:
         wrapper, key, iv = encrypt_envelope(body, self._m.iov.public)
         headers = {
             "user-agent": USER_AGENT, "fnc-app-type": "android", "locale": "en",
-            "fnc-fnc-os-version-type": "2.0.25", "fnc-request-id": _request_id(),
+            "fnc-fnc-os-version-type": APP_VERSION, "fnc-request-id": _request_id(),
             "content-type": "application/json; charset=utf-8", "fnc-version": IOV_VERSION,
             "fnc-app-id": self._iov_app_id, "fnc-timestamp": _now_ms(),
             "fnc-icv-timezone": self.timezone,
@@ -286,13 +290,15 @@ class GacClient:
              "captchaTicket": c.ticket(x), "captchaRandomStr": c.point_json(x),
              "type": 1, "sendType": None},
         )
-        if not self._ok(resp) or not self._data(resp).get("verifyCodeTicket"):
+        data = self._data(resp)
+        ticket = data.get("verifyCodeTicket") if isinstance(data, dict) else None
+        if not self._ok(resp) or not isinstance(ticket, str) or not ticket:
             raise LoginError(f"could not send SMS code: {_msg(resp)}")
-        self._verify_ticket = self._data(resp)["verifyCodeTicket"]
+        self._verify_ticket = ticket
 
     async def login_sms(self, mobile: str, code: str) -> None:
         """Complete sign-in with the SMS code, then mint an IoV session."""
-        ticket = getattr(self, "_verify_ticket", None)
+        ticket = self._verify_ticket
         if not ticket:
             raise LoginError("request_sms must succeed first")
         resp = await self._main_call("/iam/api/user/login/code/sec", {
@@ -300,9 +306,9 @@ class GacClient:
             "countryTelCode": self._cfg["tel"], "mobile": local_mobile(mobile, self._cfg["tel"]), "email": "",
             "protocolList": ["COMMON_PRIVACY_POLICY", "COMMON_USER_AGREEMENT"],
         })
-        if not self._ok(resp):
-            raise LoginError(f"code login failed: {_msg(resp)}")
         d = self._data(resp)
+        if not self._ok(resp) or not isinstance(d, dict) or not isinstance(d.get("token"), str) or not d["token"]:
+            raise LoginError(f"code login failed: {_msg(resp)}")
         self._session.main_token = d.get("token")
         self._session.main_refresh_token = d.get("refreshToken")
         await self._establish_iov()
@@ -432,11 +438,18 @@ class GacClient:
 
     # ---- reads -----------------------------------------------------------
     async def list_vehicles(self) -> list[Vehicle]:
+        """Vehicles bound to or shared with the account; a failed query raises instead of returning none."""
         resp = await self._main_call("/icv/api/my-vehicle/list/sec", {},
                                      authorization=self._session.main_token)
-        d = self._data(resp) or {}
-        records = (d.get("bindVehicles") or []) + (d.get("authorizedVehicles") or [])
-        return [Vehicle.from_record(r) for r in records if isinstance(r, dict)]
+        d = self._data(resp)
+        if not self._ok(resp) or not isinstance(d, dict):
+            safe_code = _safe_result_code(resp.get("code") if isinstance(resp, dict) else None)
+            detail = f"result code {safe_code}" if safe_code is not None else "no recognized result code"
+            raise ResponseError(f"vehicle list was not accepted ({detail})")
+        records = [r for key in ("bindVehicles", "authorizedVehicles")
+                   if isinstance(d.get(key), list) for r in d[key]]
+        vehicles = [Vehicle.from_record(r) for r in records if isinstance(r, dict)]
+        return [v for v in vehicles if isinstance(v.vin, str) and v.vin.strip()]
 
     async def get_status(self, vin: str) -> VehicleStatus:
         resp = await self._iov_read(commands.CATALOG["status"].path, {"vin": vin}, sensitive={"vin": vin})
@@ -447,11 +460,19 @@ class GacClient:
         status = VehicleStatus.from_results(reports[0], online=data.get("online"), updated_ms=data.get("updateTime"))
         if status.charge_time_format is not None:
             self._charge_time_formats[vin] = status.charge_time_format
+        charging = reports[0].get("chargingAccessors")
+        if (window := vehicle.reported_window(charging[0] if isinstance(charging, list) and charging else None)):
+            self._charge_windows[vin] = window
         return status
 
     async def get_position(self, vin: str) -> dict:
         resp = await self._iov_read(commands.CATALOG["position"].path, {"vin": vin}, sensitive={"vin": vin})
-        return self._data(resp) or {}
+        data = self._data(resp)
+        if not isinstance(resp, dict) or resp.get("success") is False or not isinstance(data, dict):
+            safe_code = _safe_result_code(resp.get("code") if isinstance(resp, dict) else None)
+            detail = f"result code {safe_code}" if safe_code is not None else "no valid data"
+            raise ResponseError(f"vehicle position response was not accepted ({detail})")
+        return data
 
     async def get_control_capabilities(self, vin: str) -> dict:
         """Read the app's raw capability response without issuing a control.
@@ -469,7 +490,7 @@ class GacClient:
         # The app's generic read wrapper accepts "0" and other normal success
         # codes, without requiring the main API's success boolean. Keep async
         # command-only codes out of this metadata read and do not broaden _ok.
-        success_code = type(code) in (int, str) and str(code) in {"0", "0000", "1000", "2000", "13000"}
+        success_code = type(code) in (int, str) and str(code) in SUCCESS_RESULT_CODES
         if (not isinstance(resp, dict) or resp.get("success") is False
                 or not (success_code or (code is None and self._ok(resp)))):
             safe_code = _safe_result_code(code)
@@ -607,7 +628,27 @@ class GacClient:
         return await self.command(vin, "unlock")
 
     async def charge_now(self, vin: str, *, until_soc: bool = False) -> Any:
-        return await self._reservation(vin, vehicle.charge_now_operation(until_soc=until_soc))
+        """Allow charging whenever plugged in, keeping the last reported window for later.
+
+        Before any usable report the legacy placeholder window is sent instead.
+        """
+        window = self._charge_windows.get(vin)
+        op = (vehicle.preserved_operation(window, vehicle.MODE_FREE, until_soc=until_soc) if window
+              else vehicle.charge_now_operation(until_soc=until_soc))
+        return await self._reservation(vin, op)
+
+    async def resume_schedule(self, vin: str, *, until_soc: bool | None = None) -> Any:
+        """Return to scheduled charging with the window the car last reported.
+
+        This is not a continuous pause: the car charges inside that window. The
+        stopping rule is kept unless ``until_soc`` is given. Raises CommandError,
+        without sending, before any status read has reported a usable window.
+        """
+        window = self._charge_windows.get(vin)
+        if window is None:
+            raise CommandError("no reported charge window to resume; read the status or set a charge window")
+        return await self._reservation(vin, vehicle.preserved_operation(window, vehicle.MODE_SCHEDULED,
+                                                                        until_soc=until_soc))
 
     async def charge_pause(self, vin: str) -> Any:
         """Unavailable: scheduling a daily window is not a continuous pause."""
@@ -643,12 +684,15 @@ def command_session_id(resp: Any) -> str | None:
 
 
 def _command_result(resp: Any) -> Any:
-    """13001 "ongoing" is an accepted async command, not an error."""
+    """13001 "ongoing" is an accepted async command; the app's success codes are accepted too."""
     if isinstance(resp, dict):
         code = resp.get("code")
         if code == ERR_TOKEN_INVALID:
             raise TokenInvalidError("token invalid; refresh and reissue the command")
-        if resp.get("success") is True or code in (CODE_COMMAND_ACCEPTED, str(CODE_COMMAND_ACCEPTED), "0000"):
+        text = str(code) if type(code) in (int, str) else None
+        # An explicit success=false outweighs a generic success code, never the async acceptance code.
+        if (resp.get("success") is True or text == str(CODE_COMMAND_ACCEPTED)
+                or (text in SUCCESS_RESULT_CODES and resp.get("success") is not False)):
             return resp
         raise CommandError(f"command rejected: {_msg(resp)}", code=code)
     raise CommandError("command response must be an object with an acceptance result")

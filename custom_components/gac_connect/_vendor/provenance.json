@@ -2,8 +2,8 @@
   "format": 1,
   "source": "https://github.com/leecaochang/gac-connect",
   "upstream": "https://github.com/wattferry/gac-connect",
-  "commit": "d69655cc7ba9293f7e5d0ac33d6e503eb4351da4",
-  "version": "0.4.0b10",
+  "commit": "f5184c0188d55f7d59a3b459173f66e786853e12",
+  "version": "0.4.0b11",
   "requires_python": ">=3.11",
   "dependencies": [
     "aiohttp>=3.9",
@@ -14,26 +14,26 @@
     "cli.py"
   ],
   "sha256": {
-    "__init__.py": "1fec9d1e45b2bd7190c8288de534ca9807be969a223e11fb2f6c46329dea3aaf",
+    "__init__.py": "9284bccfa473877b143019afdd75659cfb15a5a391709dd15d1000f98808c522",
     "gac_connect/LICENSE": "57bc988e8f2b38d66b35f0bea5247f28978cd1bb83b91308a4d4a23b0b707108",
-    "gac_connect/__init__.py": "7ed5116959c4442e339e58d763e5d61de1b4118e74ca3cb2e472e1fff1adb77d",
+    "gac_connect/__init__.py": "4c73f3e3993d4f616b58b46e4c7fd89c53223dc7e94f91e13b22ca20ea5829a9",
     "gac_connect/_material.pem": "fd0f684059f51cc9df4ac60f54618ee7b7f3ae1dc0e7896d903b6729731a5e38",
     "gac_connect/_material_uk.pem": "5841e40ade597509d837fa6bf779aaf1a6b088213d802bb2e4a895fc8f67f95c",
     "gac_connect/auth.py": "c88ac6746d668f0e320ef4f4bd7eabbd24bbc73818e4f0bfe6132b3e6bb8827a",
-    "gac_connect/capabilities.py": "4ca86607ef5884429cc756c238bee73a07bb8962979066a994e91f764b926444",
-    "gac_connect/client.py": "79aaf04f5bf68a5ba83c2a4259e33ea6ad9ca895597949db96fa258fdde6b666",
-    "gac_connect/commands.py": "0f56fd3434f43a2789157f21f8246cf9cbfb830468a2e7fb720495368ab12cdc",
-    "gac_connect/const.py": "8e67dac0f5727f93a1d3620dc9033b89c31fc353106dd674de242f1ff04e6231",
+    "gac_connect/capabilities.py": "a0e1a137f301000575668ee41eb167ce123f83b4b05e53f60dfd25d5506eb328",
+    "gac_connect/client.py": "3b7e03db42f37c4ab6a329dc6126c7c80c205b1e4ec302a06eee97bdde1127c2",
+    "gac_connect/commands.py": "a7a31ae71ae978d3e56ab1dd2d532fd7ee165f677f33ec19670ef39665c0b5c6",
+    "gac_connect/const.py": "973acbad9e49fe0410e132f43a2c0be67b5c5452ef93c7881dc05e0e5483204e",
     "gac_connect/crypto.py": "0549e8c0f2d696d460cc879654c9ab22112d0247d68e2c6dc42d705b3c86d700",
     "gac_connect/errors.py": "62c4bf831f085112df395d28d40215a8c893aa9298d00801493472cbb96c8fb2",
     "gac_connect/keys.py": "9a40c026b3dd4f1865d7a53e774f21578747fb7597da44490fca27e274c58ec8",
     "gac_connect/limits.py": "08b43fb32b5bfa902952265bea6bf975976b0af0c9e675c3b6e58aba7f1b3aa3",
-    "gac_connect/models.py": "43aa469fb328d8c6fa74760d4982714ed8097aa4c8fcb426afcd500ad2e00964",
+    "gac_connect/models.py": "572c287302ddf29a0f870f5a920c2e3f57e9ac830e74f112b18c479f683033d8",
     "gac_connect/phone.py": "dc21e22b67ad4e7e027476594227aca7b91ba43c50fea527030c6d77e3dc7eec",
-    "gac_connect/push.py": "94d5856dadac5bb82c985a79a353d2a15a5955dca8e3a481176c3fbea879c1a0",
+    "gac_connect/push.py": "c5028fbd4544cc8f1b7609857a41a1af270f7d393a8edbf39c9a2991da8a0718",
     "gac_connect/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "gac_connect/session.py": "f1cf8f30cb461e0813d54718596d13af13677c3dbfa8fd0c78ba23bc066626a7",
     "gac_connect/signing.py": "57acfbbe3a704a09e9a9c2930a3269d064b91a8561948e3899e9bc28ca43873f",
-    "gac_connect/vehicle.py": "3288e97ff3c26deae640204da4056c5216d4d549fa9b7c9ed68aeef8f8c116c4"
+    "gac_connect/vehicle.py": "9085f4d0b2679a4e17e9f13000640ca3dc4988d572fc188f4e33b556f73f8708"
   }
 }
