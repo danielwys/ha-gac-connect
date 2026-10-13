@@ -362,7 +362,7 @@
     },
     "switch": {
       "charging": {
-        "name": "Scheduled charging"
+        "name": "Unrestricted charging"
       },
       "steering_heat": {
         "name": "Steering wheel heat"

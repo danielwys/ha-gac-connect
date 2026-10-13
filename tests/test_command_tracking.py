@@ -126,3 +126,20 @@ def test_front_seat_requests_confirm_independently_from_fresh_seat_reports(tmp_p
             c.commands.observe(report(0, 0, 400))
             assert c.commands.state == 'confirmed'
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('command', ['charge-resume', 'charge-window'])
+@pytest.mark.parametrize('mode,confirmed', [(1, True), (2, True), (0, False)])
+def test_resume_and_window_requests_confirm_with_once_or_repeating_reports(tmp_path, command, mode, confirmed):
+    from custom_components.gac_connect.charging import window_target
+
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.data = decode_status({'chargingAccessors': [{'chargingMode': 0}]}, updated_ms=100)
+            expected = window_target('23:00', '05:00', 0, False) if command == 'charge-window' else None
+            await async_send(c, command, AsyncMock(return_value=ACCEPTED)(), expected=expected)
+            c.commands.observe(decode_status({'chargingAccessors': [{
+                'chargingMode': mode, 'dailyReservationStartTime': 82800000, 'dailyReservationStopTime': 18000000,
+                'weeklyReservation': 0, 'chargingEndType': 0}]}, updated_ms=200))
+            assert c.commands.state == ('confirmed' if confirmed else 'pending')
+    asyncio.run(run())

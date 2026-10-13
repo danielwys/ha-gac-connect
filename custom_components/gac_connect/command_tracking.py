@@ -28,6 +28,7 @@ TARGETS = {
     "vehicle-power-off": {"power_on": False},
     "lock": {"locked": True}, "unlock": {"locked": False},
     "charge-now": {"charging_mode": ChargingMode.FREE},
+    "charge-resume": {"charge_scheduled": True},
     **{f"{command}-{direction}": {field: value}
        for command, field in (("window", "window_open"), ("sunroof", "sunroof_open"), ("tailgate", "hatch_open"))
        for direction, value in (("open", True), ("close", False))},
@@ -206,6 +207,9 @@ class CommandTracker:
                     return doors_locked(status, model)
                 if key.startswith("seat_") and key.endswith("_ventilation_on"):
                     return ventilation_state(status, int(key.split("_")[1]))
+                if key == "charge_scheduled":   # once and repeating schedules both count
+                    mode = getattr(status, "charging_mode", None)
+                    return None if mode in (None, ChargingMode.UNKNOWN) else mode.scheduled
                 return getattr(status, key, None)
 
             if all(reading(key) == value for key, value in record.expected.items()):

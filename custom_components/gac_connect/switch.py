@@ -1,8 +1,8 @@
 """Switches: pre-conditioning, the charge gate, steering-wheel heat, ventilation, flash lights.
 
-Scheduled charging: on means unrestricted charging; off means scheduled mode.
-Turning on is supported. Turning off cannot continuously pause charging, so
-that action is disabled. Resuming takes the car a few minutes to act on.
+Unrestricted charging: on charges whenever plugged in; off returns to the
+schedule the car last reported (once or repeating), resent unchanged. Neither
+is a continuous pause. The car takes a few minutes to act on a change.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 
@@ -25,7 +24,6 @@ from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
 from ._vendor.gac_connect.push import PushResult
 
 from . import GacConfigEntry, cabin, fridge
-from .api import PAUSE_UNSUPPORTED
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .transition import GacTransitionEntity
@@ -105,24 +103,25 @@ class GacChargeSwitch(GacTransitionEntity, SwitchEntity):
         return self._requested_state if self._requested_state is not None else self._reported_state()
 
     def _reported_state(self) -> bool | None:
-        if self.status is None or self.status.charging_mode not in (ChargingMode.FREE, ChargingMode.SCHEDULED):
+        mode = self.status.charging_mode if self.status is not None else None
+        if mode not in (ChargingMode.FREE, ChargingMode.SCHEDULED, ChargingMode.LOOP):
             return None
         # Off means the car uses a schedule, not that charging is continuously paused.
-        return self.status.charging_mode is ChargingMode.FREE
+        return mode is ChargingMode.FREE
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "note": "On enables unrestricted charging; off indicates scheduled mode.",
-            "off_action_supported": False,
-            "off_action_reason": PAUSE_UNSUPPORTED,
+            "note": "On charges whenever plugged in; off returns to the car's last reported schedule. "
+                    "Neither pauses charging.",
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._run_transition(True, "charge-now", lambda: self.coordinator.client.charge_now(self.coordinator.vin))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        raise ServiceValidationError(PAUSE_UNSUPPORTED)
+        await self._run_transition(False, "charge-resume",
+                                   lambda: self.coordinator.client.resume_schedule(self.coordinator.vin))
 
 
 class GacCommandSwitch(GacEntity, SwitchEntity):

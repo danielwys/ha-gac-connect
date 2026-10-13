@@ -51,8 +51,9 @@ def control(kind, target):
         action = entity.async_lock if target else entity.async_unlock
     elif kind == "charge":
         coordinator.client.charge_now = AsyncMock(return_value=ACCEPTED)
+        coordinator.client.resume_schedule = AsyncMock(return_value=ACCEPTED)
         entity = GacChargeSwitch(coordinator)
-        action = entity.async_turn_on
+        action = entity.async_turn_on if target else entity.async_turn_off
     else:
         entity = GacCoverEntity(coordinator, next(d for d in COVERS if d.key == kind))
         action = entity.async_close_cover if target else entity.async_open_cover
@@ -62,7 +63,7 @@ def control(kind, target):
 
 @pytest.mark.parametrize("kind,target", [
     (kind, target) for kind in ("lock", "windows", "sunroof", "tailgate") for target in (False, True)
-] + [("charge", True)])
+] + [("charge", True), ("charge", False)])
 def test_control_holds_transition_until_a_new_matching_report(kind, target, timers):
     coordinator, entity, action = control(kind, target)
     asyncio.run(action())
@@ -73,7 +74,9 @@ def test_control_holds_transition_until_a_new_matching_report(kind, target, time
         sensor = GacBinaryEntity(coordinator, next(d for d in BINARY_SENSORS if d.key == "locked"))
         assert sensor.is_on is target  # Last observed state, not a fabricated command result.
     elif kind == "charge":
-        assert entity.is_on is True
+        assert entity.is_on is target
+        sent = coordinator.client.charge_now if target else coordinator.client.resume_schedule
+        sent.assert_awaited_once_with("TESTVIN")
     else:
         assert entity.state == ("closing" if target else "opening")
     # An auto-detect notification of the existing report is not confirmation.

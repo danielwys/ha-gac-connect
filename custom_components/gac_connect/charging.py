@@ -13,11 +13,14 @@ def reported_days(mask: int | None) -> str:
     return ", ".join(day for index, day in enumerate(DAYS.values()) if mask & (1 << index))
 
 
+SCHEDULE_TYPES = {ChargingMode.FREE: "Immediately", ChargingMode.SCHEDULED: "Once", ChargingMode.LOOP: "Repeating"}
+
+
 def schedule_mode(status) -> str:
     if status is None:
         return "not_reported"
-    return {ChargingMode.FREE: "unrestricted", ChargingMode.SCHEDULED: "scheduled"}.get(
-        status.charging_mode, "not_reported")
+    return {ChargingMode.FREE: "unrestricted", ChargingMode.SCHEDULED: "scheduled",
+            ChargingMode.LOOP: "scheduled"}.get(status.charging_mode, "not_reported")
 
 
 def schedule_attributes(status) -> dict:
@@ -25,6 +28,7 @@ def schedule_attributes(status) -> dict:
         "reported_start": status.charge_window_start if status else None,
         "reported_stop": status.charge_window_stop if status else None,
         "reported_days": reported_days(status.charge_weekly if status else None),
+        "reported_schedule_type": SCHEDULE_TYPES.get(getattr(status, "charging_mode", None), "Not reported"),
         "reported_clock_verified": False,
         "reported_clock_consistent": getattr(status, "charge_clock_consistent", None),
         "reported_time_format": getattr(status, "charge_time_format", None),
@@ -37,6 +41,8 @@ def schedule_summary(coordinator) -> str:
     data = coordinator.data
     mode = {"unrestricted": "Unrestricted charging", "scheduled": "Scheduled charging",
             "not_reported": "Not reported"}[schedule_mode(data)]
+    if schedule_mode(data) == "scheduled":
+        mode += f" ({schedule_attributes(data)['reported_schedule_type'].lower()})"
     fields = schedule_attributes(data)
     age = coordinator.report_age
     age_text = "Not reported" if age is None else "Clock ahead" if age < -60 else f"{max(0, int(age // 60))} minutes"
@@ -61,5 +67,5 @@ def schedule_summary(coordinator) -> str:
 
 def window_target(start: str, stop: str, weekly: int, until_soc: bool) -> dict:
     """The reported fields required to confirm a requested window."""
-    return {"charging_mode": ChargingMode.SCHEDULED, "charge_window_start": start,
+    return {"charge_scheduled": True, "charge_window_start": start,
             "charge_window_stop": stop, "charge_weekly": weekly, "charge_end_type": int(until_soc)}

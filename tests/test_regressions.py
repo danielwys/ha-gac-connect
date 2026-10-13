@@ -317,6 +317,33 @@ def test_unknown_charge_mode_remains_unknown():
     assert GacChargeSwitch(coord(VehicleStatus(charging_mode=ChargingMode.UNKNOWN))).is_on is None
 
 
+@pytest.mark.parametrize("mode,expected", [(ChargingMode.FREE, True), (ChargingMode.SCHEDULED, False),
+                                           (ChargingMode.LOOP, False), (None, None)])
+def test_repeating_schedules_show_as_scheduled(mode, expected):
+    from custom_components.gac_connect.charging import schedule_attributes, schedule_mode
+
+    status = VehicleStatus(charging_mode=mode)
+    assert GacChargeSwitch(coord(status)).is_on is expected
+    assert schedule_mode(status) == {True: "unrestricted", False: "scheduled", None: "not_reported"}[expected]
+    assert schedule_attributes(status)["reported_schedule_type"] == {
+        ChargingMode.FREE: "Immediately", ChargingMode.SCHEDULED: "Once", ChargingMode.LOOP: "Repeating",
+        None: "Not reported"}[mode]
+
+
+def test_switch_off_without_a_reported_window_surfaces_the_library_refusal():
+    from homeassistant.exceptions import HomeAssistantError
+
+    c = coord(VehicleStatus(charging_mode=ChargingMode.FREE))
+    c.client._reservation = AsyncMock(return_value=ACCEPTED)
+    entity = GacChargeSwitch(c)
+    entity.async_write_ha_state = Mock()
+    with patch("custom_components.gac_connect.transition.async_call_later", Mock(return_value=Mock())):
+        with pytest.raises(HomeAssistantError, match="no reported charge window"):
+            asyncio.run(entity.async_turn_off())
+    c.client._reservation.assert_not_awaited()
+    assert entity._requested_state is None and entity.is_on is True
+
+
 @pytest.mark.parametrize(
     "group,attr",
     [
@@ -770,7 +797,7 @@ def service_registry(c):
     return registered
 
 
-@pytest.mark.parametrize("surface", ["button", "switch", "service", "client"])
+@pytest.mark.parametrize("surface", ["button", "service", "client"])
 def test_pause_is_blocked_at_every_entry_point(surface):
     from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
     from homeassistant.exceptions import ServiceValidationError
@@ -781,8 +808,6 @@ def test_pause_is_blocked_at_every_entry_point(surface):
     if surface == "button":
         d = next(d for d in BUTTONS if d.key == "charge_pause")
         action = GacButtonEntity(c, d).async_press()
-    elif surface == "switch":
-        action = GacChargeSwitch(c).async_turn_off()
     elif surface == "service":
         action = service_registry(c)["charge_pause"][0](SimpleNamespace(data={}))
     else:
