@@ -88,11 +88,9 @@
           "picture": "Car picture on the map (optional)",
           "quiet_start": "Quiet hours start (HH:MM, optional)",
           "quiet_end": "Quiet hours end (HH:MM, optional)",
-          "ac_minutes": "A/C run time (minutes)",
-          "seat_fans_off_when_locked": "Turn off seat fans after locking"
+          "ac_minutes": "A/C run time (minutes)"
         },
         "data_description": {
-          "seat_fans_off_when_locked": "When the car has been locked for 3 minutes and a front seat fan is still on Low, Medium or High, turn it off, then set it back the next time the car is unlocked. Seats on Auto stop by themselves and are left alone. Locking and unlocking are seen when the car is polled, so this can lag by up to the poll interval, and a restart forgets the levels to set back.",
           "profile": "Switch profiles here. Leaving the Aion UT preset clears its preset exclusions; Auto detect then uses reports to identify equipment, including variants.",
           "enable_entities": "Show these entities even without detection evidence. Omit choices and the separate fridge and location settings still take priority. Remote unlocking and vehicle shutdown require their separate Allow settings. This does not prove a command is supported.",
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",

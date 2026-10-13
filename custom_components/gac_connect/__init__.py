@@ -18,13 +18,12 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .cabin import controller as cabin_controller
 from .capabilities import store_key as capabilities_store_key
-from .const import CONF_REGION, CONF_SEAT_FANS_OFF_WHEN_LOCKED, CONF_VIN, DOMAIN, PLATFORMS
+from .const import CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS
 from .coordinator import GacCoordinator
 from .session_store import ConfigEntryStore
 from .entity_filter import apply_registry_choices
 from .fridge import FridgeController, controls_enabled, remove_entities, store_key
 from .helpers import async_build_client
-from .seat_fans import SeatFanGuard
 from .statistics import async_setup_cleanup
 
 type GacConfigEntry = ConfigEntry[GacRuntime]
@@ -64,8 +63,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     entry.runtime_data = GacRuntime(client=client, coordinator=coordinator, options=dict(entry.options))
     apply_registry_choices(hass, entry)
     cabin_controller(coordinator).async_setup(entry)
-    if entry.options.get(CONF_SEAT_FANS_OFF_WHEN_LOCKED) is True:
-        SeatFanGuard(hass, entry, coordinator).async_setup()
     entry.runtime_data.fridge = FridgeController(hass, entry, coordinator)
     await entry.runtime_data.fridge.async_setup(entry)
     coordinator.start_push()
