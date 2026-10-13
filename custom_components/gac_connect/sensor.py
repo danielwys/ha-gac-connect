@@ -39,6 +39,7 @@ from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .command_tracking import STATES as COMMAND_STATES
 from .charging import schedule_attributes, schedule_mode
+from .location import shown_position
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -67,10 +68,10 @@ class GacSensor(SensorEntityDescription):
     value: Callable[[VehicleStatus], str | float | int | datetime | None]
 
 
-def gps_coordinates(status: VehicleStatus) -> str | None:
-    if status.latitude is None or status.longitude is None:
+def gps_coordinates(latitude: float | None, longitude: float | None) -> str | None:
+    if latitude is None or longitude is None:
         return None
-    return f"{status.latitude:.6f}, {status.longitude:.6f}"
+    return f"{latitude:.6f}, {longitude:.6f}"
 
 
 SENSORS: tuple[GacSensor, ...] = (
@@ -92,8 +93,9 @@ SENSORS: tuple[GacSensor, ...] = (
     GacSensor(key="outside_temp", translation_key="outside_temp", device_class=SensorDeviceClass.TEMPERATURE,
               native_unit_of_measurement=UnitOfTemperature.CELSIUS,
               state_class=SensorStateClass.MEASUREMENT, value=lambda s: getattr(s, "outside_temp_c", None)),
+    # The entity applies the parked/moving tracking choices to the position.
     GacSensor(key="gps_coordinates", translation_key="gps_coordinates", icon="mdi:map-marker",
-              entity_category=None, value=gps_coordinates),
+              entity_category=None, value=lambda s: gps_coordinates(s.latitude, s.longitude)),
     GacSensor(key="ac_fan_strength", translation_key="ac_fan_strength", icon="mdi:fan",
               entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "ac_fan_strength", None)),
     GacSensor(key="aux_voltage", translation_key="aux_voltage", device_class=SensorDeviceClass.VOLTAGE,
@@ -187,15 +189,21 @@ class GacSensorEntity(GacEntity, SensorEntity):
     def native_value(self):
         if self.status is None:
             return None
+        if self.entity_description.key == "gps_coordinates":
+            return gps_coordinates(*self._position)
         return self.entity_description.value(self.status)
+
+    @property
+    def _position(self) -> tuple[float | None, float | None]:
+        return shown_position(self.status, self.coordinator.config_entry.options)
 
     @property
     def extra_state_attributes(self):
         if self.entity_description.key == "charge_schedule":
             return schedule_attributes(self.status)
         if self.entity_description.key == "gps_coordinates":
-            return {"latitude": self.status.latitude if self.status else None,
-                    "longitude": self.status.longitude if self.status else None}
+            latitude, longitude = self._position
+            return {"latitude": latitude, "longitude": longitude}
         return None
 
 

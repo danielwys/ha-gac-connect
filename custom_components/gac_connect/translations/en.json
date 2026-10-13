@@ -79,7 +79,8 @@
           "enable_entities": "Always show (Auto detect only)",
           "allow_plaintext_push": "Allow unencrypted push connections (less secure)",
           "scan_interval": "Poll interval (seconds)",
-          "enable_tracker": "Enable location tracking",
+          "track_parked": "Enable location tracking when parked",
+          "track_moving": "Enable location tracking when moving",
           "enable_fridge": "Fridge / warmer box controls",
           "experimental_pinless_unlock": "Allow remote unlocking",
           "allow_vehicle_shutdown": "Allow remote vehicle shutdown",
@@ -100,7 +101,8 @@
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command; the Vehicle power sensor remains available when it is off.",
           "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials.",
-          "enable_tracker": "Show the Home/Away location tracker and a separate GPS coordinates sensor. Turning this off hides both; coordinates remain redacted in downloaded diagnostics."
+          "track_parked": "Show the car's location while it is switched off. With either location setting on, the Home/Away location tracker and a GPS coordinates sensor are added; with both off, neither is shown. Coordinates remain redacted in downloaded diagnostics.",
+          "track_moving": "Show the car's location while it is switched on. The car reports no speed or gear, so switched on counts as moving, even when stationary. While the car is in a state you do not track, both location entities show unknown and no position is recorded."
         }
       },
       "init": {

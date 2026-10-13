@@ -36,6 +36,7 @@ from homeassistant.helpers.network import get_url
 
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
+from .location import location_enabled, tracking_choices
 from .session_store import ConfigEntryStore
 from .profiles import profile_for
 from .entity_filter import OMIT_OPTIONS, UT_OMISSIONS, is_aion_ut, model_omissions
@@ -45,6 +46,8 @@ from .const import (
     CONF_ENABLE_FRIDGE,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
+    CONF_TRACK_MOVING,
+    CONF_TRACK_PARKED,
     CONF_ALLOW_VEHICLE_SHUTDOWN,
     CONF_SEAT_FANS_OFF_WHEN_LOCKED,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK,
@@ -59,7 +62,6 @@ from .const import (
     CONF_SESSION,
     CONF_VIN,
     DEFAULT_ENABLE_FRIDGE,
-    DEFAULT_ENABLE_TRACKER,
     DEFAULT_AC_MINUTES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -468,10 +470,12 @@ class GacOptionsFlow(OptionsFlow):
                 # Persist through HA's normal update API (including its reload
                 # listener), without finishing and closing this options flow.
                 self.hass.config_entries.async_update_entry(
-                    self.config_entry, options={**user_input, **quiet, CONF_PICTURE: picture}
+                    self.config_entry, options={**user_input, **quiet, CONF_PICTURE: picture,
+                                                CONF_ENABLE_TRACKER: location_enabled(user_input)}
                 )
                 return await self.async_step_init()
         opts = {**self.config_entry.options, **(user_input or {})}
+        track_parked, track_moving = tracking_choices(opts)
         forced = model_omissions(self.config_entry)
         omit_options = {key: label for key, label in OMIT_OPTIONS.items() if key not in forced}
         selected_omissions = [
@@ -491,8 +495,8 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_SCAN_INTERVAL,
                          default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)):
                 vol.All(vol.Coerce(int), vol.Clamp(min=MIN_SCAN_INTERVAL)),
-            vol.Optional(CONF_ENABLE_TRACKER,
-                         default=opts.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER)): bool,
+            vol.Optional(CONF_TRACK_PARKED, default=track_parked): bool,
+            vol.Optional(CONF_TRACK_MOVING, default=track_moving): bool,
             vol.Optional(CONF_EXPERIMENTAL_PINLESS_UNLOCK,
                          default=opts.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)): bool,
             vol.Optional(CONF_ALLOW_VEHICLE_SHUTDOWN,

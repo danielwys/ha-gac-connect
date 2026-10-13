@@ -9,10 +9,11 @@ from homeassistant.helpers.storage import Store
 
 from .api import Capabilities, Support, doors_locked
 from .entity_filter import LOCATION_ENTITIES
+from .location import location_enabled
 from .const import (
-    CONF_ENABLE_ENTITIES, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER, CONF_MODEL,
+    CONF_ENABLE_ENTITIES, CONF_ENABLE_FRIDGE, CONF_MODEL,
     CONF_ALLOW_VEHICLE_SHUTDOWN,
-    CONF_OMIT_ENTITIES, CONF_REGION, CONF_VIN, DEFAULT_ENABLE_TRACKER, DOMAIN,
+    CONF_OMIT_ENTITIES, CONF_REGION, CONF_VIN, DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ class CapabilityManager:
     def includes(self, entity_key: str) -> bool:
         if entity_key == "button:vehicle_power_off" and self.entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
             return False
-        if entity_key in LOCATION_ENTITIES and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+        if entity_key in LOCATION_ENTITIES and not location_enabled(self.entry.options):
             return False
         if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
             return False
@@ -142,7 +143,7 @@ class CapabilityManager:
             return "Hidden: remote vehicle shutdown is disabled in Vehicle settings."
         if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
             return "Hidden by your Omit choice."
-        if entity_key in LOCATION_ENTITIES and not self.entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+        if entity_key in LOCATION_ENTITIES and not location_enabled(self.entry.options):
             return "Hidden: location tracking is turned off."
         if entity_key in FRIDGE_ENTITIES and self.entry.options.get(CONF_ENABLE_FRIDGE) is False:
             return "Hidden: fridge controls are turned off."

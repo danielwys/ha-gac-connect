@@ -8,9 +8,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_ENABLE_TRACKER, CONF_OMIT_ENTITIES, CONF_VIN,
-    DEFAULT_ENABLE_TRACKER, DOMAIN, PROFILE_AUTO, PROFILE_UT,
+    CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_OMIT_ENTITIES, CONF_VIN,
+    DOMAIN, PROFILE_AUTO, PROFILE_UT,
 )
+from .location import location_enabled
 from .profiles import profile_for
 
 # Option IDs use the platform and existing unique-id suffix so an option can be
@@ -90,7 +91,7 @@ def model_omissions(entry: ConfigEntry) -> set[str]:
 
 def effective_omissions(entry: ConfigEntry) -> set[str]:
     omitted = set(entry.options.get(CONF_OMIT_ENTITIES, ())) | model_omissions(entry)
-    if not entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+    if not location_enabled(entry.options):
         omitted |= LOCATION_ENTITIES
     if entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
         omitted.add("button:vehicle_power_off")

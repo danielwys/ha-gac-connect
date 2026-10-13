@@ -26,6 +26,7 @@ from test_regressions import coord
 def test_gps_sensor_keeps_the_tracker_and_exposes_coordinate_attributes():
     status = decode_status({'positionAccessors': [{'latitude': 12.3456789, 'longitude': 98.7654321}]})
     c = coord(status)
+    c.config_entry.options['enable_tracker'] = True   # an entry saved before the parked/moving split
     tracker = GacDeviceTracker(c)
     gps = GacSensorEntity(c, next(d for d in SENSORS if d.key == 'gps_coordinates'))
     assert tracker.source_type is SourceType.GPS
@@ -286,3 +287,70 @@ def test_replaced_entities_are_retired_from_the_registry():
     assert {('button', 'precondition_battery'), ('switch', 'seat_1_ventilation'),
             ('switch', 'seat_2_ventilation')} <= set(_RETIRED)
     assert not any(d.key == 'precondition_battery' for d in BUTTONS)
+
+
+def located(power):
+    return decode_status({'positionAccessors': [{'latitude': 12.5, 'longitude': 98.5}],
+                          **({'powerAccessors': [{'powerMode': power}]} if power is not None else {})})
+
+
+@pytest.mark.parametrize('parked,moving,power,shown', [
+    (True, True, 0, True), (True, True, 2, True), (True, True, None, True),
+    (True, False, 0, True), (True, False, 2, False), (True, False, None, False),
+    (False, True, 0, False), (False, True, 2, True), (False, True, None, False),
+    (False, False, 2, False),
+])
+def test_position_is_shown_only_in_the_tracked_state(parked, moving, power, shown):
+    c = coord(located(power))
+    c.config_entry.options.update(track_parked=parked, track_moving=moving)
+    tracker = GacDeviceTracker(c)
+    gps = GacSensorEntity(c, next(d for d in SENSORS if d.key == 'gps_coordinates'))
+    expected = (12.5, 98.5) if shown else (None, None)
+    assert (tracker.latitude, tracker.longitude) == expected
+    assert gps.native_value == ('12.500000, 98.500000' if shown else None)
+    assert gps.extra_state_attributes == {'latitude': expected[0], 'longitude': expected[1]}
+
+
+@pytest.mark.parametrize('options,choices', [
+    ({}, (False, False)), ({'enable_tracker': True}, (True, True)), ({'enable_tracker': False}, (False, False)),
+    ({'enable_tracker': True, 'track_parked': True, 'track_moving': False}, (True, False)),
+    ({'track_parked': False, 'track_moving': True}, (False, True)),
+])
+def test_older_entries_follow_their_single_location_setting(options, choices):
+    from custom_components.gac_connect.location import location_enabled, tracking_choices
+    assert tracking_choices(options) == choices
+    assert location_enabled(options) is any(choices)
+
+
+@pytest.mark.parametrize('parked,moving', [(True, False), (False, True), (False, False)])
+def test_entities_exist_when_either_state_is_tracked(tmp_path, parked, moving):
+    async def run():
+        options = {'profile': 'auto_detect', 'track_parked': parked, 'track_moving': moving}
+        async with vehicle(tmp_path, options=options) as (hass, entry, c):
+            added = []
+            c.data = located(0)
+            if c.capabilities:
+                c.capabilities.observe(c.data)
+            for platform in ('sensor', 'device_tracker'):
+                await importlib.import_module(f'custom_components.gac_connect.{platform}').async_setup_entry(
+                    hass, entry, lambda entities: added.extend(e.unique_id for e in entities))
+            assert ('VIN_location' in added) is ('VIN_gps_coordinates' in added) is (parked or moving)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('stored', [False, True])
+def test_settings_offer_both_choices_and_keep_the_single_setting_in_step(tmp_path, stored):
+    async def run():
+        async with vehicle(tmp_path, options={'enable_tracker': stored}) as (hass, entry, _):
+            flow = GacOptionsFlow()
+            flow.hass, flow.handler = hass, entry.entry_id
+            form = await flow.async_step_settings()
+            defaults = {key.schema: key.default() for key in form['data_schema'].schema
+                        if key.schema in ('enable_tracker', 'track_parked', 'track_moving')}
+            assert defaults == {'track_parked': stored, 'track_moving': stored}
+            await flow.async_step_settings({'track_parked': False, 'track_moving': True})
+            assert [entry.options[key] for key in ('track_parked', 'track_moving', 'enable_tracker')] == [
+                False, True, True]
+            await flow.async_step_settings({'track_parked': False, 'track_moving': False})
+            assert entry.options['enable_tracker'] is False
+    asyncio.run(run())

@@ -15,10 +15,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GacConfigEntry
-from .const import CONF_ENABLE_TRACKER, CONF_MODEL, CONF_PICTURE, DEFAULT_ENABLE_TRACKER, DOMAIN
+from .const import CONF_MODEL, CONF_PICTURE, DOMAIN
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
+from .location import location_enabled, shown_position
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ _REGISTER_LOCK = f"{DOMAIN}_pictures_lock"
 async def async_setup_entry(
     hass: HomeAssistant, entry: GacConfigEntry, add_entities: AddEntitiesCallback
 ) -> None:
-    if not entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+    if not location_enabled(entry.options):
         return
     picture = await _async_picture(hass, entry)
     add_configured_entities(entry, add_entities, "device_tracker", [GacDeviceTracker(entry.runtime_data.coordinator, picture)])
@@ -82,8 +83,8 @@ class GacDeviceTracker(GacEntity, TrackerEntity):
 
     @property
     def latitude(self) -> float | None:
-        return self.status.latitude if self.status else None
+        return shown_position(self.status, self.coordinator.config_entry.options)[0]
 
     @property
     def longitude(self) -> float | None:
-        return self.status.longitude if self.status else None
+        return shown_position(self.status, self.coordinator.config_entry.options)[1]

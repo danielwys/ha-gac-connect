@@ -1,11 +1,9 @@
 """Human-readable equipment explanations, without telemetry or identifiers."""
 from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
 from .capabilities import ENTITY_FEATURES, FRIDGE_ENTITIES
-from .const import (
-    CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_ENABLE_FRIDGE, CONF_ENABLE_TRACKER,
-    CONF_OMIT_ENTITIES, DEFAULT_ENABLE_TRACKER,
-)
+from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_ENABLE_FRIDGE, CONF_OMIT_ENTITIES
 from .entity_filter import LOCATION_ENTITIES, OMIT_OPTIONS, is_aion_ut, model_omissions
+from .location import location_enabled
 
 
 def equipment_summary(entry) -> str:
@@ -31,7 +29,7 @@ def equipment_summary(entry) -> str:
         elif key in FRIDGE_ENTITIES:
             explanation = ("Shown only when fridge readings are available." if entry.options.get(CONF_ENABLE_FRIDGE, True)
                            else "Hidden: fridge controls are turned off.")
-        elif key in LOCATION_ENTITIES and not entry.options.get(CONF_ENABLE_TRACKER, DEFAULT_ENABLE_TRACKER):
+        elif key in LOCATION_ENTITIES and not location_enabled(entry.options):
             explanation = "Hidden: location tracking is turned off."
         elif key == "button:charge_pause":
             explanation = "Unavailable: continuous charging pause is not supported."
