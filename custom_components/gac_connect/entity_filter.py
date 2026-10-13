@@ -53,7 +53,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "seat_2_ventilation": "Front passenger seat ventilation",
         "fridge": "Fridge",
     },
-    "cover": {"windows": "Windows", "sunroof": "Sunroof", "tailgate": "Tailgate"},
+    "cover": {"windows": "Windows", "sunroof": "Sunroof", "tailgate": "Boot"},
     "climate": {"climate": "Climate"},
     "lock": {"doors": "Doors"},
     "select": {"fridge_mode": "Fridge mode"},
