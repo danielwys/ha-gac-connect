@@ -31,6 +31,7 @@ PROFILE_CUSTOM: Final = "custom"
 CONF_EXPERIMENTAL_PINLESS_UNLOCK: Final = "experimental_pinless_unlock"
 CONF_ALLOW_PLAINTEXT_PUSH: Final = "allow_plaintext_push"
 CONF_ALLOW_VEHICLE_SHUTDOWN: Final = "allow_vehicle_shutdown"
+CONF_SEAT_FANS_OFF_WHEN_LOCKED: Final = "seat_fans_off_when_locked"
 VEHICLE_SHUTDOWN_COMMANDS: Final = frozenset({"vehicle-power-off", "power-off", "powerkeep-stop"})
 
 DEFAULT_SCAN_INTERVAL: Final = 300     # seconds

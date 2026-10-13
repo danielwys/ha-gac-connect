@@ -46,6 +46,7 @@ from .const import (
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
     CONF_ALLOW_VEHICLE_SHUTDOWN,
+    CONF_SEAT_FANS_OFF_WHEN_LOCKED,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK,
     CONF_MOBILE,
     CONF_MODEL,
@@ -503,6 +504,8 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_QUIET_END, default=opts.get(CONF_QUIET_END, "")): str,
             vol.Optional(CONF_AC_MINUTES, default=opts.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)):
                 vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
+            vol.Optional(CONF_SEAT_FANS_OFF_WHEN_LOCKED,
+                         default=opts.get(CONF_SEAT_FANS_OFF_WHEN_LOCKED, False)): bool,
         }
         if not is_aion_ut(self.config_entry):
             fields[vol.Optional(CONF_ENABLE_FRIDGE,
