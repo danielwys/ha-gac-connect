@@ -63,7 +63,7 @@ def scheduled(monkeypatch):
         return timer.cancel
 
     monkeypatch.setattr("custom_components.gac_connect.cabin.async_call_later", later)
-    monkeypatch.setattr("custom_components.gac_connect.switch.async_call_later", later)
+    monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later", later)
     monkeypatch.setattr("custom_components.gac_connect.transition.async_call_later", later)
     return timers
 
@@ -750,10 +750,10 @@ def test_reported_switch_expires_without_poll(scheduled):
     sw = GacCommandSwitch(c, next(d for d in SWITCHES if d.key == "lights"))
     sw.hass = Mock()
     sw.async_write_ha_state = Mock()
-    with patch("custom_components.gac_connect.switch.monotonic", return_value=100):
+    with patch("custom_components.gac_connect.requested.monotonic", return_value=100):
         asyncio.run(sw.async_turn_on())
     assert sw.is_on is True
-    with patch("custom_components.gac_connect.switch.monotonic", return_value=281):
+    with patch("custom_components.gac_connect.requested.monotonic", return_value=281):
         scheduled[-1].callback(None)
     assert sw.is_on is False
     assert sw.async_write_ha_state.call_count >= 2

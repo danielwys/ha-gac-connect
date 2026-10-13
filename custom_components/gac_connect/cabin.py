@@ -15,7 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_call_later
 
 from ._vendor.gac_connect import GacError, command_session_id
-from ._vendor.gac_connect.commands import validate_blowing_mode, validate_climate
+from ._vendor.gac_connect.commands import validate_blowing_mode, validate_climate, validate_cycling_mode
 from ._vendor.gac_connect.push import PushResult
 
 from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES, SIGNAL_COMMAND_RESULT
@@ -135,6 +135,14 @@ class CabinController:
         value = getattr(self.coordinator.data, "ac_blowing_mode", None)
         return value if type(value) is int and value > 0 else None
 
+    @property
+    def cycling_mode(self) -> int | None:
+        """Air source as reported (1 recirculate, 2 fresh air), a pending selection first."""
+        if self._req is not None and "ac_cycling_mode" in self._req.expected:
+            return self._req.expected["ac_cycling_mode"]
+        value = getattr(self.coordinator.data, "ac_cycling_mode", None)
+        return value if type(value) is int and value > 0 else None
+
     @callback
     def sync(self) -> None:
         data = self.coordinator.data
@@ -243,6 +251,24 @@ class CabinController:
                 )
             await self._command(True, blowing_mode=mode)
 
+    async def async_set_cycling_mode(self, mode: int) -> None:
+        """Select the air source while A/C runs; the request renews the timed run.
+
+        An Aion UT applies a remote air-source change only while its A/C is
+        already running, so nothing is sent (or started) while it is off.
+        """
+        try:
+            mode = validate_cycling_mode(mode)
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        async with self.lock:
+            if self.on is not True:
+                raise ServiceValidationError(
+                    "Recirculation can be changed only while the cabin A/C is running. "
+                    "Turn on Pre-conditioning first."
+                )
+            await self._command(True, cycling_mode=mode)
+
     async def async_set_temperature(
         self, target: float, *, on: bool | None = None, automatic: bool = False
     ) -> None:
@@ -261,6 +287,7 @@ class CabinController:
     async def _command(
         self, on: bool, target: float | None = None, *, temperature_only: bool = False,
         automatic: bool = False, fan_speed: int | None = None, blowing_mode: int | None = None,
+        cycling_mode: int | None = None,
     ) -> None:
         """Send one command under the shared lock; undo transport failures or cancellation."""
         previous, selection = self._req, self._selected_target
@@ -272,7 +299,8 @@ class CabinController:
                        selection_before=selection, baseline=self.coordinator.data)
         req.expected = {"ac_on": on, **({"ac_target_temp_c": setpoint} if on else {})}
         if on and not automatic:
-            for key, value in (("ac_fan_strength", fan_speed), ("ac_blowing_mode", blowing_mode)):
+            for key, value in (("ac_fan_strength", fan_speed), ("ac_blowing_mode", blowing_mode),
+                               ("ac_cycling_mode", cycling_mode)):
                 if value is not None:
                     req.expected[key] = value
                 elif previous is not None and previous.deadline > monotonic() and key in previous.expected:
@@ -294,7 +322,8 @@ class CabinController:
                 command, request = "aircon-on", client.climate_on(vin, temperature=setpoint, minutes=duration)
             elif on:
                 command, request = "aircon-manual-on", client.climate_manual_on(
-                    vin, temperature=setpoint, minutes=duration, fan_speed=fan_speed, blowing_mode=blowing_mode
+                    vin, temperature=setpoint, minutes=duration, fan_speed=fan_speed, blowing_mode=blowing_mode,
+                    cycling_mode=cycling_mode,
                 )
             else:
                 command, request = "aircon-off", client.climate_off(vin)

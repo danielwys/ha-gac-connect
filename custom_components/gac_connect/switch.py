@@ -1,4 +1,5 @@
-"""Switches: pre-conditioning, the charge gate, steering-wheel heat, ventilation, flash lights.
+"""Switches: pre-conditioning, recirculation, the charge gate, battery preconditioning, steering-wheel
+heat, ventilation, flash lights.
 
 Unrestricted charging: on charges whenever plugged in; off returns to the
 schedule the car last reported (once or repeating), resent unchanged. Neither
@@ -7,29 +8,24 @@ is a continuous pause. The car takes a few minutes to act on a change.
 
 from __future__ import annotations
 
-import asyncio
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from time import monotonic
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later
 
-from ._vendor.gac_connect import command_session_id
+from ._vendor.gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
 from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
-from ._vendor.gac_connect.push import PushResult
 
 from . import GacConfigEntry, cabin, fridge
 from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES
 from .coordinator import GacCoordinator
 from .entity import GacEntity
+from .requested import REQUEST_SECONDS, GacRequestedEntity
 from .transition import GacTransitionEntity
 from .entity_filter import add_configured_entities
-from .seats import ventilation_state
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,11 +37,10 @@ class GacSwitch(SwitchEntityDescription):
     # result events that answer this switch's commands; with none listed, results
     # can only be matched by session id, so a refusal may not clear the state
     events: tuple[str, ...] = ()
+    attributes: Callable[[VehicleStatus], dict[str, Any]] | None = None
 
 
-_LOGGER = logging.getLogger(__name__)
-
-REQUEST_SECONDS = 180  # a requested state overrides the car's report at most this long
+PRECONDITION_MODES = {0: "Off", 1: "Immediately", 2: "Once", 3: "Repeating"}
 
 
 SWITCHES: tuple[GacSwitch, ...] = (
@@ -75,18 +70,27 @@ SWITCHES: tuple[GacSwitch, ...] = (
         off_cmd="ventilate-off",
         events=("control_ventilate_mode",),
     ),
-    *(GacSwitch(
-        key=f"seat_{seat}_ventilation", translation_key=f"seat_{seat}_ventilation",
-        icon="mdi:car-seat-cooler", on_cmd=f"seat-{seat}-ventilation-on",
-        off_cmd=f"seat-{seat}-ventilation-off", state=lambda s, seat=seat: ventilation_state(s, seat),
-        # Both seats share a result event; only a matching session can identify one.
-    ) for seat in (1, 2)),
+    GacSwitch(
+        key="precondition_battery",
+        translation_key="precondition_battery",
+        icon="mdi:battery-heart-variant",
+        on_cmd="battery-precondition",
+        off_cmd="battery-precondition-off",
+        # On while the car reports any requested or scheduled preconditioning; Off cancels it.
+        state=lambda s: getattr(s, "battery_precondition_on", None),
+        events=("control_battery_pretreatment",),
+        attributes=lambda s: {
+            "reported_mode": PRECONDITION_MODES.get(getattr(s, "battery_precondition_mode", None)),
+            "reported_status": getattr(s, "battery_precondition_status", None),
+        },
+    ),
 )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_entities: AddEntitiesCallback) -> None:
     coordinator = entry.runtime_data.coordinator
-    entities: list[SwitchEntity] = [GacChargeSwitch(coordinator), GacClimateSwitch(coordinator)]
+    entities: list[SwitchEntity] = [GacChargeSwitch(coordinator), GacClimateSwitch(coordinator),
+                                    GacRecirculationSwitch(coordinator)]
     entities.extend(GacCommandSwitch(coordinator, d) for d in SWITCHES)
     add_configured_entities(entry, add_entities, "switch", entities)
     fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeSwitch(coordinator)], platform="switch")
@@ -125,32 +129,23 @@ class GacChargeSwitch(GacTransitionEntity, SwitchEntity):
                                    lambda: self.coordinator.client.resume_schedule(self.coordinator.vin))
 
 
-class GacCommandSwitch(GacEntity, SwitchEntity):
+class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
     entity_description: GacSwitch
 
     def __init__(self, coordinator: GacCoordinator, description: GacSwitch) -> None:
-        super().__init__(coordinator, description.key)
+        super().__init__(coordinator, description.key, description.events)
         self.entity_description = description
-        self._requested: bool | None = None
-        self._requested_until: float = 0.0
-        self._op_lock = asyncio.Lock()  # one command at a time per entity
-        self._result_events = description.events
-        self._init_results()
         self._attr_assumed_state = description.state is None
-        self._expire: CALLBACK_TYPE | None = None
 
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self.async_on_remove(self._cancel_expiry)
+    @property
+    def _reports_value(self) -> bool:
+        return self.entity_description.state is not None
 
-    @callback
-    def _cancel_expiry(self) -> None:
-        if self._expire is not None:
-            self._expire()
-            self._expire = None
+    def _reported(self) -> bool | None:
+        state = self.entity_description.state
+        return state(self.status) if state is not None else None
 
     def _hold_seconds(self) -> float:
-        """How long a requested state is shown before the report (or unknown) takes over."""
         if self.entity_description.state is not None:
             return REQUEST_SECONDS
         # Without telemetry, assume the run lasts the configured cabin run time, then show unknown.
@@ -160,73 +155,14 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
             minutes = DEFAULT_AC_MINUTES
         return 60 * min(max(minutes, 5), 60)
 
-    @callback
-    def _arm_expiry(self) -> None:
-        self._cancel_expiry()
-        if self._requested is not None:
-            self._expire = async_call_later(self.hass, max(0, self._requested_until - monotonic()), self._expired)
-
-    @callback
-    def _expired(self, _now) -> None:
-        self._expire = None
-        if monotonic() >= self._requested_until:
-            self._requested = None
-            self.async_write_ha_state()
-        else:
-            self._arm_expiry()
-
     @property
     def is_on(self) -> bool | None:
-        if self._requested is not None:
-            return self._requested
-        if self.entity_description.state is None or self.status is None:
-            return None
-        return self.entity_description.state(self.status)
+        return self._value
 
-    def _handle_coordinator_update(self) -> None:
-        st = self.entity_description.state
-        if self._requested is not None and st is not None:
-            confirmed = self.status is not None and st(self.status) == self._requested
-            if confirmed or monotonic() > self._requested_until:
-                self._requested = None  # the car's report is authoritative again
-                self._cancel_expiry()
-        super()._handle_coordinator_update()
-
-    def _on_command_result(self, result: PushResult) -> None:
-        if self._requested is None:
-            return
-        if result.ok is False:
-            _LOGGER.warning("car did not apply %s (result code %s: %s)", self.entity_id, result.code,
-                            result.reason or "unknown reason")
-            self._requested = None
-            self._cancel_expiry()
-            self.async_write_ha_state()
-
-    async def _run(self, on: bool, make_request, *, command: str) -> None:
-        """Show the requested state at once; undo it if the request itself fails.
-
-        Commands on one entity run one at a time (the request is only created
-        once the lock is held), and cancellation restores the previous state.
-        """
-        async with self._op_lock:
-            prev = (self._requested, self._requested_until)
-            previous_session = self._session_id
-            self._requested, self._requested_until = on, monotonic() + self._hold_seconds()
-            self._begin_command()
-            self._arm_expiry()
-            self.async_write_ha_state()
-            resp = None
-            try:
-                resp = await self._send(make_request(), command=command)
-            finally:
-                if resp is None:
-                    self._requested, self._requested_until = prev
-                    self._end_command(previous_session)
-                    self._arm_expiry()
-                    self.async_write_ha_state()
-                else:
-                    self._end_command(command_session_id(resp))
-                    self._arm_expiry()
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attributes = self.entity_description.attributes
+        return attributes(self.status) if attributes is not None and self.status is not None else None
 
     async def _set(self, on: bool) -> None:
         cmd = self.entity_description.on_cmd if on else self.entity_description.off_cmd
@@ -266,6 +202,44 @@ class GacClimateSwitch(GacEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._cabin.async_set_power(False)
+
+
+class GacRecirculationSwitch(GacEntity, SwitchEntity):
+    """Air source as reported: on recirculates, off draws fresh air (or the console's Auto, reported alike).
+
+    Changes are sent only while A/C runs (renewing the timed run); an Aion UT
+    ignores a remote air-source change otherwise.
+    """
+
+    _attr_translation_key = "recirculation"
+    _attr_icon = "mdi:autorenew"
+
+    def __init__(self, coordinator: GacCoordinator) -> None:
+        super().__init__(coordinator, "recirculation")
+        self._cabin = cabin.controller(coordinator)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._cabin.add_listener(self.async_write_ha_state))
+
+    @property
+    def is_on(self) -> bool | None:
+        mode = self._cabin.cycling_mode
+        return None if mode not in (CYCLING_RECIRCULATE, CYCLING_FRESH_AIR) else mode == CYCLING_RECIRCULATE
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"reported_cycling_mode": getattr(self.status, "ac_cycling_mode", None)}
+
+    def _handle_coordinator_update(self) -> None:
+        self._cabin.sync()
+        super()._handle_coordinator_update()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._cabin.async_set_cycling_mode(CYCLING_RECIRCULATE)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._cabin.async_set_cycling_mode(CYCLING_FRESH_AIR)
 
 
 class GacFridgeSwitch(GacEntity, SwitchEntity):

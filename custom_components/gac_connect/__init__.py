@@ -74,7 +74,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
 
 
 # unique-id suffixes of entities earlier versions created and later versions replaced
-_RETIRED: tuple[tuple[str, str], ...] = (("button", "flash_lights"),)
+_RETIRED: tuple[tuple[str, str], ...] = (
+    ("button", "flash_lights"),
+    ("button", "precondition_battery"),        # now a switch
+    ("switch", "seat_1_ventilation"), ("switch", "seat_2_ventilation"),   # now level selects
+)
 
 
 def _remove_retired_entities(hass: HomeAssistant, entry: GacConfigEntry) -> None:

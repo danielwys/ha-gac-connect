@@ -353,9 +353,6 @@
       "refresh": {
         "name": "Refresh"
       },
-      "precondition_battery": {
-        "name": "Precondition battery"
-      },
       "horn": {
         "name": "Sound horn"
       }
@@ -370,12 +367,6 @@
       "ventilation": {
         "name": "Ventilation"
       },
-      "seat_1_ventilation": {
-        "name": "Driver seat ventilation"
-      },
-      "seat_2_ventilation": {
-        "name": "Front passenger seat ventilation"
-      },
       "climate_power": {
         "name": "Pre-conditioning"
       },
@@ -384,6 +375,12 @@
       },
       "fridge": {
         "name": "Fridge"
+      },
+      "precondition_battery": {
+        "name": "Battery preconditioning"
+      },
+      "recirculation": {
+        "name": "Recirculation"
       }
     },
     "device_tracker": {
@@ -441,6 +438,24 @@
           "refrigerate": "Refrigerate",
           "heat": "Heat",
           "freeze": "Freeze"
+        }
+      },
+      "seat_1_ventilation": {
+        "name": "Driver seat ventilation",
+        "state": {
+          "off": "Off",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      },
+      "seat_2_ventilation": {
+        "name": "Front passenger seat ventilation",
+        "state": {
+          "off": "Off",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
         }
       }
     },

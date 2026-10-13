@@ -241,7 +241,7 @@ def test_entity_removal_cancels_pending_timer(timers):
 def test_reported_switches_keep_requested_state_through_stale_polls(key, field, monkeypatch):
     from custom_components.gac_connect.switch import SWITCHES, GacCommandSwitch
 
-    monkeypatch.setattr("custom_components.gac_connect.switch.async_call_later", Mock(return_value=Mock()))
+    monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later", Mock(return_value=Mock()))
     coordinator = coord(VehicleStatus(**{field: False}))
     entity = GacCommandSwitch(coordinator, next(d for d in SWITCHES if d.key == key))
     entity.hass = coordinator.hass

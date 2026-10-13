@@ -43,20 +43,23 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
     "button": {
         "vehicle_power_off": "Turn vehicle off",
         "charge_now": "Charge now", "charge_pause": "Pause charging",
-        "horn": "Sound horn", "precondition_battery": "Precondition battery",
+        "horn": "Sound horn",
     },
     "switch": {
         "charge_switch": "Unrestricted charging", "climate_power": "Pre-conditioning",
         "steering_heat": "Steering wheel heat", "lights": "Flash lights",
-        "ventilation": "Ventilation",
-        "seat_1_ventilation": "Driver seat ventilation",
-        "seat_2_ventilation": "Front passenger seat ventilation",
+        "ventilation": "Ventilation", "recirculation": "Recirculation",
+        "precondition_battery": "Battery preconditioning",
         "fridge": "Fridge",
     },
     "cover": {"windows": "Windows", "sunroof": "Sunroof", "tailgate": "Boot"},
     "climate": {"climate": "Climate"},
     "lock": {"doors": "Doors"},
-    "select": {"fridge_mode": "Fridge mode"},
+    "select": {
+        "seat_1_ventilation": "Driver seat ventilation",
+        "seat_2_ventilation": "Front passenger seat ventilation",
+        "fridge_mode": "Fridge mode",
+    },
     "number": {"fridge_temperature": "Fridge temperature"},
     "device_tracker": {"location": "Location"},
 }

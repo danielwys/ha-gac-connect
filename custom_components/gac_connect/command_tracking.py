@@ -29,6 +29,8 @@ TARGETS = {
     "lock": {"locked": True}, "unlock": {"locked": False},
     "charge-now": {"charging_mode": ChargingMode.FREE},
     "charge-resume": {"charge_scheduled": True},
+    "battery-precondition": {"battery_precondition_on": True},
+    "battery-precondition-off": {"battery_precondition_on": False},
     **{f"{command}-{direction}": {field: value}
        for command, field in (("window", "window_open"), ("sunroof", "sunroof_open"), ("tailgate", "hatch_open"))
        for direction, value in (("open", True), ("close", False))},

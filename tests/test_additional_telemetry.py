@@ -86,49 +86,57 @@ def test_unknown_seat_enable_code_is_exposed_without_inventing_smart_state():
 
 
 @pytest.mark.parametrize('seat_id', [1, 2])
-def test_seat_switches_use_separate_commands_and_correlate_only_their_session(tmp_path, seat_id):
+def test_seat_level_selects_send_levels_and_correlate_only_their_session(tmp_path, seat_id):
     from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+    from custom_components.gac_connect.select import GacSeatVentilationSelect
     from homeassistant.exceptions import HomeAssistantError
 
     async def run():
         async with vehicle(tmp_path, options={'profile': 'aion_ut'}) as (hass, _, c):
             c.data = decode_status({'seatTemperatureAccessors': [{'seat': seat_id, 'enableWind': 1, 'windStrength': 0}]})
-            sw = GacCommandSwitch(c, next(d for d in SWITCHES if d.key == f'seat_{seat_id}_ventilation'))
-            sw.hass, sw.async_write_ha_state = hass, Mock()
+            c.client.set_seat_ventilation_level = AsyncMock(return_value={'code': 13001, 'data': {'sessionId': 's1'}})
+            sel = GacSeatVentilationSelect(c, seat_id)
+            sel.hass, sel.async_write_ha_state = hass, Mock()
             try:
-                assert sw.is_on is False and sw.assumed_state is False
-                await sw.async_turn_on()
-                c.client.command.assert_awaited_once_with('VIN', f'seat-{seat_id}-ventilation-on')
-                assert sw.is_on is True
-                sw._handle_result(PushResult(False, '13101', None, {}, event='control_seat_temperature'))
-                sw._handle_result(PushResult(False, '13101', None, {}, session_id='other-seat'))
-                assert sw.is_on is True
-                sw._handle_result(PushResult(False, '13101', None, {}, session_id='s1'))
-                assert sw.is_on is False
-                c.client.command.side_effect = CommandError('rejected')
+                assert sel.current_option == 'off' and sel.options == ['off', 'low', 'medium', 'high']
+                await sel.async_select_option('medium')
+                c.client.set_seat_ventilation_level.assert_awaited_once_with('VIN', seat_id, 2)
+                assert sel.current_option == 'medium'
+                assert c.commands.records[-1].command == f'seat-{seat_id}-ventilation-on'
+                sel._handle_result(PushResult(False, '13101', None, {}, event='control_seat_temperature'))
+                sel._handle_result(PushResult(False, '13101', None, {}, session_id='other-seat'))
+                assert sel.current_option == 'medium'
+                sel._handle_result(PushResult(False, '13101', None, {}, session_id='s1'))
+                assert sel.current_option == 'off'
+                c.client.set_seat_ventilation_level.side_effect = CommandError('rejected')
                 with pytest.raises(HomeAssistantError):
-                    await sw.async_turn_on()
-                assert sw.is_on is False
-                c.client.command.side_effect = None
-                await sw.async_turn_off()
-                assert c.client.command.await_args.args == ('VIN', f'seat-{seat_id}-ventilation-off')
+                    await sel.async_select_option('high')
+                assert sel.current_option == 'off'
+                c.client.set_seat_ventilation_level.side_effect = None
+                await sel.async_select_option('high')
+                c.data = decode_status({'seatTemperatureAccessors': [{'seat': seat_id, 'enableWind': 1, 'windStrength': 3}]})
+                sel._handle_coordinator_update()
+                assert sel._requested is None and sel.current_option == 'high'   # confirmed by the report
+                await sel.async_select_option('off')
+                assert c.client.set_seat_ventilation_level.await_args.args == ('VIN', seat_id, 0)
+                assert c.commands.records[-1].command == f'seat-{seat_id}-ventilation-off'
             finally:
-                sw._cancel_expiry()
+                sel._cancel_expiry()
     asyncio.run(run())
 
 
 def test_seat_controls_require_manual_or_successful_command_evidence_in_auto_profile(tmp_path):
     async def run():
-        async with vehicle(tmp_path, options={'enable_entities': ['switch:seat_1_ventilation']}) as (_, _, c):
+        async with vehicle(tmp_path, options={'enable_entities': ['select:seat_1_ventilation']}) as (_, _, c):
             c.data = decode_status({'seatTemperatureAccessors': [
                 {'seat': 1, 'enableWind': 0}, {'seat': 2, 'enableWind': 0},
             ]})
             c.capabilities.observe(c.data)
-            assert c.capabilities.includes('switch:seat_1_ventilation')
-            assert not c.capabilities.includes('switch:seat_2_ventilation')
+            assert c.capabilities.includes('select:seat_1_ventilation')
+            assert not c.capabilities.includes('select:seat_2_ventilation')
             c.capabilities.confirm_command('seat-2-ventilation-on')
-            assert c.capabilities.includes('switch:seat_2_ventilation')
-            assert all(not d.key.startswith(('seat_3_', 'seat_4_')) for d in SWITCHES)
+            assert c.capabilities.includes('select:seat_2_ventilation')
+            assert all(not d.key.startswith('seat_') for d in SWITCHES)
             c.client.command.assert_not_awaited()
     asyncio.run(run())
 
@@ -191,7 +199,7 @@ def test_ventilation_without_telemetry_returns_to_unknown_after_the_run_time(mon
     from test_regressions import ACCEPTED, coord
 
     timers = []
-    monkeypatch.setattr("custom_components.gac_connect.switch.async_call_later",
+    monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later",
                         lambda hass, delay, action: timers.append((delay, action)) or Mock())
     c = coord(None)
     if minutes is not None:
@@ -203,6 +211,78 @@ def test_ventilation_without_telemetry_returns_to_unknown_after_the_run_time(mon
     assert sw.assumed_state is True and sw.is_on is True
     delay, expire = timers[-1]
     assert expected - 5 <= delay <= expected
-    monkeypatch.setattr("custom_components.gac_connect.switch.monotonic", lambda: float("inf"))
+    monkeypatch.setattr("custom_components.gac_connect.requested.monotonic", lambda: float("inf"))
     expire(None)
     assert sw.is_on is None
+
+
+def _air(cycling, running, updated):
+    return decode_status({'airConditionAccessors': [{'cyclingMode': cycling, 'windStrength': 3 if running else 0,
+                                                     'enableAirCompressor': int(running), 'temperature': 23}]},
+                         updated_ms=updated)
+
+
+def test_recirculation_while_ac_runs_is_sent_at_once_through_the_shared_cabin_queue(tmp_path):
+    from custom_components.gac_connect import cabin
+    from custom_components.gac_connect.switch import GacRecirculationSwitch
+
+    async def run():
+        async with vehicle(tmp_path) as (_, entry, c):
+            c.client.climate_manual_on = AsyncMock(return_value={'code': 13001, 'data': {'sessionId': 'r1'}})
+            c.data = _air(1, True, 1)
+            cabin.controller(c).async_setup(entry)
+            sw = GacRecirculationSwitch(c)
+            sw.async_write_ha_state = Mock()
+            assert sw.is_on is True and sw.extra_state_attributes == {'reported_cycling_mode': 1}
+            await sw.async_turn_off()
+            kwargs = c.client.climate_manual_on.await_args.kwargs
+            assert kwargs['cycling_mode'] == 2 and kwargs['temperature'] == 23 and kwargs['fan_speed'] is None
+            assert sw.is_on is False                       # the pending selection shows at once
+            c.data = _air(2, True, 2)
+            cabin.controller(c).sync()
+            assert sw.is_on is False and cabin.controller(c)._req is None   # confirmed by the report
+    asyncio.run(run())
+
+
+def test_recirculation_shows_the_report_and_is_refused_while_ac_is_off(tmp_path):
+    from homeassistant.exceptions import ServiceValidationError
+
+    from custom_components.gac_connect import cabin
+    from custom_components.gac_connect.switch import GacClimateSwitch, GacRecirculationSwitch
+
+    async def run():
+        async with vehicle(tmp_path) as (_, entry, c):
+            c.client.climate_manual_on = AsyncMock(return_value={'code': 13001, 'data': {'sessionId': 'r1'}})
+            c.data = _air(1, False, 1)
+            cabin.controller(c).async_setup(entry)
+            recirculation, climate = GacRecirculationSwitch(c), GacClimateSwitch(c)
+            assert recirculation.is_on is True and climate.is_on is False   # the car's report, A/C off
+            for action in (recirculation.async_turn_off, recirculation.async_turn_on):
+                with pytest.raises(ServiceValidationError, match='only while the cabin A/C is running'):
+                    await action()
+            c.client.climate_manual_on.assert_not_awaited()
+            assert climate.is_on is False
+            c.data = _air(2, False, 2)                       # a console change shows while A/C is off
+            cabin.controller(c).sync()
+            assert recirculation.is_on is False
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('mode,on,name', [(0, False, 'Off'), (1, True, 'Immediately'), (3, True, 'Repeating')])
+def test_battery_preconditioning_switch_follows_the_reported_mode(mode, on, name):
+    sw = GacCommandSwitch(coord(decode_status({'batteryPretreatmentAccessors': [
+        {'batteryPretreatmentMode': mode, 'batteryPretreatmentStatus': -1}]})),
+        next(d for d in SWITCHES if d.key == 'precondition_battery'))
+    assert sw.is_on is on and sw.assumed_state is False
+    assert sw.extra_state_attributes == {'reported_mode': name, 'reported_status': None}
+    assert (sw.entity_description.on_cmd, sw.entity_description.off_cmd) == (
+        'battery-precondition', 'battery-precondition-off')
+
+
+def test_replaced_entities_are_retired_from_the_registry():
+    from custom_components.gac_connect import _RETIRED
+    from custom_components.gac_connect.button import BUTTONS
+
+    assert {('button', 'precondition_battery'), ('switch', 'seat_1_ventilation'),
+            ('switch', 'seat_2_ventilation')} <= set(_RETIRED)
+    assert not any(d.key == 'precondition_battery' for d in BUTTONS)

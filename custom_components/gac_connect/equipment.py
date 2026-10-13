@@ -40,7 +40,8 @@ def equipment_summary(entry) -> str:
         rows.append(f"- **{label}** — {explanation}")
     if manager is None:
         rows.insert(0, "Auto detect evidence is available only while that profile is loaded.\n")
-    rows.append("\nDriver and front passenger seat ventilation have separate on/off switches. "
+    rows.append("\nDriver and front passenger seat ventilation each have a level select (off, low, medium, high); "
+                "the console's Smart mode is not reported, and choosing a level replaces it. "
                 "Vehicle power shows on/off from the reported power mode, independently of Online and A/C. "
                 "Turn vehicle off sends the app's shutdown request; remote power-on is not implemented. "
                 "Seat status, A/C auto/compressor and anti-theft entities show the vehicle's report. "
@@ -48,6 +49,9 @@ def equipment_summary(entry) -> str:
                 "Console-only speeds 8–10 remain visible in Cabin fan strength. "
                 "A speed selection starts or renews the timed A/C run at the selected temperature. "
                 "Climate airflow offers cabin, cabin + feet, feet and feet + windscreen when Vehicle power is On. "
+                "Recirculation shows the reported air source (on recirculates, off draws fresh air; the console's "
+                "Auto reports as fresh air) and can be changed only while A/C runs. "
+                "Battery preconditioning is on while the car reports a requested or scheduled run; off cancels it. "
                 "Windscreen-only was rejected by the cloud; all-outlets is not verified remotely. "
                 "Raw seat enableWind is available for comparing console On and Smart modes. "
                 "The Climate heating/cooling presets use the app's automatic A/C temperature extremes. "
