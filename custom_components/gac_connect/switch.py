@@ -24,6 +24,7 @@ from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
 from ._vendor.gac_connect.push import PushResult
 
 from . import GacConfigEntry, cabin, fridge
+from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .transition import GacTransitionEntity
@@ -148,10 +149,21 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
             self._expire()
             self._expire = None
 
+    def _hold_seconds(self) -> float:
+        """How long a requested state is shown before the report (or unknown) takes over."""
+        if self.entity_description.state is not None:
+            return REQUEST_SECONDS
+        # Without telemetry, assume the run lasts the configured cabin run time, then show unknown.
+        try:
+            minutes = int(self.coordinator.config_entry.options.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES))
+        except (TypeError, ValueError):
+            minutes = DEFAULT_AC_MINUTES
+        return 60 * min(max(minutes, 5), 60)
+
     @callback
     def _arm_expiry(self) -> None:
         self._cancel_expiry()
-        if self._requested is not None and self.entity_description.state is not None:
+        if self._requested is not None:
             self._expire = async_call_later(self.hass, max(0, self._requested_until - monotonic()), self._expired)
 
     @callback
@@ -198,7 +210,7 @@ class GacCommandSwitch(GacEntity, SwitchEntity):
         async with self._op_lock:
             prev = (self._requested, self._requested_until)
             previous_session = self._session_id
-            self._requested, self._requested_until = on, monotonic() + REQUEST_SECONDS
+            self._requested, self._requested_until = on, monotonic() + self._hold_seconds()
             self._begin_command()
             self._arm_expiry()
             self.async_write_ha_state()

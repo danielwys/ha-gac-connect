@@ -180,3 +180,29 @@ def test_older_status_does_not_remove_climate_or_crash_the_charging_panel(tmp_pa
             assert result['type'] == 'menu'
             assert '22:00' in result['description_placeholders']['schedule']
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("minutes,expected", [(None, 1800), (10, 600), ("bad", 1800), (99, 3600)])
+def test_ventilation_without_telemetry_returns_to_unknown_after_the_run_time(monkeypatch, minutes, expected):
+    from unittest.mock import AsyncMock, Mock
+
+    from custom_components.gac_connect.const import CONF_AC_MINUTES
+    from custom_components.gac_connect.switch import SWITCHES, GacCommandSwitch
+    from test_regressions import ACCEPTED, coord
+
+    timers = []
+    monkeypatch.setattr("custom_components.gac_connect.switch.async_call_later",
+                        lambda hass, delay, action: timers.append((delay, action)) or Mock())
+    c = coord(None)
+    if minutes is not None:
+        c.config_entry.options[CONF_AC_MINUTES] = minutes
+    c.client.command = AsyncMock(return_value=ACCEPTED)
+    sw = GacCommandSwitch(c, next(d for d in SWITCHES if d.key == "ventilation"))
+    sw.hass, sw.async_write_ha_state = Mock(), Mock()
+    asyncio.run(sw.async_turn_on())
+    assert sw.assumed_state is True and sw.is_on is True
+    delay, expire = timers[-1]
+    assert expected - 5 <= delay <= expected
+    monkeypatch.setattr("custom_components.gac_connect.switch.monotonic", lambda: float("inf"))
+    expire(None)
+    assert sw.is_on is None
