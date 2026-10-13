@@ -67,3 +67,22 @@ def test_setup_saves_unlock_choice_for_every_profile(tmp_path, profile, allow_un
             assert result["options"]["omit_entities"] == []
 
     asyncio.run(run())
+
+
+def test_vehicle_choice_reuses_the_list_it_showed(tmp_path):
+    async def run():
+        flow = GacConfigFlow()
+        flow.hass = HomeAssistant(str(tmp_path))
+        flow.context = {"source": "user"}
+        vehicles = [SimpleNamespace(vin="VIN1", model="Aion UT", plate=None),
+                    SimpleNamespace(vin="VIN2", model="Aion V", plate="P2")]
+        flow._client = SimpleNamespace(list_vehicles=AsyncMock(return_value=vehicles))
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = Mock()
+        flow.async_step_profile = AsyncMock(return_value={"type": "form", "step_id": "profile"})
+        shown = await flow.async_step_vehicle()
+        assert shown["step_id"] == "vehicle"
+        chosen = await flow.async_step_vehicle({"vin": "VIN2"})
+        assert chosen["step_id"] == "profile" and flow._vehicle is vehicles[1]
+        flow._client.list_vehicles.assert_awaited_once()
+    asyncio.run(run())

@@ -95,6 +95,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._mobile: str | None = None
         self._region: str = "AU"
         self._vehicle: Vehicle | None = None
+        self._vehicles: list[Vehicle] | None = None
         self._allow_unlock = False
         self._allow_vehicle_shutdown = False
         self._view_registered = False
@@ -207,12 +208,14 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # ---- step 4: pick the vehicle ---------------------------------------
     async def async_step_vehicle(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        try:
-            vehicles = await self._client.list_vehicles()
-        except RateLimitedError:
-            return self.async_abort(reason="rate_limited")
-        except (GacError, aiohttp.ClientError, TimeoutError):
-            return self.async_abort(reason="cannot_connect")
+        if user_input is None or self._vehicles is None:   # submitting the form reuses the list just shown
+            try:
+                self._vehicles = await self._client.list_vehicles()
+            except RateLimitedError:
+                return self.async_abort(reason="rate_limited")
+            except (GacError, aiohttp.ClientError, TimeoutError):
+                return self.async_abort(reason="cannot_connect")
+        vehicles = self._vehicles
         if not vehicles:
             return self.async_abort(reason="no_vehicles")
         by_vin = {v.vin: v for v in vehicles}

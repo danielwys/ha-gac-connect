@@ -100,7 +100,7 @@ SENSORS: tuple[GacSensor, ...] = (
               native_unit_of_measurement=UnitOfElectricPotential.VOLT,
               state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
               value=lambda s: s.aux_voltage),
-    GacSensor(key="charge_time", translation_key="charge_time",
+    GacSensor(key="charge_time", translation_key="charge_time", device_class=SensorDeviceClass.DURATION,
               native_unit_of_measurement=UnitOfTime.MINUTES,
               value=lambda s: s.estimated_charge_minutes),
     GacSensor(key="charge_current", translation_key="charge_current",
