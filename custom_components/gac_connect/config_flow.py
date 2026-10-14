@@ -47,6 +47,7 @@ from .location import location_enabled, tracking_choices
 from .session_store import ConfigEntryStore
 from .entity_filter import OMIT_OPTIONS
 from .const import (
+    CONF_ALLOW_CHARGER_UNLOCK,
     CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
@@ -107,6 +108,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._vehicles: list[Vehicle] | None = None
         self._allow_unlock = False
         self._allow_vehicle_shutdown = False
+        self._allow_charger_unlock = False
         self._view_registered = False
         self._http: aiohttp.ClientSession | None = None
         self._captcha_expiry = None
@@ -258,11 +260,13 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._allow_unlock = user_input.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)
             self._allow_vehicle_shutdown = user_input.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)
+            self._allow_charger_unlock = user_input.get(CONF_ALLOW_CHARGER_UNLOCK, False)
             return self._create_vehicle_entry({CONF_OMIT_ENTITIES: [], CONF_ENABLE_ENTITIES: []})
         return self.async_show_form(
             step_id="remote_controls",
             data_schema=vol.Schema({
                 vol.Required(CONF_EXPERIMENTAL_PINLESS_UNLOCK, default=self._allow_unlock): bool,
+                vol.Required(CONF_ALLOW_CHARGER_UNLOCK, default=self._allow_charger_unlock): bool,
                 vol.Required(CONF_ALLOW_VEHICLE_SHUTDOWN, default=self._allow_vehicle_shutdown): bool,
             }),
             description_placeholders={"model": self._vehicle.model or "your vehicle"},
@@ -280,6 +284,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_SESSION: self._client.session.to_dict(),
             },
             options={**options, CONF_EXPERIMENTAL_PINLESS_UNLOCK: self._allow_unlock,
+                     CONF_ALLOW_CHARGER_UNLOCK: self._allow_charger_unlock,
                      CONF_ALLOW_VEHICLE_SHUTDOWN: self._allow_vehicle_shutdown},
         )
 
@@ -483,6 +488,8 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_TRACK_MOVING, default=track_moving): bool,
             vol.Optional(CONF_EXPERIMENTAL_PINLESS_UNLOCK,
                          default=opts.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)): bool,
+            vol.Optional(CONF_ALLOW_CHARGER_UNLOCK,
+                         default=opts.get(CONF_ALLOW_CHARGER_UNLOCK, False)): bool,
             vol.Optional(CONF_ALLOW_VEHICLE_SHUTDOWN,
                          default=opts.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)): bool,
             vol.Optional(CONF_OMIT_ENTITIES,

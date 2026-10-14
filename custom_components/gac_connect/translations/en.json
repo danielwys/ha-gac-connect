@@ -27,13 +27,15 @@
       },
       "remote_controls": {
         "title": "Remote controls",
-        "description": "Choose which remote controls Home Assistant may use for {model}. Sensors and controls are matched to the car's own capability list. Both can be changed later in the integration options.",
+        "description": "Choose which remote controls Home Assistant may use for {model}. Sensors and controls are matched to the car's own capability list. Each can be changed later in the integration options.",
         "data": {
           "experimental_pinless_unlock": "Allow remote unlocking",
+          "allow_charger_unlock": "Allow remote charging connector unlock",
           "allow_vehicle_shutdown": "Allow remote vehicle shutdown"
         },
         "data_description": {
           "experimental_pinless_unlock": "Allow the Doors control to unlock the car. No PIN required. Leave off to use this control for locking only.",
+          "allow_charger_unlock": "Show the Unlock charging connector button. Unlocking lets anyone pull the charging cable out, and unlocking while charging affects the charging power. There is no remote command to lock it again. Off by default.",
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command."
         }
       },
@@ -72,6 +74,7 @@
           "track_parked": "Enable location tracking when parked",
           "track_moving": "Enable location tracking when moving",
           "experimental_pinless_unlock": "Allow remote unlocking",
+          "allow_charger_unlock": "Allow remote charging connector unlock",
           "allow_vehicle_shutdown": "Allow remote vehicle shutdown",
           "omit_entities": "Omit unsupported entities",
           "picture": "Car picture on the map (optional)",
@@ -79,9 +82,10 @@
           "quiet_end": "Quiet hours end (HH:MM, optional)"
         },
         "data_description": {
-          "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking and shutdown need their Allow settings.",
+          "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking, connector unlock and shutdown need their Allow settings.",
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends the broker credentials and topic names without TLS, which allows network interception or forged results. On GAC's Southeast Asia service they include an account number, but not the VIN or phone number. Polling continues when disabled.",
           "experimental_pinless_unlock": "Allow the Doors control to unlock the car. No PIN required. Leave off to use this control for locking only.",
+          "allow_charger_unlock": "Show the Unlock charging connector button. Unlocking lets anyone pull the charging cable out, and unlocking while charging affects the charging power. There is no remote command to lock it again. Off by default.",
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command; the Vehicle power sensor remains available when it is off.",
           "omit_entities": "Hide these entities even if the car has them. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials.",
@@ -347,6 +351,9 @@
       },
       "charge_now": {
         "name": "Charge now"
+      },
+      "charger_unlock": {
+        "name": "Unlock charging connector"
       },
       "refresh": {
         "name": "Refresh"

@@ -2,7 +2,7 @@
   "format": 1,
   "source": "https://github.com/leecaochang/gac-connect",
   "upstream": "https://github.com/wattferry/gac-connect",
-  "commit": "2fe31aca6ed3c9550be6afddea0b0eb773029164",
+  "commit": "173e8de52daca4ef34099329a9bca3d04326f8cf",
   "version": "0.4.0b11",
   "requires_python": ">=3.11",
   "dependencies": [
@@ -14,15 +14,15 @@
     "cli.py"
   ],
   "sha256": {
-    "__init__.py": "e197536f0ea8b864032391cafc026b3dd0bb691a92f39eb460c1e234db72fd44",
+    "__init__.py": "bdfa257f757a105c355da6370be9e3f70f2a2bf5d8eb0546e5c899ea6dd7208f",
     "gac_connect/LICENSE": "57bc988e8f2b38d66b35f0bea5247f28978cd1bb83b91308a4d4a23b0b707108",
     "gac_connect/__init__.py": "54084cf2da4d85f188c4a8b7d25b647707f4e5378e6c9f4d6b2a731c9639a216",
     "gac_connect/_material.pem": "fd0f684059f51cc9df4ac60f54618ee7b7f3ae1dc0e7896d903b6729731a5e38",
     "gac_connect/_material_uk.pem": "5841e40ade597509d837fa6bf779aaf1a6b088213d802bb2e4a895fc8f67f95c",
     "gac_connect/auth.py": "c88ac6746d668f0e320ef4f4bd7eabbd24bbc73818e4f0bfe6132b3e6bb8827a",
-    "gac_connect/capabilities.py": "2c10cfdb0d8b0dea3412bce9dda118eb54545a5c55bf429f502538340abcaac6",
+    "gac_connect/capabilities.py": "b80922418d3ed1f57cd45d74e8db7e34ca43afa8800532a3a773c3cf8350ad6e",
     "gac_connect/client.py": "4131e1dbb5a49e5be2605aee21b1258e41f1d6076559034ae626b7a47d2e1cc8",
-    "gac_connect/commands.py": "f95f570468d7194b526cc4a6f811b2de08c4269c04eae9a4cacce106ac51ec46",
+    "gac_connect/commands.py": "b603f58f99543c99644c2349c1e667a7dae311d1f4e0a85430e63062b85b0f35",
     "gac_connect/const.py": "600947443dc82802b270ff3e9ef8aa0f56fb41fdad96973071f5c15ed3400852",
     "gac_connect/crypto.py": "0549e8c0f2d696d460cc879654c9ab22112d0247d68e2c6dc42d705b3c86d700",
     "gac_connect/errors.py": "00708069a53cf5a843303b2a2ed8081eb8593c1a65c7402d30fae5864f48831f",

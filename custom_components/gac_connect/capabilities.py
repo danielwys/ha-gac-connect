@@ -15,6 +15,7 @@ from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled
 from .const import (
     CONF_ENABLE_ENTITIES, CONF_MODEL,
+    CONF_ALLOW_CHARGER_UNLOCK,
     CONF_ALLOW_VEHICLE_SHUTDOWN,
     CONF_OMIT_ENTITIES, CONF_REGION, CONF_VIN, DOMAIN,
 )
@@ -52,7 +53,7 @@ ENTITY_FEATURES = {
     "cover:windows": "windows", "cover:sunroof": "sunroof", "cover:tailgate": "tailgate",
     "climate:climate": "climate", "lock:doors": "doors",
     "button:horn": "horn",
-    "button:vehicle_power_off": "vehicle_power_control",
+    "button:vehicle_power_off": "vehicle_power_control", "button:charger_unlock": "charger_unlock",
     "button:charge_now": "charge_control", "select:fridge_mode": "fridge", "number:fridge_temperature": "fridge",
     "number:ac_minutes": "climate",
     "device_tracker:location": "location",
@@ -157,6 +158,8 @@ class CapabilityManager:
         """Whether an entity is shown; without ``user_choices``, as if Omit and Always show were empty."""
         if entity_key == "button:vehicle_power_off" and self.entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
             return False
+        if entity_key == "button:charger_unlock" and self.entry.options.get(CONF_ALLOW_CHARGER_UNLOCK) is not True:
+            return False
         if entity_key in LOCATION_ENTITIES and not location_enabled(self.entry.options):
             return False
         if user_choices and entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
@@ -205,6 +208,8 @@ class CapabilityManager:
         options = self.entry.options
         if entity_key == "button:vehicle_power_off" and options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
             return False, "remote shutdown is not allowed in Vehicle settings"
+        if entity_key == "button:charger_unlock" and options.get(CONF_ALLOW_CHARGER_UNLOCK) is not True:
+            return False, "remote connector unlock is not allowed in Vehicle settings"
         if user_choices and entity_key in options.get(CONF_OMIT_ENTITIES, ()):
             return False, "your Omit choice"
         if entity_key in LOCATION_ENTITIES and not location_enabled(options):

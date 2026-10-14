@@ -29,6 +29,7 @@ CONF_ENABLE_ENTITIES: Final = "enable_entities"
 CONF_EXPERIMENTAL_PINLESS_UNLOCK: Final = "experimental_pinless_unlock"
 CONF_ALLOW_PLAINTEXT_PUSH: Final = "allow_plaintext_push"
 CONF_ALLOW_VEHICLE_SHUTDOWN: Final = "allow_vehicle_shutdown"
+CONF_ALLOW_CHARGER_UNLOCK: Final = "allow_charger_unlock"
 VEHICLE_SHUTDOWN_COMMANDS: Final = frozenset({"vehicle-power-off", "power-off", "powerkeep-stop"})
 
 DEFAULT_SCAN_INTERVAL: Final = 300     # seconds

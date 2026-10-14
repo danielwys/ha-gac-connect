@@ -18,7 +18,10 @@ from ._vendor.gac_connect.commands import refusal_hint
 from ._vendor.gac_connect.models import ChargingMode
 from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError
 from .api import doors_locked
-from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK, VEHICLE_SHUTDOWN_COMMANDS
+from .const import (
+    CONF_ALLOW_CHARGER_UNLOCK, CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK,
+    VEHICLE_SHUTDOWN_COMMANDS,
+)
 from .seats import ventilation_state
 
 REQUEST_SECONDS = 180
@@ -273,6 +276,9 @@ async def async_send(coordinator, command: str, request, *, expected=None):
                    "in GAC Connect Vehicle settings to use it.")
     elif command == "unlock" and coordinator.config_entry.options.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK) is not True:
         refusal = "Remote unlocking is disabled. Turn on 'Allow remote unlocking' in GAC Connect options to use it."
+    elif command == "charger-unlock" and coordinator.config_entry.options.get(CONF_ALLOW_CHARGER_UNLOCK) is not True:
+        refusal = ("Remote charging connector unlock is disabled. Turn on 'Allow remote charging connector "
+                   "unlock' in GAC Connect options to use it.")
     if refusal is not None:
         if iscoroutine(request):
             request.close()

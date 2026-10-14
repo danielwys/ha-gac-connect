@@ -39,6 +39,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
     "button": {
         "vehicle_power_off": "Turn vehicle off",
         "charge_now": "Charge now",
+        "charger_unlock": "Unlock charging connector",
         "horn": "Sound horn",
     },
     "switch": {

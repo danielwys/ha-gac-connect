@@ -31,7 +31,7 @@ DETAILS: dict[str, str] = {
     "binary_sensor:ac_compressor": "on/off", "binary_sensor:anti_theft": "armed/disarmed",
     **{f"binary_sensor:seat_{i}_ventilation": "running/off" for i in range(1, 5)},
     "button:vehicle_power_off": "switches the car off", "button:charge_now": "charge when plugged in",
-    "button:horn": "sounds the horn",
+    "button:horn": "sounds the horn", "button:charger_unlock": "releases the charging connector",
     "switch:charge_switch": "on follows the schedule, off charges whenever plugged in", "switch:climate_power": "A/C on/off",
     "switch:steering_heat": "on/off", "switch:lights": "flash on/off", "switch:ventilation": "on/off",
     "switch:recirculation": "on recirculates, off fresh air; while the A/C runs",

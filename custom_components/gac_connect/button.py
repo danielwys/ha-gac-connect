@@ -1,4 +1,4 @@
-"""Buttons: refresh, charging, horn and vehicle shutdown."""
+"""Buttons: refresh, charging, charging connector unlock, horn and vehicle shutdown."""
 
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ BUTTONS: tuple[GacButton, ...] = (
     GacButton(key="vehicle_power_off", command="vehicle-power-off", translation_key="vehicle_power_off",
               icon="mdi:power", press=lambda c, vin: c.command(vin, "vehicle-power-off")),
     GacButton(key="charge_now", command="charge-now", translation_key="charge_now", press=lambda c, vin: c.charge_now(vin)),
+    GacButton(key="charger_unlock", command="charger-unlock", translation_key="charger_unlock",
+              icon="mdi:lock-open-variant", press=lambda c, vin: c.command(vin, "charger-unlock")),
     GacButton(key="horn", command="horn-on", translation_key="horn", icon="mdi:bullhorn", press=lambda c, vin: c.command(vin, "horn-on")),
 )
 
