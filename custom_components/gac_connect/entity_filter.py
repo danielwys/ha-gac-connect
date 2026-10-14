@@ -42,7 +42,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "horn": "Sound horn",
     },
     "switch": {
-        "charge_switch": "Unrestricted charging", "climate_power": "Pre-conditioning",
+        "charge_switch": "Scheduled charging", "climate_power": "Pre-conditioning",
         "steering_heat": "Steering wheel heat", "lights": "Flash lights",
         "ventilation": "Ventilation", "recirculation": "Recirculation",
         "precondition_battery": "Battery preconditioning",

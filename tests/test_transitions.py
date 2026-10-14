@@ -37,7 +37,7 @@ def report(kind, target, updated=10):
             {"door": i, "lock": (0 if target else 1) if i < 3 else -1} for i in range(1, 5)
         ]}, updated_ms=updated)
     if kind == "charge":
-        return VehicleStatus(charging_mode=ChargingMode.FREE if target else ChargingMode.SCHEDULED, updated_ms=updated)
+        return VehicleStatus(charging_mode=ChargingMode.SCHEDULED if target else ChargingMode.FREE, updated_ms=updated)
     field = {"windows": "window_open", "sunroof": "sunroof_open", "tailgate": "hatch_open"}[kind]
     return VehicleStatus(**{field: not target, "updated_ms": updated})
 
@@ -75,7 +75,7 @@ def test_control_holds_transition_until_a_new_matching_report(kind, target, time
         assert sensor.is_on is target  # Last observed state, not a fabricated command result.
     elif kind == "charge":
         assert entity.is_on is target
-        sent = coordinator.client.charge_now if target else coordinator.client.resume_schedule
+        sent = coordinator.client.resume_schedule if target else coordinator.client.charge_now
         sent.assert_awaited_once_with("TESTVIN")
     else:
         assert entity.state == ("closing" if target else "opening")

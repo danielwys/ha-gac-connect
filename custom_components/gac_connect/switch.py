@@ -1,9 +1,9 @@
 """Switches: pre-conditioning, recirculation, the charge gate, battery preconditioning, steering-wheel
 heat, ventilation, flash lights.
 
-Unrestricted charging: on charges whenever plugged in; off returns to the
-schedule the car last reported (once or repeating), resent unchanged. Neither
-is a continuous pause. The car takes a few minutes to act on a change.
+Scheduled charging: on returns to the schedule the car last reported (once or
+repeating), resent unchanged; off charges whenever plugged in. Neither is a
+continuous pause. The car takes a few minutes to act on a change.
 """
 
 from __future__ import annotations
@@ -111,22 +111,22 @@ class GacChargeSwitch(GacTransitionEntity, SwitchEntity):
         mode = self.status.charging_mode if self.status is not None else None
         if mode not in (ChargingMode.FREE, ChargingMode.SCHEDULED, ChargingMode.LOOP):
             return None
-        # Off means the car uses a schedule, not that charging is continuously paused.
-        return mode is ChargingMode.FREE
+        # On means the car follows a schedule (once or repeating), not that it is charging.
+        return mode is not ChargingMode.FREE
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "note": "On charges whenever plugged in; off returns to the car's last reported schedule. "
+            "note": "On follows the car's last reported schedule; off charges whenever plugged in. "
                     "Neither pauses charging.",
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self._run_transition(True, "charge-now", lambda: self.coordinator.client.charge_now(self.coordinator.vin))
+        await self._run_transition(True, "charge-resume",
+                                   lambda: self.coordinator.client.resume_schedule(self.coordinator.vin))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._run_transition(False, "charge-resume",
-                                   lambda: self.coordinator.client.resume_schedule(self.coordinator.vin))
+        await self._run_transition(False, "charge-now", lambda: self.coordinator.client.charge_now(self.coordinator.vin))
 
 
 class GacCommandSwitch(GacRequestedEntity, SwitchEntity):

@@ -18,7 +18,7 @@ import aiohttp
 import voluptuous as vol
 from ._vendor.gac_connect.commands import CLIMATE_MINUTES_RANGE
 from ._vendor.gac_connect.const import LISTED_REGIONS
-from ._vendor.gac_connect.errors import GacError, LoginError, RateLimitedError
+from ._vendor.gac_connect.errors import CommandError, GacError, LoginError, RateLimitedError
 
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
@@ -102,7 +102,7 @@ def _thai_local_mobile(mobile: str) -> str:
 
 class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 2   # 1.2: vehicle profiles removed
+    MINOR_VERSION = 3   # 1.2: vehicle profiles removed; 1.3: Scheduled charging entity ID
 
     def __init__(self) -> None:
         self._client: GacClient | None = None
@@ -336,7 +336,7 @@ class GacOptionsFlow(OptionsFlow):
     async def async_step_refresh_charging(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if (coordinator := self._loaded_coordinator()) is None:
             return self.async_abort(reason="vehicle_not_loaded")
-        await coordinator.async_manual_refresh()
+        await coordinator.async_refresh_now()
         return await self.async_step_charging()
 
     async def async_step_charge_now(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -348,12 +348,16 @@ class GacOptionsFlow(OptionsFlow):
         if user_input is not None:
             try:
                 await async_send(coordinator, "charge-now", coordinator.client.charge_now(coordinator.vin))
+            except CommandError as err:   # the gateway refused it; its reason says why
+                _LOGGER.warning("Charge now request failed: %s", err)
+                errors["base"], refusal["reason"] = "command_refused", str(err)
             except GacError as err:
                 _LOGGER.warning("Charge now request failed: %s", err)
                 errors["base"] = "command_failed"
             except HomeAssistantError as err:   # the car refused it
                 errors["base"], refusal["reason"] = "command_refused", str(err)
             else:
+                await coordinator.async_refresh_now()     # show the car's answer, not the old report
                 return await self.async_step_charging()
         return self.async_show_form(step_id="charge_now", data_schema=vol.Schema({}), errors=errors,
                                     description_placeholders=refusal)
@@ -367,25 +371,32 @@ class GacOptionsFlow(OptionsFlow):
             return self.async_abort(reason="vehicle_not_loaded")
         errors, refusal = {}, {"reason": ""}
         if user_input is not None:
+            until_soc = user_input.get("until_soc", False)
             try:
-                start, stop = (validate_clock(user_input[key]) for key in ("start", "stop"))
-                if start == stop:
+                start = validate_clock(user_input["start"])
+                # Stopping at the charge limit sends no stop time.
+                stop = validate_clock(user_input.get("stop")) if user_input.get("stop") or not until_soc else None
+                if start == stop and not until_soc:
                     raise ValueError("start and stop must differ")
                 days = user_input.get("days", [])
                 if not isinstance(days, list) or any(day not in DAYS for day in days):
                     raise ValueError("unknown day")
                 weekly = sum(1 << index for index, day in enumerate(DAYS) if day in days)
                 await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
-                    coordinator.vin, start, stop, weekly=weekly, until_soc=user_input.get("until_soc", False)),
-                    expected=window_target(start, stop, weekly, user_input.get("until_soc", False)))
+                    coordinator.vin, start, stop, weekly=weekly, until_soc=until_soc),
+                    expected=window_target(start, stop, weekly, until_soc))
             except ValueError:
                 errors["base"] = "invalid_charge_window"
+            except CommandError as err:   # the gateway refused it; its reason says why
+                _LOGGER.warning("Charging window request failed: %s", err)
+                errors["base"], refusal["reason"] = "command_refused", str(err)
             except GacError as err:
                 _LOGGER.warning("Charging window request failed: %s", err)
                 errors["base"] = "command_failed"
             except HomeAssistantError as err:   # the car refused it
                 errors["base"], refusal["reason"] = "command_refused", str(err)
             else:
+                await coordinator.async_refresh_now()     # show the car's answer, not the old report
                 return await self.async_step_charging()
         values = dict(user_input) if user_input is not None else {}
         if user_input is None and (status := coordinator.data) is not None:
@@ -400,7 +411,7 @@ class GacOptionsFlow(OptionsFlow):
             values["until_soc"] = getattr(status, "charge_end_type", None) == 1
         return self.async_show_form(step_id="charge_window", errors=errors, data_schema=vol.Schema({
             vol.Required("start", description={"suggested_value": values.get("start", "")}): str,
-            vol.Required("stop", description={"suggested_value": values.get("stop", "")}): str,
+            vol.Optional("stop", description={"suggested_value": values.get("stop", "")}): str,
             vol.Optional("days", default=values.get("days", [])): cv.multi_select(DAYS),
             vol.Optional("until_soc", default=values.get("until_soc", False)): bool,
         }), description_placeholders={"timezone": coordinator.client.timezone, **refusal})

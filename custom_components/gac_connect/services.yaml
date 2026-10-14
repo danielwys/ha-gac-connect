@@ -35,7 +35,7 @@ set_charge_window:
       selector: { text: {} }
     stop:
       name: Stop (HH:MM)
-      required: true
+      description: Required unless Until target SoC is on; then no stop time is sent and the car keeps its saved one.
       example: "05:00"
       selector: { text: {} }
     weekly:
@@ -44,6 +44,7 @@ set_charge_window:
       selector: { number: { min: 0, max: 127, mode: box } }
     until_soc:
       name: Until target SoC
+      description: Stop at the car's target charge level instead of the stop time.
       selector: { boolean: {} }
 
 get_control_capabilities:

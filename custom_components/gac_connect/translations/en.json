@@ -121,7 +121,7 @@
         }
       },
       "charge_now": {
-        "title": "Allow unrestricted charging",
+        "title": "Charge whenever plugged in",
         "description": "Submitting allows the car to charge whenever it is plugged in, overriding scheduled mode. This sends a command to the car. It does not guarantee charging starts immediately. Check Last command and the vehicle’s next report for the outcome."
       },
       "charge_window": {
@@ -135,7 +135,7 @@
         },
         "data_description": {
           "start": "Use 24-hour time, for example 23:00.",
-          "stop": "Use 24-hour time, for example 05:00. An earlier stop time runs into the following day. Start and stop must differ.",
+          "stop": "Use 24-hour time, for example 05:00. An earlier stop time runs into the following day. Start and stop must differ. Not needed when stopping at the target charge level.",
           "days": "Leave empty for a one-time charge (the app’s Once). Select days to repeat, or all seven for every day. For an overnight window, select the day charging starts.",
           "until_soc": "Use the car’s existing target instead of the stop time. This integration cannot read or change that target; verify it in the car or official app."
         }
@@ -147,7 +147,7 @@
       "invalid_quiet_time": "Enter a time from 00:00 to 23:59 in HH:MM format.",
       "quiet_pair_required": "Set both quiet-hour times, or clear both to disable quiet hours.",
       "quiet_times_equal": "Start and end must differ. Clear both to disable quiet hours.",
-      "invalid_charge_window": "Enter different start and stop times in HH:MM format (00:00–23:59) and choose valid days.",
+      "invalid_charge_window": "Enter a start time and, unless stopping at the target charge level, a different stop time, in HH:MM format (00:00–23:59), and choose valid days.",
       "command_failed": "The request failed. Open Last command for the failure reason and service code, and check Polling status before trying again.",
       "command_refused": "{reason}",
       "capability_read_failed": "The capability list could not be read. Equipment is still detected from the car's reports; try again later."
@@ -273,7 +273,7 @@
       "charge_schedule": {
         "name": "Charging schedule",
         "state": {
-          "unrestricted": "Unrestricted charging",
+          "unrestricted": "Whenever plugged in",
           "scheduled": "Scheduled charging",
           "not_reported": "Mode not reported"
         }
@@ -357,7 +357,7 @@
     },
     "switch": {
       "charging": {
-        "name": "Unrestricted charging"
+        "name": "Scheduled charging"
       },
       "steering_heat": {
         "name": "Steering wheel heat"

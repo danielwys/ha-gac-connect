@@ -317,20 +317,20 @@ def test_unknown_charge_mode_remains_unknown():
     assert GacChargeSwitch(coord(VehicleStatus(charging_mode=ChargingMode.UNKNOWN))).is_on is None
 
 
-@pytest.mark.parametrize("mode,expected", [(ChargingMode.FREE, True), (ChargingMode.SCHEDULED, False),
-                                           (ChargingMode.LOOP, False), (None, None)])
+@pytest.mark.parametrize("mode,expected", [(ChargingMode.FREE, False), (ChargingMode.SCHEDULED, True),
+                                           (ChargingMode.LOOP, True), (None, None)])
 def test_repeating_schedules_show_as_scheduled(mode, expected):
     from custom_components.gac_connect.charging import schedule_attributes, schedule_mode
 
     status = VehicleStatus(charging_mode=mode)
-    assert GacChargeSwitch(coord(status)).is_on is expected
-    assert schedule_mode(status) == {True: "unrestricted", False: "scheduled", None: "not_reported"}[expected]
+    assert GacChargeSwitch(coord(status)).is_on is expected        # Scheduled charging
+    assert schedule_mode(status) == {False: "unrestricted", True: "scheduled", None: "not_reported"}[expected]
     assert schedule_attributes(status)["reported_schedule_type"] == {
         ChargingMode.FREE: "Immediately", ChargingMode.SCHEDULED: "Once", ChargingMode.LOOP: "Repeating",
         None: "Not reported"}[mode]
 
 
-def test_switch_off_without_a_reported_window_surfaces_the_library_refusal():
+def test_switch_on_without_a_reported_window_surfaces_the_library_refusal():
     from homeassistant.exceptions import HomeAssistantError
 
     c = coord(VehicleStatus(charging_mode=ChargingMode.FREE))
@@ -339,9 +339,9 @@ def test_switch_off_without_a_reported_window_surfaces_the_library_refusal():
     entity.async_write_ha_state = Mock()
     with patch("custom_components.gac_connect.transition.async_call_later", Mock(return_value=Mock())):
         with pytest.raises(HomeAssistantError, match="no reported charge window"):
-            asyncio.run(entity.async_turn_off())
+            asyncio.run(entity.async_turn_on())
     c.client._reservation.assert_not_awaited()
-    assert entity._requested_state is None and entity.is_on is True
+    assert entity._requested_state is None and entity.is_on is False
 
 
 @pytest.mark.parametrize(
@@ -396,7 +396,7 @@ def test_overnight_window_struct_dates_are_ordered(hour):
 
     assert dt(op["stopTime"]) > dt(op["startTime"])
     assert op["dailyReservationStartTime"] == 82800000
-    assert op["dailyReservationStopTime"] == 18000000
+    assert op["dailyReservationStopTime"] == 18000000 + 86400000   # after midnight: 05:00 as 29:00, as the app sends
 
 
 @pytest.mark.parametrize("mask", [-1, 128, 1.5, "1", True])
@@ -819,20 +819,42 @@ def test_pause_is_blocked_at_every_entry_point(surface):
     c.client.command.assert_not_awaited()
 
 
+@pytest.mark.parametrize("until_soc", [False, True])
 @pytest.mark.parametrize("start,stop", [("23:00", "05:00"), ("01:00", "02:00")])
-def test_charge_window_service_uses_corrected_client(start, stop):
+def test_charge_window_service_uses_corrected_client(start, stop, until_soc):
     c = coord(VehicleStatus())
     c.client._tz = ZoneInfo("Asia/Bangkok")
     c.client._reservation = AsyncMock(return_value=ACCEPTED)
     handler, schema = service_registry(c)["set_charge_window"]
-    data = schema({"start": start, "stop": stop, "weekly": 3.0, "until_soc": True})
+    data = schema({"start": start, "stop": stop, "weekly": 3.0, "until_soc": until_soc})
     asyncio.run(handler(SimpleNamespace(data=data)))
     vin, op = c.client._reservation.await_args.args
-    assert vin == c.vin and op["weeklyReservation"] == 3 and op["chargingEndType"] == 1
+    assert vin == c.vin and op["weeklyReservation"] == 3 and op["chargingEndType"] == int(until_soc)
     assert isinstance(op["weeklyReservation"], int)
     assert op["chargingMode"] == 2
     assert (op["startTime"]["hour"], op["startTime"]["minute"]) == tuple(map(int, start.split(":")))
-    assert (op["stopTime"]["hour"], op["stopTime"]["minute"]) == tuple(map(int, stop.split(":")))
+    if until_soc:      # stopping at the charge limit sends no stop time
+        assert "stopTime" not in op and "dailyReservationStopTime" not in op
+    else:
+        assert (op["stopTime"]["hour"], op["stopTime"]["minute"]) == tuple(map(int, stop.split(":")))
+
+
+@pytest.mark.parametrize("until_soc", [False, True])
+def test_the_charge_window_service_needs_a_stop_only_without_the_charge_limit(until_soc):
+    from homeassistant.exceptions import ServiceValidationError
+
+    c = coord(VehicleStatus())
+    c.client._tz = ZoneInfo("Asia/Bangkok")
+    c.client._reservation = AsyncMock(return_value=ACCEPTED)
+    handler, schema = service_registry(c)["set_charge_window"]
+    call = SimpleNamespace(data=schema({"start": "23:00", "weekly": 127, "until_soc": until_soc}))
+    if until_soc:
+        asyncio.run(handler(call))
+        assert c.client._reservation.await_args.args[1]["chargingEndType"] == 1
+    else:
+        with pytest.raises(ServiceValidationError, match="stop is required"):
+            asyncio.run(handler(call))
+        c.client._reservation.assert_not_awaited()
 
 
 @pytest.mark.parametrize(

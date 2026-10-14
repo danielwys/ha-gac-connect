@@ -34,7 +34,7 @@ def test_view_prefills_the_reported_window_without_sending_a_command(tmp_path):
                 'dailyReservationStopTime': 18000000, 'weeklyReservation': 3}]})
             page = await flow.async_step_charging()
             summary = page['description_placeholders']['schedule']
-            for value in ('Unrestricted charging', '23:00', '05:00', 'Monday, Tuesday', 'Asia/Bangkok'):
+            for value in ('Whenever plugged in', '23:00', '05:00', 'Monday, Tuesday', 'Asia/Bangkok'):
                 assert value in summary
             assert schedule_mode(c.data) == 'unrestricted'  # a stored window is not proof scheduled mode is active
             assert schedule_attributes(c.data)['reported_clock_verified'] is False
@@ -63,7 +63,10 @@ def test_editor_sends_validated_overnight_window_with_selected_days(tmp_path, un
             assert vin == 'VIN'
             assert operation['weeklyReservation'] == 17
             assert operation['dailyReservationStartTime'] == 82800000
-            assert operation['dailyReservationStopTime'] == 18000000
+            # Stopping at the charge limit sends no stop time (the gateway refuses one with 13101).
+            # 05:00 after a 23:00 start is sent as 29:00, as the app does.
+            assert operation.get('dailyReservationStopTime') == (None if until_soc else 18000000 + 86400000)
+            assert ('stopTime' in operation) is not until_soc
             assert operation['chargingMode'] == 2 and operation['chargingEndType'] == int(until_soc)
             start = datetime(*(operation['startTime'][k] for k in ('year', 'month', 'day', 'hour', 'minute')))
             assert start.weekday() in (0, 4) and (start.hour, start.minute) == (23, 0)  # dated, never undated
@@ -95,7 +98,8 @@ def test_rejected_window_keeps_input_and_charge_now_requires_submit(tmp_path):
                 'dailyReservationStartTime': 82800000, 'dailyReservationStopTime': 18000000}]})
             client._reservation.side_effect = CommandError('rejected')
             response = await flow.async_step_charge_window({'start': '22:00', 'stop': '06:00', 'days': [], 'until_soc': False})
-            assert response['errors']['base'] == 'command_failed'
+            assert response['errors']['base'] == 'command_refused'      # the gateway's reason is shown
+            assert response['description_placeholders']['reason'] == 'rejected'
             values = response['data_schema']({'start': '22:00', 'stop': '06:00'})
             assert values['days'] == [] and values['until_soc'] is False
             assert {key.schema: key.description.get('suggested_value') for key in response['data_schema'].schema
@@ -165,7 +169,7 @@ def test_real_ut_schedule_reads_calendar_fields_and_confirms_after_new_report(tm
             assert response['type'] == 'menu'
             operation = client._reservation.await_args.args[1]   # one time: loop mode without days
             assert (operation['chargingMode'], operation['weeklyReservation']) == (2, 0)
-            assert (operation['dailyReservationStartTime'], operation['dailyReservationStopTime']) == (82800000, 25200000)
+            assert (operation['dailyReservationStartTime'], operation['dailyReservationStopTime']) == (82800000, 25200000 + 86400000)
             assert c.commands.state == 'pending'
             c.commands.observe(decode_status({'chargingAccessors': [operation]}, updated_ms=2000))
             assert c.commands.state == 'confirmed'
@@ -208,4 +212,71 @@ def test_car_refusal_is_shown_on_the_form(tmp_path, step, user_input):
             assert response['errors']['base'] == 'command_refused'
             assert response['description_placeholders']['reason'] == 'The car refused the request: result code 13101.'
             assert c.commands.state == 'rejected'
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('until_soc,sent', [(True, True), (False, False)])
+def test_the_stop_time_is_needed_only_without_the_charge_limit(tmp_path, until_soc, sent):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            form = await flow.async_step_charge_window()
+            submitted = form['data_schema']({'start': '23:00', 'days': [], 'until_soc': until_soc})
+            response = await flow.async_step_charge_window(submitted)
+            if sent:
+                assert response['step_id'] == 'charging'
+                assert 'dailyReservationStopTime' not in client._reservation.await_args.args[1]
+            else:
+                assert response['errors'] == {'base': 'invalid_charge_window'}
+                client._reservation.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_a_window_that_could_not_be_sent_says_the_request_failed(tmp_path):
+    from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
+
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            client._reservation.side_effect = ResponseError('Could not reach GAC')
+            response = await flow.async_step_charge_window({'start': '21:00', 'stop': '23:00', 'days': []})
+            assert response['errors']['base'] == 'command_failed'
+    asyncio.run(run())
+
+
+def test_after_sending_the_page_shows_the_request_and_says_the_report_predates_it(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            c.data = decode_status({'chargingAccessors': [{'chargingMode': 2, 'weeklyReservation': 127,
+                'dailyReservationStartTime': 79860000, 'dailyReservationStopTime': 79920000}]})
+            page = await flow.async_step_charge_window({'start': '23:09', 'stop': '00:10', 'days': ['fri', 'sat']})
+            text = page['description_placeholders']['schedule']
+            assert '23:09 → 00:10, Friday, Saturday — sent; waiting for the car\'s report' in text
+            assert 'values below are from before it' in text
+            assert '**Reported window:** 22:11 → 22:12' in text          # the old report, still shown
+            client._reservation.side_effect = CommandError('rejected', code=13002)
+            page = await flow.async_step_charge_window({'start': '23:09', 'until_soc': True, 'days': []})
+            text = (await flow.async_step_charging())['description_placeholders']['schedule']
+            assert ('23:09 → the target charge level, One time — refused: not supported by this vehicle '
+                    '(code 13002)') in text
+            assert 'values below are from before it' not in text
+    asyncio.run(run())
+
+
+def test_after_an_accepted_window_the_page_reads_the_car_again(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            flow, client = setup_flow(hass, entry, c)
+            c.data = decode_status({'chargingAccessors': [{'chargingMode': 2, 'weeklyReservation': 127,
+                'dailyReservationStartTime': 79860000, 'dailyReservationStopTime': 79920000}]})
+            # The car's next report: the new window across midnight, as an Aion UT reports it.
+            client.get_status = AsyncMock(return_value=decode_status({'chargingAccessors': [{
+                'chargingMode': 2, 'weeklyReservation': 48, 'chargingEndType': 0,
+                'dailyReservationStartTime': 83340000, 'dailyReservationStopTime': 87000000}]}))
+            page = await flow.async_step_charge_window({'start': '23:09', 'stop': '00:10', 'days': ['fri', 'sat']})
+            client.get_status.assert_awaited()
+            text = page['description_placeholders']['schedule']
+            assert "23:09 → 00:10, Friday, Saturday — confirmed by the car's report" in text
+            assert '**Reported window:** 23:09 → 00:10' in text and 'from before it' not in text
     asyncio.run(run())

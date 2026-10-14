@@ -59,15 +59,14 @@ def async_register_services(hass: HomeAssistant) -> None:
 
     async def set_charge_window(call: ServiceCall) -> None:
         coordinator, vin = _resolve(hass, call)
+        start, stop = call.data[ATTR_START], call.data.get(ATTR_STOP)
+        weekly, until_soc = call.data.get(ATTR_WEEKLY, 0), call.data.get(ATTR_UNTIL_SOC, False)
+        if stop is None and not until_soc:
+            raise ServiceValidationError("stop is required unless until_soc is set")
         try:
             await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
-                vin,
-                call.data[ATTR_START],
-                call.data[ATTR_STOP],
-                weekly=call.data.get(ATTR_WEEKLY, 0),
-                until_soc=call.data.get(ATTR_UNTIL_SOC, False),
-            ), expected=window_target(call.data[ATTR_START], call.data[ATTR_STOP],
-                                      call.data.get(ATTR_WEEKLY, 0), call.data.get(ATTR_UNTIL_SOC, False)))
+                vin, start, stop, weekly=weekly, until_soc=until_soc,
+            ), expected=window_target(start, stop, weekly, until_soc))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         except GacError as err:
@@ -106,7 +105,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         base.extend(
             {
                 vol.Required(ATTR_START): validate_clock,
-                vol.Required(ATTR_STOP): validate_clock,
+                vol.Optional(ATTR_STOP): validate_clock,
                 vol.Optional(ATTR_WEEKLY): validate_weekly,
                 vol.Optional(ATTR_UNTIL_SOC): cv.boolean,
             }

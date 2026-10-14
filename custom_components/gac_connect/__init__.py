@@ -53,7 +53,11 @@ _UT_PROFILE_OMISSIONS = frozenset({
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """1.2: vehicle profiles were removed; detection decides, and the owner's own choices stay."""
+    """1.2: vehicle profiles were removed; detection decides, and the owner's own choices stay.
+
+    1.3: Unrestricted charging became Scheduled charging, with on and off swapped, so its
+    default entity ID follows the new meaning. A custom ID is left alone.
+    """
     if entry.version == 1 and entry.minor_version < 2:
         options = dict(entry.options)
         profile = options.pop(CONF_PROFILE, None)
@@ -62,6 +66,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             options[CONF_OMIT_ENTITIES] = sorted(set(options.get(CONF_OMIT_ENTITIES, ())) - _UT_PROFILE_OMISSIONS)
             options[CONF_ENABLE_FRIDGE] = True
         hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    if entry.version == 1 and entry.minor_version < 3:
+        registry = er.async_get(hass)
+        entity_id = registry.async_get_entity_id("switch", DOMAIN, f"{entry.data[CONF_VIN]}_charge_switch")
+        if entity_id and entity_id.endswith("_unrestricted_charging"):
+            renamed = entity_id.removesuffix("_unrestricted_charging") + "_scheduled_charging"
+            if registry.async_get(renamed) is None:
+                registry.async_update_entity(entity_id, new_entity_id=renamed)
+        hass.config_entries.async_update_entry(entry, minor_version=3)
     return True
 
 

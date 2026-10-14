@@ -325,6 +325,16 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self._force_refresh = True
         await self.async_request_refresh()
 
+    async def async_refresh_now(self) -> None:
+        """One read straight away, without the refresh debounce, for a page that shows its result.
+
+        Skipped while the service has asked for a pause; a read in flight is shared.
+        """
+        if monotonic() < self._rate_limit_until:
+            return
+        self._force_refresh = True
+        await self.async_refresh()
+
     async def _async_update_data(self) -> VehicleStatus:
         generation = self._fetch_generation
         async with self._fetch_lock:
