@@ -24,13 +24,12 @@ from ._vendor.gac_connect.push import PushResult
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
 from .capabilities import remote_choices
-from .const import CONF_ENABLE_FRIDGE, CONF_VIN, DEFAULT_ENABLE_FRIDGE, DOMAIN, SIGNAL_COMMAND_RESULT
+from .const import DOMAIN, SIGNAL_COMMAND_RESULT
 from .entity_filter import add_configured_entities
 from .command_tracking import async_send
 
@@ -40,30 +39,10 @@ RUNNING_MODES: tuple[str, ...] = tuple(FRIDGE_MODES)          # refrigerate, hea
 RESULT_EVENTS: tuple[str, ...] = ("control_refrigerator",)
 REQUEST_SECONDS = 180      # a requested state overrides the car's report at most this long
 STORE_VERSION = 1
-# (platform, unique-id suffix) of every fridge entity
-ENTITIES: tuple[tuple[str, str], ...] = (
-    ("switch", "fridge"), ("select", "fridge_mode"), ("number", "fridge_temperature"),
-    ("sensor", "fridge_keep_mode"), ("sensor", "fridge_time_left"),
-)
 
 
 def store_key(entry_id: str) -> str:
     return f"{DOMAIN}.fridge.{entry_id}"
-
-
-def controls_enabled(entry: ConfigEntry) -> bool:
-    """Owners can hide the controls, e.g. on a car that reports a fridge it doesn't have."""
-    return bool(entry.options.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))
-
-
-@callback
-def remove_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Drop the fridge entities from the registry once the controls are switched off."""
-    registry = er.async_get(hass)
-    for domain, key in ENTITIES:
-        entity_id = registry.async_get_entity_id(domain, DOMAIN, f"{entry.data[CONF_VIN]}_{key}")
-        if entity_id:
-            registry.async_remove(entity_id)
 
 
 def running_modes(coordinator) -> tuple[str, ...]:
@@ -393,5 +372,4 @@ def controller(coordinator) -> FridgeController:
 
 def async_add_when_fitted(entry: ConfigEntry, coordinator, add_entities, make: Callable[[], list], *, platform: str) -> None:
     """Add the fridge entities; detection shows them once the car is known to have a fridge."""
-    if controls_enabled(entry):
-        add_configured_entities(entry, add_entities, platform, make())
+    add_configured_entities(entry, add_entities, platform, make())

@@ -22,7 +22,7 @@ def groups(text):
 def test_entities_are_grouped_by_reason_with_short_details(tmp_path):
     async def run():
         async with vehicle(tmp_path, model='Aion UT', options={
-            'enable_entities': ['button:horn'], 'omit_entities': ['sensor:pm25'], 'enable_fridge': False,
+            'enable_entities': ['button:horn'], 'omit_entities': ['sensor:pm25'],
         }) as (hass, entry, c):
             c.capabilities.observe(decode_status({'steeringAccessors': [{'steering': 0}]}))
             c.capabilities.confirm_command('sunroof-close')
@@ -45,7 +45,7 @@ def test_entities_are_grouped_by_reason_with_short_details(tmp_path):
             hidden = found["Hidden (not seen in the car's reports yet, unless noted)"]
             assert '- Climate (Off, On, Fan only; 18–32 °C; fan 1–7; 4 airflow choices; Heating and Cooling presets)' in hidden
             assert '- Tyre 1 pressure (kPa) — not fitted to this model' in hidden
-            assert '- Fridge mode (Off, Refrigerate, Heat, Freeze) — fridge controls are off' in hidden
+            assert '- Fridge mode (Off, Refrigerate, Heat, Freeze) — not fitted to this model' in hidden
             assert '- Location (home/away and map) — location tracking is off' in hidden
             assert sum(len(items) for items in found.values()) == len(OMIT_OPTIONS)   # every entity, once
             assert 'VIN' not in text and not re.search(r'[.!?] [A-Z][a-z]+ [a-z]+ [a-z]+', text)   # no prose

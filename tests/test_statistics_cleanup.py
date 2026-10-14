@@ -21,7 +21,6 @@ from homeassistant.setup import async_setup_component
 from custom_components.gac_connect import async_setup, async_unload_entry
 from custom_components.gac_connect.const import DOMAIN
 from custom_components.gac_connect.entity_filter import apply_registry_choices
-from custom_components.gac_connect.fridge import remove_entities
 from custom_components.gac_connect.statistics import async_setup_cleanup
 from test_session_store import make_entry
 
@@ -205,13 +204,13 @@ def test_normal_shutdown_preserves_statistics(tmp_path):
     asyncio.run(run())
 
 
-def test_fridge_registry_removal_also_cleans_up_sensor_statistics(tmp_path):
+def test_a_registry_removal_also_cleans_up_sensor_statistics(tmp_path):
     async def run():
         async with recorded_vehicle(tmp_path) as (hass, entry, registry):
             removed = sensor(registry, entry, "fridge_time_left")
             retained = sensor(registry, entry, "soc")
             await seed_statistics(hass, {removed.entity_id, retained.entity_id})
-            remove_entities(hass, entry)
+            registry.async_remove(removed.entity_id)       # as a retired entity is removed at setup
             await assert_statistics(hass, {retained.entity_id})
 
     asyncio.run(run())

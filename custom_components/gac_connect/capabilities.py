@@ -14,7 +14,7 @@ from .api import Capabilities, Support, doors_locked, equipment_from_capabilitie
 from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled
 from .const import (
-    CONF_ENABLE_ENTITIES, CONF_ENABLE_FRIDGE, CONF_MODEL,
+    CONF_ENABLE_ENTITIES, CONF_MODEL,
     CONF_ALLOW_VEHICLE_SHUTDOWN,
     CONF_OMIT_ENTITIES, CONF_REGION, CONF_VIN, DOMAIN,
 )
@@ -160,8 +160,6 @@ class CapabilityManager:
             return False
         if user_choices and entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
             return False
-        if entity_key in FRIDGE_ENTITIES and self.entry.options.get(CONF_ENABLE_FRIDGE) is False:
-            return False
         if entity_key == "button:refresh":
             return True
         if entity_key == "button:vehicle_power_off":
@@ -210,8 +208,6 @@ class CapabilityManager:
             return False, "your Omit choice"
         if entity_key in LOCATION_ENTITIES and not location_enabled(options):
             return False, "location tracking is off"
-        if entity_key in FRIDGE_ENTITIES and options.get(CONF_ENABLE_FRIDGE) is False:
-            return False, "fridge controls are off"
         if entity_key == "button:vehicle_power_off":
             return True, "remote shutdown is allowed in Vehicle settings"
         if user_choices and entity_key in options.get(CONF_ENABLE_ENTITIES, ()):

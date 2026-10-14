@@ -51,7 +51,6 @@ from .entity_filter import OMIT_OPTIONS
 from .const import (
     CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_AC_MINUTES,
-    CONF_ENABLE_FRIDGE,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
     CONF_TRACK_MOVING,
@@ -67,7 +66,6 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_SESSION,
     CONF_VIN,
-    DEFAULT_ENABLE_FRIDGE,
     DEFAULT_AC_MINUTES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -102,7 +100,7 @@ def _thai_local_mobile(mobile: str) -> str:
 
 class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 3   # 1.2: vehicle profiles removed; 1.3: Scheduled charging entity ID
+    MINOR_VERSION = 4   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed
 
     def __init__(self) -> None:
         self._client: GacClient | None = None
@@ -263,8 +261,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._allow_unlock = user_input.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)
             self._allow_vehicle_shutdown = user_input.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)
-            return self._create_vehicle_entry({CONF_ENABLE_FRIDGE: DEFAULT_ENABLE_FRIDGE,
-                                               CONF_OMIT_ENTITIES: [], CONF_ENABLE_ENTITIES: []})
+            return self._create_vehicle_entry({CONF_OMIT_ENTITIES: [], CONF_ENABLE_ENTITIES: []})
         return self.async_show_form(
             step_id="remote_controls",
             data_schema=vol.Schema({
@@ -502,6 +499,5 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_AC_MINUTES, default=opts.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)):
                 vol.All(vol.Coerce(int), vol.Range(min=shortest, max=longest)),
         }
-        fields[vol.Optional(CONF_ENABLE_FRIDGE, default=opts.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))] = bool
         schema = vol.Schema(fields)
         return self.async_show_form(step_id="settings", data_schema=schema, errors=errors)

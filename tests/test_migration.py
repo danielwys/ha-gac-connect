@@ -1,9 +1,10 @@
-"""Entries from before 1.2 drop their vehicle profile and keep the owner's own choices."""
+"""Older entries drop retired settings and keep the owner's own choices."""
 import asyncio
 
 import pytest
 
 from custom_components.gac_connect import _UT_PROFILE_OMISSIONS, async_migrate_entry
+from custom_components.gac_connect.capabilities import FRIDGE_ENTITIES
 from test_autodetect import vehicle
 
 
@@ -17,9 +18,9 @@ def test_aion_ut_entries_lose_only_the_preset_omissions(tmp_path, stored_profile
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options=options, minor_version=1)
             assert await async_migrate_entry(hass, entry)
-            assert entry.minor_version == 3 and "profile" not in entry.options
-            assert entry.options["omit_entities"] == ["sensor:pm25"]
-            assert entry.options["enable_fridge"] is True
+            assert entry.minor_version == 4 and "profile" not in entry.options
+            assert entry.options["omit_entities"] == ["sensor:pm25"]      # the preset's fridge Off is not the owner's
+            assert "enable_fridge" not in entry.options
             assert entry.options["enable_tracker"] is False and entry.options["experimental_pinless_unlock"] is True
             assert len([key for key in _UT_PROFILE_OMISSIONS if key.startswith("sensor:tyre_")]) == 8
     asyncio.run(run())
@@ -32,7 +33,7 @@ def test_other_profiles_keep_every_choice(tmp_path, profile):
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options=options, minor_version=1)
             assert await async_migrate_entry(hass, entry)
-            assert entry.options == {"omit_entities": ["cover:sunroof", "sensor:tyre_1_temp"], "enable_fridge": False}
+            assert entry.options == {"omit_entities": sorted({"cover:sunroof", "sensor:tyre_1_temp", *FRIDGE_ENTITIES})}
     asyncio.run(run())
 
 
@@ -60,7 +61,7 @@ def test_the_charge_switch_entity_id_follows_its_new_meaning(tmp_path, object_id
             hass.config_entries.async_update_entry(entry, minor_version=2)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_charge_switch") == expected
-            assert entry.minor_version == 3
+            assert entry.minor_version == 4
     asyncio.run(run())
 
 

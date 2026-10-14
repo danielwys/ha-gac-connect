@@ -32,9 +32,7 @@ async def vehicle(tmp_path, *, model="Unknown trim", options=None):
     hass = HomeAssistant(str(tmp_path))
     entry = make_entry(hass, {"region": "AU", "vin": "VIN", "model": model})
     hass.config_entries._store = Mock()
-    hass.config_entries.async_update_entry(entry, options={
-        "enable_fridge": True, **(options or {}),
-    })
+    hass.config_entries.async_update_entry(entry, options=dict(options or {}))
     if hasattr(dr, "async_setup"):
         dr.async_setup(hass)
     await dr.async_load(hass)
@@ -62,9 +60,7 @@ def test_setup_asks_only_which_remote_controls_to_allow():
     flow = GacConfigFlow()
     flow._create_vehicle_entry = Mock()
     asyncio.run(flow.async_step_remote_controls({"experimental_pinless_unlock": True, "allow_vehicle_shutdown": False}))
-    assert flow._create_vehicle_entry.call_args.args[0] == {
-        "enable_fridge": True, "omit_entities": [], "enable_entities": [],
-    }
+    assert flow._create_vehicle_entry.call_args.args[0] == {"omit_entities": [], "enable_entities": []}
     assert (flow._allow_unlock, flow._allow_vehicle_shutdown) == (True, False)
 
 
@@ -76,7 +72,7 @@ def test_settings_offer_no_profile_and_keep_the_other_choices(tmp_path):
             flow = GacOptionsFlow()
             flow.hass, flow.handler = hass, entry.entry_id
             form = await flow.async_step_settings()
-            assert "profile" not in form["data_schema"].schema and "enable_fridge" in form["data_schema"].schema
+            assert "profile" not in form["data_schema"].schema and "enable_fridge" not in form["data_schema"].schema
             response = await flow.async_step_settings({"scan_interval": 120})
             assert response["type"] == "menu" and response["step_id"] == "init"
             assert entry.options["omit_entities"] == ["sensor:pm25"]
@@ -136,8 +132,8 @@ def test_live_platform_discovery_adds_only_observed_entities_once_without_comman
 def test_manual_overrides_respect_privacy_and_unlock_opt_in(tmp_path):
     async def run():
         async with vehicle(tmp_path, options={
-            "enable_entities": ["switch:fridge", "button:horn", "cover:sunroof", "device_tracker:location", "lock:doors"],
-            "omit_entities": ["cover:sunroof"], "enable_tracker": False, "enable_fridge": False,
+            "enable_entities": ["button:horn", "cover:sunroof", "device_tracker:location", "lock:doors"],
+            "omit_entities": ["cover:sunroof", "switch:fridge"], "enable_tracker": False,
         }) as (hass, entry, coordinator):
             manager = coordinator.capabilities
             assert manager.includes("button:horn")

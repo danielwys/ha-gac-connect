@@ -71,7 +71,6 @@
           "scan_interval": "Poll interval (seconds)",
           "track_parked": "Enable location tracking when parked",
           "track_moving": "Enable location tracking when moving",
-          "enable_fridge": "Fridge / warmer box controls",
           "experimental_pinless_unlock": "Allow remote unlocking",
           "allow_vehicle_shutdown": "Allow remote vehicle shutdown",
           "omit_entities": "Omit unsupported entities",
@@ -83,7 +82,6 @@
         "data_description": {
           "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking and shutdown need their Allow settings.",
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",
-          "enable_fridge": "Allow fridge controls when detected. Turn off to remove them, for example on a trim without one. With Auto detect, Always show can reveal controls before usable fridge readings arrive.",
           "experimental_pinless_unlock": "Allow the Doors control to unlock the car. No PIN required. Leave off to use this control for locking only.",
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command; the Vehicle power sensor remains available when it is off.",
           "omit_entities": "Hide these entities even if the car has them. Existing entities are disabled while selected and return with the same IDs if you clear them.",

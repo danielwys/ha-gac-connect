@@ -19,7 +19,7 @@ CONF_QUIET_END: Final = "quiet_end"
 CONF_ENABLE_TRACKER: Final = "enable_tracker"   # any location tracking; kept for older entries
 CONF_TRACK_PARKED: Final = "track_parked"
 CONF_TRACK_MOVING: Final = "track_moving"
-CONF_ENABLE_FRIDGE: Final = "enable_fridge"
+CONF_ENABLE_FRIDGE: Final = "enable_fridge"   # retired in 1.4; read only by the entry migration
 CONF_AC_MINUTES: Final = "ac_minutes"
 CONF_PICTURE: Final = "picture"
 CONF_OMIT_ENTITIES: Final = "omit_entities"
@@ -34,7 +34,6 @@ VEHICLE_SHUTDOWN_COMMANDS: Final = frozenset({"vehicle-power-off", "power-off", 
 DEFAULT_SCAN_INTERVAL: Final = 300     # seconds
 MIN_SCAN_INTERVAL: Final = 60
 DEFAULT_ENABLE_TRACKER: Final = False
-DEFAULT_ENABLE_FRIDGE: Final = True    # shown when the car reports a fridge
 DEFAULT_AC_MINUTES: Final = 30       # minutes an A/C run lasts
 
 SIGNAL_COMMAND_RESULT: Final = "gac_connect_command_result_{vin}"

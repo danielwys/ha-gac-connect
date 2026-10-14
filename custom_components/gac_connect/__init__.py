@@ -17,14 +17,14 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .cabin import controller as cabin_controller
-from .capabilities import store_key as capabilities_store_key
+from .capabilities import FRIDGE_ENTITIES, store_key as capabilities_store_key
 from .const import (
     CONF_ENABLE_FRIDGE, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE, CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS,
 )
 from .coordinator import GacCoordinator
 from .session_store import ConfigEntryStore
 from .entity_filter import apply_registry_choices
-from .fridge import FridgeController, controls_enabled, remove_entities, store_key
+from .fridge import FridgeController, store_key
 from .helpers import async_build_client
 from .statistics import async_setup_cleanup
 
@@ -57,6 +57,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     1.3: Unrestricted charging became Scheduled charging, with on and off swapped, so its
     default entity ID follows the new meaning. A custom ID is left alone.
+
+    1.4: the Fridge / warmer box controls option was removed (the capability list decides);
+    an owner's Off becomes Omit for each fridge entity.
     """
     if entry.version == 1 and entry.minor_version < 2:
         options = dict(entry.options)
@@ -74,6 +77,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if registry.async_get(renamed) is None:
                 registry.async_update_entity(entity_id, new_entity_id=renamed)
         hass.config_entries.async_update_entry(entry, minor_version=3)
+    if entry.version == 1 and entry.minor_version < 4:
+        options = dict(entry.options)
+        if options.pop(CONF_ENABLE_FRIDGE, None) is False:
+            options[CONF_OMIT_ENTITIES] = sorted(set(options.get(CONF_OMIT_ENTITIES, ())) | FRIDGE_ENTITIES)
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=4)
     return True
 
 
@@ -88,8 +96,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
 
     _remove_retired_entities(hass, entry)
     coordinator = GacCoordinator(hass, entry, client)
-    if not controls_enabled(entry):
-        remove_entities(hass, entry)
     await coordinator.capabilities.async_load()
     await coordinator.async_config_entry_first_refresh()
     await coordinator.capabilities.async_read_capability_list_once(client, coordinator.vin)

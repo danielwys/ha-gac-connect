@@ -47,7 +47,7 @@ def test_setup_saves_the_unlock_choice(tmp_path, allow_unlock):
         assert result["type"] == "create_entry"
         assert result["options"][CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
         assert "profile" not in result["options"]
-        assert result["options"]["enable_fridge"] is True
+        assert "enable_fridge" not in result["options"]
         assert result["options"]["omit_entities"] == [] and result["options"]["enable_entities"] == []
 
     asyncio.run(run())
