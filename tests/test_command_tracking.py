@@ -154,14 +154,19 @@ def refusal(event=None):
     return PushResult(False, "13005", None, {}, event=event, session_id="s1", vin="VIN", reason=CONDITIONS)
 
 
-def test_refusal_while_waiting_fails_the_action_with_its_reason(tmp_path):
+@pytest.mark.parametrize('command,hint', [
+    ('aircon-manual-on', " The GAC app lists these conditions: the car is not moving and is switched off; "
+                         "the car is locked; the car has enough range."),
+    ('charge-now', ""),
+])
+def test_refusal_while_waiting_fails_the_action_with_its_reason(tmp_path, command, hint):
     async def run():
         async with vehicle(tmp_path) as (_, _, c):
             c.push.connected = True
             asyncio.get_running_loop().call_later(0.01, c.commands.result, refusal())
             with pytest.raises(HomeAssistantError) as err:
-                await async_send(c, 'aircon-manual-on', AsyncMock(return_value=ACCEPTED)())
-            assert str(err.value) == f"The car refused the request: {CONDITIONS} (code 13005)."
+                await async_send(c, command, AsyncMock(return_value=ACCEPTED)())
+            assert str(err.value) == f"The car refused the request: {CONDITIONS} (code 13005).{hint}"
             attributes = c.commands.attributes()
             assert c.commands.state == 'rejected'
             assert (attributes['failure_reason'], attributes['response_code']) == ('vehicle_rejected', '13005')

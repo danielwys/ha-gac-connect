@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from ._vendor.gac_connect import command_session_id
 from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
+from ._vendor.gac_connect.commands import refusal_hint
 from ._vendor.gac_connect.models import ChargingMode
 from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError
 from .api import doors_locked
@@ -66,7 +67,8 @@ def refusal_message(record: CommandRecord) -> str:
     """Explain a refusal reported by the car."""
     code = record.response_code
     detail = f"{record.refusal_reason} (code {code})" if record.refusal_reason else f"result code {code}"
-    return f"The car refused the request: {detail}."
+    hint = refusal_hint(code, record.command)
+    return f"The car refused the request: {detail}." + (f" {hint}" if hint else "")
 
 
 class CommandTracker:
