@@ -41,8 +41,7 @@ integration's HACS page.
 2. Solve the slide puzzle that opens (drag the piece into the gap, then Verify;
    arrow keys move it one pixel). A miss shows a new puzzle.
 3. Enter the SMS code.
-4. Choose the vehicle and its profile, and whether to allow remote unlocking and
-   remote shutdown.
+4. Choose the vehicle, and whether to allow remote unlocking and remote shutdown.
 
 Regions: Australia, Brazil, Cambodia, Finland, Greece, Hong Kong, Indonesia,
 Israel, Kuwait, Macau, Mexico, New Zealand, Philippines, Poland, Portugal, Russia,
@@ -51,14 +50,11 @@ Saudi Arabia, Singapore, Spain, Thailand, United Arab Emirates, United Kingdom.
 Signing in here signs the official app out once. Sign the app back in and both keep
 working.
 
-## Vehicle profiles
+## Which entities appear
 
-| Profile | Entities |
-|---|---|
-| Auto detect | Learns the car's equipment from its reports and remembers it. |
-| Aion UT | Omits fridge, steering wheel heat, sunroof, tyre readings and rear seat ventilation. |
-| Aion V | Includes the fridge. |
-| Other or custom | Everything, minus what you omit in the options. |
+Entities are matched to the car. At setup the integration reads the car's
+capability list from GAC's service, and uses the car's reports where the list says
+nothing. **Always show** and **Omit** in the options override either.
 
 ## Entities
 
@@ -87,7 +83,6 @@ the car refuses a command, the action fails with the car's reason.
 | Sound horn | button | Sounds the horn. |
 | Refresh | button | Reads the car's status now. |
 | Turn vehicle off | button | Switches the car off. Only with **Allow remote vehicle shutdown**. |
-| Pause charging | button | Unavailable: the car has no continuous pause. Use a charging window. |
 | Fridge | switch | Fridge on or off (cars with a fridge). |
 | Fridge mode | select | Off, Refrigerate, Heat, Freeze. |
 | Fridge temperature | number | Refrigerate 0–20 °C, Heat 35–50 °C, Freeze −15 to −1 °C. |
@@ -145,8 +140,7 @@ the car refuses a command, the action fails with the car's reason.
 
 | Setting | Default | Description |
 |---|---|---|
-| Vehicle profile | chosen at setup | See [Vehicle profiles](#vehicle-profiles). |
-| Always show | none | Auto detect only: show entities before the car reports them. |
+| Always show | none | Show entities even if the car does not appear to have them. |
 | Allow unencrypted push connections | off | Receive command results where GAC's push broker is unencrypted. Without it, results arrive at the next poll. |
 | Poll interval | 300 s | Minimum 60 s. Lengthened automatically when several vehicles share the request budget. |
 | Enable location tracking when parked | off | Show the location while the car is switched off. |
@@ -154,12 +148,16 @@ the car refuses a command, the action fails with the car's reason.
 | Fridge / warmer box controls | on | Turn off on a trim that reports a fridge it does not have. |
 | Allow remote unlocking | off | Lets the Doors lock unlock the car. |
 | Allow remote vehicle shutdown | off | Shows Turn vehicle off. |
-| Omit unsupported entities | none | Hide entities your car does not have. |
+| Omit unsupported entities | none | Hide entities even if the car has them. |
 | Car picture on the map | AION V picture, or initials | Image URL or `/local/…` path. |
 | Quiet hours start / end | none | No polling between these times (HH:MM). |
 | A/C run time | 30 min | 5–60 minutes per A/C start. |
 
-**Detected equipment** lists each entity and why it is shown or hidden.
+**Detected equipment** lists which entities are shown and why, starting with your
+Always show and Omit choices.
+
+**Refresh vehicle capabilities** reads the car's capability list again, for example
+after a software update.
 
 **Charging schedule** shows the reported schedule and can set a charging window,
 charge now or refresh.
@@ -172,7 +170,7 @@ charge now or refresh.
 | `gac_connect.set_charge_window` | `vin`, `start`, `stop`, `weekly`, `until_soc` | Charge only between `start` and `stop` (HH:MM; a stop before the start runs overnight). `weekly`: Mon=1, Tue=2 … Sun=64; 127 every day; 0 or omitted once. |
 | `gac_connect.charge_pause` | `vin` | Unavailable; use `set_charge_window`. |
 | `gac_connect.send_command` | `vin`, `command`, `params` | Send a command by name, for example `horn-on` or `aircon-manual-on`, with optional parameters. Unlock and shutdown need their options; PIN commands are refused. |
-| `gac_connect.get_control_capabilities` | `vin` | Return the car's raw cabin, seat and charging capability data. |
+| `gac_connect.get_control_capabilities` | `vin` | Return the car's capability list (numeric fields only). |
 
 `vin` is needed only with more than one vehicle. `until_soc` stops at the car's
 own target charge level instead of the stop time; some cars refuse it.
