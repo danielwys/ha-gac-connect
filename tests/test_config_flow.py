@@ -8,7 +8,6 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.gac_connect.config_flow import GacConfigFlow
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
-from custom_components.gac_connect.entity_filter import UT_OMISSIONS
 
 
 @pytest.mark.parametrize("error", [aiohttp.ClientConnectionError(), TimeoutError()])
@@ -30,41 +29,26 @@ def test_network_failure_is_a_flow_error(tmp_path, error, step):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("profile", ["aion_ut", "aion_v", "auto_detect", "custom"])
 @pytest.mark.parametrize("allow_unlock", [None, False, True])
-def test_setup_saves_unlock_choice_for_every_profile(tmp_path, profile, allow_unlock):
+def test_setup_saves_the_unlock_choice(tmp_path, allow_unlock):
     async def run():
         flow = GacConfigFlow()
         flow.hass = HomeAssistant(str(tmp_path))
         flow._vehicle = SimpleNamespace(vin="TESTVIN", model="Aion UT")
         flow._client = SimpleNamespace(session=SimpleNamespace(to_dict=Mock(return_value={})))
 
-        form = await flow.async_step_profile()
-        submitted = {"profile": profile}
-        if allow_unlock is not None:
-            submitted[CONF_EXPERIMENTAL_PINLESS_UNLOCK] = allow_unlock
+        form = await flow.async_step_remote_controls()
+        assert form["step_id"] == "remote_controls" and "profile" not in form["data_schema"].schema
+        submitted = {} if allow_unlock is None else {CONF_EXPERIMENTAL_PINLESS_UNLOCK: allow_unlock}
         validated = form["data_schema"](submitted)
         assert validated[CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
 
-        result = await flow.async_step_profile(validated)
-        if profile == "custom":
-            assert result["type"] == "form" and result["step_id"] == "profile_custom"
-            flow._client.session.to_dict.assert_not_called()
-            result = await flow.async_step_profile_custom(result["data_schema"]({
-                "enable_fridge": False, "omit_entities": ["cover:sunroof"],
-            }))
+        result = await flow.async_step_remote_controls(validated)
         assert result["type"] == "create_entry"
         assert result["options"][CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
-        assert result["options"]["profile"] == profile
-        if profile == "aion_ut":
-            assert result["options"]["enable_fridge"] is False
-            assert set(result["options"]["omit_entities"]) == UT_OMISSIONS
-        elif profile == "custom":
-            assert result["options"]["enable_fridge"] is False
-            assert result["options"]["omit_entities"] == ["cover:sunroof"]
-        else:
-            assert result["options"]["enable_fridge"] is True
-            assert result["options"]["omit_entities"] == []
+        assert "profile" not in result["options"]
+        assert result["options"]["enable_fridge"] is True
+        assert result["options"]["omit_entities"] == [] and result["options"]["enable_entities"] == []
 
     asyncio.run(run())
 
@@ -79,11 +63,11 @@ def test_vehicle_choice_reuses_the_list_it_showed(tmp_path):
         flow._client = SimpleNamespace(list_vehicles=AsyncMock(return_value=vehicles))
         flow.async_set_unique_id = AsyncMock()
         flow._abort_if_unique_id_configured = Mock()
-        flow.async_step_profile = AsyncMock(return_value={"type": "form", "step_id": "profile"})
+        flow.async_step_remote_controls = AsyncMock(return_value={"type": "form", "step_id": "remote_controls"})
         shown = await flow.async_step_vehicle()
         assert shown["step_id"] == "vehicle"
         chosen = await flow.async_step_vehicle({"vin": "VIN2"})
-        assert chosen["step_id"] == "profile" and flow._vehicle is vehicles[1]
+        assert chosen["step_id"] == "remote_controls" and flow._vehicle is vehicles[1]
         flow._client.list_vehicles.assert_awaited_once()
     asyncio.run(run())
 

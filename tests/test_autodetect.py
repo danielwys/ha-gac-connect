@@ -17,11 +17,11 @@ from custom_components.gac_connect import async_remove_entry, async_unload_entry
 from custom_components.gac_connect.api import GacClient, Support, decode_status
 from custom_components.gac_connect.capabilities import CapabilityManager, ENTITY_FEATURES, store_key
 from custom_components.gac_connect.command_tracking import async_send
-from custom_components.gac_connect.config_flow import GacConfigFlow, GacOptionsFlow, PROFILES
+from custom_components.gac_connect.config_flow import GacConfigFlow, GacOptionsFlow
 from custom_components.gac_connect.const import PLATFORMS
 from custom_components.gac_connect.coordinator import GacCoordinator
 from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics
-from custom_components.gac_connect.entity_filter import OMIT_OPTIONS, UT_OMISSIONS, apply_registry_choices
+from custom_components.gac_connect.entity_filter import OMIT_OPTIONS, apply_registry_choices
 from custom_components.gac_connect.lock import GacLock
 from test_regressions import ACCEPTED, service_registry
 from test_session_store import make_entry
@@ -33,7 +33,7 @@ async def vehicle(tmp_path, *, model="Unknown trim", options=None):
     entry = make_entry(hass, {"region": "AU", "vin": "VIN", "model": model})
     hass.config_entries._store = Mock()
     hass.config_entries.async_update_entry(entry, options={
-        "profile": "auto_detect", "enable_fridge": True, **(options or {}),
+        "enable_fridge": True, **(options or {}),
     })
     if hasattr(dr, "async_setup"):
         dr.async_setup(hass)
@@ -58,33 +58,28 @@ def result(sid="s1", *, ok=True, vin="VIN"):
     return PushResult(ok, "0000" if ok else "13101", None, {}, session_id=sid, vin=vin)
 
 
-def test_auto_profile_is_available_at_setup_and_keeps_unknown_features_automatic():
-    assert PROFILES["auto_detect"] == "Auto detect"
+def test_setup_asks_only_which_remote_controls_to_allow():
     flow = GacConfigFlow()
     flow._create_vehicle_entry = Mock()
-    asyncio.run(flow.async_step_profile({"profile": "auto_detect"}))
+    asyncio.run(flow.async_step_remote_controls({"experimental_pinless_unlock": True, "allow_vehicle_shutdown": False}))
     assert flow._create_vehicle_entry.call_args.args[0] == {
-        "profile": "auto_detect", "enable_fridge": True, "omit_entities": [], "enable_entities": [],
+        "enable_fridge": True, "omit_entities": [], "enable_entities": [],
     }
+    assert (flow._allow_unlock, flow._allow_vehicle_shutdown) == (True, False)
 
 
-@pytest.mark.parametrize("stored_profile", [None, "aion_ut"])
-def test_existing_ut_can_switch_to_auto_without_inheriting_preset_exclusions(tmp_path, stored_profile):
+def test_settings_offer_no_profile_and_keep_the_other_choices(tmp_path):
     async def run():
-        options = {"omit_entities": sorted(UT_OMISSIONS | {"sensor:pm25"}),
-                   "enable_fridge": False, "enable_tracker": False, "experimental_pinless_unlock": True}
-        if stored_profile:
-            options["profile"] = stored_profile
+        options = {"omit_entities": ["sensor:pm25"], "enable_tracker": False, "experimental_pinless_unlock": True}
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options=options)
             flow = GacOptionsFlow()
             flow.hass, flow.handler = hass, entry.entry_id
             form = await flow.async_step_settings()
-            assert "profile" in form["data_schema"].schema
-            response = await flow.async_step_settings({"profile": "auto_detect"})
+            assert "profile" not in form["data_schema"].schema and "enable_fridge" in form["data_schema"].schema
+            response = await flow.async_step_settings({"scan_interval": 120})
             assert response["type"] == "menu" and response["step_id"] == "init"
             assert entry.options["omit_entities"] == ["sensor:pm25"]
-            assert entry.options["enable_fridge"] is True
             assert entry.options["enable_tracker"] is False
             assert entry.options["experimental_pinless_unlock"] is True
     asyncio.run(run())
@@ -182,7 +177,7 @@ def test_ut_auto_uses_model_lock_decoding_and_accepts_positive_variant_evidence(
     asyncio.run(run())
 
 
-def test_registry_preserves_ids_and_user_disabled_rows_through_discovery_and_profiles(tmp_path):
+def test_registry_preserves_ids_and_user_disabled_rows_through_discovery_and_choices(tmp_path):
     async def run():
         async with vehicle(tmp_path) as (hass, entry, coordinator):
             registry = er.async_get(hass)
@@ -198,13 +193,11 @@ def test_registry_preserves_ids_and_user_disabled_rows_through_discovery_and_pro
             assert registry.async_get(sunroof.entity_id).disabled_by is None
             assert registry.async_get(steering.entity_id).disabled_by is er.RegistryEntryDisabler.USER
             assert registry.async_get(other.entity_id).disabled_by is None
-            # A later manual profile restores previously automatic-disabled rows.
+            # Always show restores a row that detection had disabled.
             unknown = registry.async_get_or_create("button", "gac_connect", "VIN_horn")
             apply_registry_choices(hass, entry)
             assert registry.async_get(unknown.entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
-            await coordinator.capabilities.async_close()
-            coordinator.capabilities = None
-            hass.config_entries.async_update_entry(entry, options={"profile": "custom"})
+            hass.config_entries.async_update_entry(entry, options={**entry.options, "enable_entities": ["button:horn"]})
             apply_registry_choices(hass, entry)
             assert registry.async_get(unknown.entity_id).disabled_by is None
             assert registry.async_get(steering.entity_id).disabled_by is er.RegistryEntryDisabler.USER
@@ -222,7 +215,8 @@ def test_evidence_survives_reload_but_does_not_leak_between_vehicles(tmp_path):
             stored = json.loads((tmp_path / ".storage" / store_key(entry.entry_id)).read_text())["data"]
             # Entry IDs and hashes can coincidentally contain digits from readings.
             # Assert the saved data's shape and values, not arbitrary substrings.
-            assert set(stored) == {"vehicle_key", "evidence"}
+            assert set(stored) == {"vehicle_key", "evidence", "capability_list_read"}
+            assert stored["capability_list_read"] is False
             assert len(stored["vehicle_key"]) == 64 and all(c in "0123456789abcdef" for c in stored["vehicle_key"])
             assert stored["evidence"] == {
                 "version": 1, "readings": ["tyre_4_pressure", "tyre_4_temperature"],

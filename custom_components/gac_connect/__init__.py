@@ -18,7 +18,9 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .cabin import controller as cabin_controller
 from .capabilities import store_key as capabilities_store_key
-from .const import CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS
+from .const import (
+    CONF_ENABLE_FRIDGE, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE, CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS,
+)
 from .coordinator import GacCoordinator
 from .session_store import ConfigEntryStore
 from .entity_filter import apply_registry_choices
@@ -43,6 +45,26 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     return True
 
 
+# What the removed Aion UT profile omitted on its own; the car's capability list decides these now.
+_UT_PROFILE_OMISSIONS = frozenset({
+    "switch:steering_heat", "cover:sunroof", "binary_sensor:seat_3_ventilation", "binary_sensor:seat_4_ventilation",
+    *(f"sensor:tyre_{i}_{kind}" for i in range(1, 5) for kind in ("pressure", "temp")),
+})
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """1.2: vehicle profiles were removed; detection decides, and the owner's own choices stay."""
+    if entry.version == 1 and entry.minor_version < 2:
+        options = dict(entry.options)
+        profile = options.pop(CONF_PROFILE, None)
+        model = str(entry.data.get(CONF_MODEL) or "").strip().casefold()
+        if profile == "aion_ut" or (profile is None and (model == "aion ut" or model.startswith("aion ut "))):
+            options[CONF_OMIT_ENTITIES] = sorted(set(options.get(CONF_OMIT_ENTITIES, ())) - _UT_PROFILE_OMISSIONS)
+            options[CONF_ENABLE_FRIDGE] = True
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     # Isolated session: this login's cookies must not mix with other integrations.
     http = async_create_clientsession(hass)
@@ -54,11 +76,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
 
     _remove_retired_entities(hass, entry)
     coordinator = GacCoordinator(hass, entry, client)
-    if coordinator.capabilities is None and not controls_enabled(entry):
+    if not controls_enabled(entry):
         remove_entities(hass, entry)
-    if coordinator.capabilities is not None:
-        await coordinator.capabilities.async_load()
+    await coordinator.capabilities.async_load()
     await coordinator.async_config_entry_first_refresh()
+    await coordinator.capabilities.async_read_capability_list_once(client, coordinator.vin)
 
     entry.runtime_data = GacRuntime(client=client, coordinator=coordinator, options=dict(entry.options))
     apply_registry_choices(hass, entry)
@@ -91,7 +113,7 @@ def _remove_retired_entities(hass: HomeAssistant, entry: GacConfigEntry) -> None
 
 async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unloaded and entry.runtime_data.coordinator.capabilities is not None:
+    if unloaded:
         await entry.runtime_data.coordinator.capabilities.async_close()
     return unloaded
 

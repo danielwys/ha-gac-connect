@@ -37,20 +37,18 @@ def test_power_sensor_shows_only_the_reported_power_mode_in_sensors(mode, expect
     assert sensor.is_on is None and sensor.extra_state_attributes == {'power_mode': None}
 
 
-@pytest.mark.parametrize('profile', ['auto_detect', 'aion_ut', 'aion_v', 'custom'])
 @pytest.mark.parametrize('allowed', [False, True])
 @pytest.mark.parametrize('omitted', [False, True])
-def test_shutdown_choice_controls_button_visibility_without_suppressing_power_sensor(tmp_path, profile, allowed, omitted):
+def test_shutdown_choice_controls_button_visibility_without_suppressing_power_sensor(tmp_path, allowed, omitted):
     async def run():
         from custom_components.gac_connect import binary_sensor, button
-        options = {'profile': profile, CONF_ALLOW_VEHICLE_SHUTDOWN: allowed,
+        options = {CONF_ALLOW_VEHICLE_SHUTDOWN: allowed,
                    'enable_entities': ['button:vehicle_power_off'],
                    'omit_entities': ['button:vehicle_power_off'] if omitted else []}
         async with vehicle(tmp_path, options=options) as (hass, entry, c):
             c.data = decode_status({'powerAccessors': [{'powerMode': 0}]})
-            if c.capabilities:
-                c.capabilities.observe(c.data)
-                c.capabilities.confirm_command('vehicle-power-off')
+            c.capabilities.observe(c.data)
+            c.capabilities.confirm_command('vehicle-power-off')
             added = []
             for module in (binary_sensor, button):
                 await module.async_setup_entry(hass, entry, lambda entities: added.extend(e.unique_id for e in entities))
@@ -104,15 +102,13 @@ def test_shutdown_tracks_fresh_power_off_without_optimistic_sensor_changes_and_c
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('profile', ['auto_detect', 'aion_ut'])
-def test_disabling_shutdown_preserves_its_registry_id_for_reenable(tmp_path, profile):
+def test_disabling_shutdown_preserves_its_registry_id_for_reenable(tmp_path):
     async def run():
-        async with vehicle(tmp_path, options={'profile': profile}) as (hass, entry, c):
+        async with vehicle(tmp_path) as (hass, entry, c):
             registry = er.async_get(hass)
             record = registry.async_get_or_create('button', 'gac_connect', 'VIN_vehicle_power_off')
             for allowed in (False, True, False, True):
-                hass.config_entries.async_update_entry(entry, options={'profile': profile,
-                                                                       CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
+                hass.config_entries.async_update_entry(entry, options={CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
                 apply_registry_choices(hass, entry)
                 current = registry.async_get(record.entity_id)
                 assert current is not None and current.id == record.id
@@ -121,28 +117,24 @@ def test_disabling_shutdown_preserves_its_registry_id_for_reenable(tmp_path, pro
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('profile', ['aion_ut', 'aion_v', 'auto_detect', 'custom'])
 @pytest.mark.parametrize('allowed', [False, True])
-def test_setup_and_options_save_shutdown_permission_for_all_profiles(tmp_path, profile, allowed):
+def test_setup_and_options_save_the_shutdown_permission(tmp_path, allowed):
     async def run():
         flow = GacConfigFlow()
         async with vehicle(tmp_path) as (hass, entry, c):
             flow.hass = hass
             flow._vehicle = SimpleNamespace(vin='VIN', model='Aion UT')
             flow._client = SimpleNamespace(session=SimpleNamespace(to_dict=Mock(return_value={})))
-            form = await flow.async_step_profile()
-            defaults = form['data_schema']({'profile': profile})
+            form = await flow.async_step_remote_controls()
+            defaults = form['data_schema']({})
             assert defaults[CONF_ALLOW_VEHICLE_SHUTDOWN] is False
-            submitted = {**defaults, CONF_ALLOW_VEHICLE_SHUTDOWN: allowed}
-            created = await flow.async_step_profile(submitted)
-            if profile == 'custom':
-                created = await flow.async_step_profile_custom(created['data_schema']({'enable_fridge': False}))
+            created = await flow.async_step_remote_controls({**defaults, CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
             assert created['options'][CONF_ALLOW_VEHICLE_SHUTDOWN] is allowed
             options_flow = GacOptionsFlow()
             options_flow.hass, options_flow.handler = hass, entry.entry_id
             form = await options_flow.async_step_settings()
             assert form['data_schema']({})[CONF_ALLOW_VEHICLE_SHUTDOWN] is False
-            await options_flow.async_step_settings({'profile': profile, CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
+            await options_flow.async_step_settings({CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
             assert entry.options[CONF_ALLOW_VEHICLE_SHUTDOWN] is allowed
             await options_flow.async_step_settings({'scan_interval': 120})
             assert entry.options[CONF_ALLOW_VEHICLE_SHUTDOWN] is allowed

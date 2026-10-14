@@ -30,10 +30,8 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
 from .const import CONF_ENABLE_FRIDGE, CONF_VIN, DEFAULT_ENABLE_FRIDGE, DOMAIN, SIGNAL_COMMAND_RESULT
-from .entity_filter import is_aion_ut, add_configured_entities
+from .entity_filter import add_configured_entities
 from .command_tracking import async_send
-from .profiles import profile_for
-from .const import PROFILE_AUTO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,14 +51,8 @@ def store_key(entry_id: str) -> str:
     return f"{DOMAIN}.fridge.{entry_id}"
 
 
-def fitted(coordinator) -> bool:
-    return bool(coordinator.data is not None and getattr(coordinator.data, "fridge_fitted", False))
-
-
 def controls_enabled(entry: ConfigEntry) -> bool:
     """Owners can hide the controls, e.g. on a car that reports a fridge it doesn't have."""
-    if is_aion_ut(entry):
-        return False
     return bool(entry.options.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))
 
 
@@ -369,32 +361,6 @@ def controller(coordinator) -> FridgeController:
 
 
 def async_add_when_fitted(entry: ConfigEntry, coordinator, add_entities, make: Callable[[], list], *, platform: str) -> None:
-    """Add the fridge entities now if the car has one, or when a report first shows one."""
-    if not controls_enabled(entry):
-        return
-    if profile_for(entry) == PROFILE_AUTO:
+    """Add the fridge entities; detection shows them once the car is known to have a fridge."""
+    if controls_enabled(entry):
         add_configured_entities(entry, add_entities, platform, make())
-        return
-    if fitted(coordinator):
-        add_configured_entities(entry, add_entities, platform, make())
-        return
-    unsub: Callable[[], None] | None = None
-
-    @callback
-    def _check() -> None:
-        nonlocal unsub
-        if unsub is not None and fitted(coordinator):
-            remove, unsub = unsub, None
-            remove()
-            add_configured_entities(entry, add_entities, platform, make())
-
-    unsub = coordinator.async_add_listener(_check)
-
-    @callback
-    def _stop() -> None:
-        nonlocal unsub
-        if unsub is not None:
-            remove, unsub = unsub, None
-            remove()
-
-    entry.async_on_unload(_stop)

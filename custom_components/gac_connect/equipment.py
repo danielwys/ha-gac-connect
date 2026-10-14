@@ -1,58 +1,78 @@
-"""Human-readable equipment explanations, without telemetry or identifiers."""
-from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
-from .capabilities import ENTITY_FEATURES, FRIDGE_ENTITIES
-from .const import CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_ENABLE_FRIDGE, CONF_OMIT_ENTITIES
-from .entity_filter import LOCATION_ENTITIES, OMIT_OPTIONS, is_aion_ut, model_omissions
-from .location import location_enabled
+"""Which entities are shown and why, without telemetry or identifiers."""
+from collections import Counter
+
+from .const import CONF_ENABLE_ENTITIES, CONF_OMIT_ENTITIES
+from .entity_filter import ENTITY_CHOICES
+
+# What each entity reports or does, in a few words.
+DETAILS: dict[str, str] = {
+    "sensor:charge_schedule": "unrestricted or scheduled",
+    "sensor:soc": "%", "sensor:range": "km", "sensor:odometer": "km",
+    "sensor:cabin_temp": "°C", "sensor:outside_temp": "°C", "sensor:aux_voltage": "V",
+    "sensor:ac_fan_strength": "0–10", "sensor:gps_coordinates": "latitude, longitude",
+    "sensor:charge_time": "minutes", "sensor:charge_current": "A", "sensor:charge_power": "kW",
+    "sensor:charge_voltage": "V", "sensor:pm25": "µg/m³", "sensor:last_report": "time",
+    "sensor:charge_window_start": "HH:MM", "sensor:charge_window_stop": "HH:MM",
+    "sensor:fridge_keep_mode": "timed or unlimited", "sensor:fridge_time_left": "minutes",
+    **{f"sensor:tyre_{i}_pressure": "kPa" for i in range(1, 5)},
+    **{f"sensor:tyre_{i}_temp": "°C" for i in range(1, 5)},
+    "binary_sensor:vehicle_power": "on/off", "binary_sensor:plugged": "plugged in/unplugged",
+    "binary_sensor:charging": "charging/not charging", "binary_sensor:locked": "locked/unlocked",
+    "binary_sensor:door_open": "open/closed", "binary_sensor:window_open": "open/closed",
+    "binary_sensor:hatch_open": "open/closed", "binary_sensor:online": "connected/disconnected",
+    "binary_sensor:charger_locked": "locked/unlocked", "binary_sensor:ac_auto": "on/off",
+    "binary_sensor:ac_compressor": "on/off", "binary_sensor:anti_theft": "armed/disarmed",
+    **{f"binary_sensor:seat_{i}_ventilation": "running/off" for i in range(1, 5)},
+    "button:vehicle_power_off": "switches the car off", "button:charge_now": "charge when plugged in",
+    "button:horn": "sounds the horn",
+    "switch:charge_switch": "on charges whenever plugged in", "switch:climate_power": "A/C on/off",
+    "switch:steering_heat": "on/off", "switch:lights": "flash on/off", "switch:ventilation": "on/off",
+    "switch:recirculation": "on recirculates, off fresh air; while the A/C runs",
+    "switch:precondition_battery": "on/off", "switch:fridge": "on/off",
+    "cover:windows": "open/close", "cover:sunroof": "open/close", "cover:tailgate": "open/close",
+    "climate:climate": "Off, On, Fan only; 18–32 °C; fan 1–7; Heating and Cooling presets",
+    "lock:doors": "lock; unlock if allowed",
+    "select:seat_1_ventilation": "Off, Low, Medium, High", "select:seat_2_ventilation": "Off, Low, Medium, High",
+    "select:fridge_mode": "Off, Refrigerate, Heat, Freeze",
+    "number:fridge_temperature": "0–20, 35–50 or −15 to −1 °C by mode",
+    "device_tracker:location": "home/away and map",
+}
+# Controls first, then readings.
+ORDER = ("climate", "switch", "select", "number", "cover", "lock", "button", "device_tracker", "sensor", "binary_sensor")
+ENTITIES = {f"{domain}:{key}": label for domain in ORDER for key, label in ENTITY_CHOICES[domain].items()}
 
 
 def equipment_summary(entry) -> str:
     runtime = getattr(entry, "runtime_data", None)
     manager = getattr(getattr(runtime, "coordinator", None), "capabilities", None)
-    rows = []
-    forced = model_omissions(entry)
-    for key, label in OMIT_OPTIONS.items():
-        if manager is not None:
-            explanation = manager.explanation(key)
-            feature = ENTITY_FEATURES.get(key)
-            commands = [name for name, equipment in COMMAND_FEATURES.items() if equipment == feature]
-            if commands:
-                confirmed = [name for name in commands if manager.detector.command(name).source == "confirmed_command"]
-                explanation += " Successful command results: " + (", ".join(confirmed) if confirmed else "none yet") + "."
-        elif key in forced or (key in FRIDGE_ENTITIES and is_aion_ut(entry)):
-            explanation = "Omitted by the selected model profile."
-        elif key in entry.options.get(CONF_OMIT_ENTITIES, ()):
-            explanation = "Hidden by your Omit choice."
-        elif key == "button:vehicle_power_off":
-            explanation = ("Enabled in Vehicle settings." if entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is True
-                           else "Hidden: remote vehicle shutdown is disabled in Vehicle settings.")
-        elif key in FRIDGE_ENTITIES:
-            explanation = ("Shown only when fridge readings are available." if entry.options.get(CONF_ENABLE_FRIDGE, True)
-                           else "Hidden: fridge controls are turned off.")
-        elif key in LOCATION_ENTITIES and not location_enabled(entry.options):
-            explanation = "Hidden: location tracking is turned off."
-        elif key == "button:charge_pause":
-            explanation = "Unavailable: continuous charging pause is not supported."
-        else:
-            explanation = "Included by the selected profile; support has not been verified by Auto detect."
-        rows.append(f"- **{label}** — {explanation}")
     if manager is None:
-        rows.insert(0, "Auto detect evidence is available only while that profile is loaded.\n")
-    rows.append("\nDriver and front passenger seat ventilation each have a level select (off, low, medium, high); "
-                "the console's Smart mode is not reported, and choosing a level replaces it. "
-                "Vehicle power shows on/off from the reported power mode, independently of Online and A/C. "
-                "Turn vehicle off sends the app's shutdown request; remote power-on is not implemented. "
-                "Seat status, A/C auto/compressor and anti-theft entities show the vehicle's report. "
-                "Climate On preserves the fan and outlets; its fan selector offers Off and speeds 1–7. "
-                "Console-only speeds 8–10 remain visible in Cabin fan strength. "
-                "A speed selection starts or renews the timed A/C run at the selected temperature. "
-                "Climate airflow offers cabin, cabin + feet, feet and feet + windscreen when Vehicle power is On. "
-                "Recirculation shows the reported air source (on recirculates, off draws fresh air; the console's "
-                "Auto reports as fresh air) and can be changed only while A/C runs. "
-                "Battery preconditioning is on while the car reports a requested or scheduled run; off cancels it. "
-                "Windscreen-only was rejected by the cloud; all-outlets is not verified remotely. "
-                "Raw seat enableWind is available for comparing console On and Smart modes. "
-                "The Climate heating/cooling presets use the app's automatic A/C temperature extremes. "
-                "The Ventilation switch controls cabin ventilation, not the seats. "
-                "Phone accessor records are metadata, not exposed calling controls.")
-    return "\n".join(rows)
+        return "The vehicle is not loaded. Reconnect it to see its equipment."
+    decide = manager.decision
+    omitted = set(entry.options.get(CONF_OMIT_ENTITIES, ()))
+    always = set(entry.options.get(CONF_ENABLE_ENTITIES, ()))
+    choices: list[str] = []
+    rows: dict[bool, list[tuple[str, str]]] = {True: [], False: []}
+    for key, label in ENTITIES.items():
+        detail = DETAILS.get(key)
+        line = f"- {label} ({detail})" if detail else f"- {label}"
+        if key in omitted or key in always:
+            # What the car's evidence alone would decide, so an override that changes nothing shows.
+            automatic, _ = decide(key, user_choices=False)
+            if key in omitted:
+                choices.append(f"{line}: omitted; " + ("otherwise shown" if automatic else "would be hidden anyway"))
+            else:
+                choices.append(f"{line}: always shown; " + ("would be shown anyway" if automatic else "otherwise hidden"))
+            continue
+        shown, reason = decide(key)
+        rows[shown].append((line, reason))
+    sections = ["**Your choices (Vehicle settings)**\n\n" + "\n".join(choices)] if choices else []
+    for shown, items in rows.items():
+        if not items:
+            continue
+        # The most common reason heads the section; any other is given on its line, after the rest.
+        main = Counter(reason for _, reason in items).most_common(1)[0][0]
+        lines = [line for line, reason in items if reason == main]
+        lines += [f"{line} — {reason}" for line, reason in items if reason != main]
+        note = ", unless noted" if len(lines) > sum(reason == main for _, reason in items) else ""
+        sections.append(f"**{'Shown' if shown else 'Hidden'} ({main}{note})**\n\n" + "\n".join(lines))
+    return "\n\n".join(sections)

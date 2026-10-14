@@ -25,25 +25,16 @@
           "vin": "Vehicle"
         }
       },
-      "profile": {
-        "title": "Set up your vehicle",
-        "description": "Select an equipment profile for {model}. Auto detect learns from vehicle reports without trying commands. Aion UT omits the fridge, steering wheel heat, sunroof and all eight tyre pressure and temperature sensors. Profiles and manual choices can be changed later in the integration options.",
+      "remote_controls": {
+        "title": "Remote controls",
+        "description": "Choose which remote controls Home Assistant may use for {model}. Sensors and controls are matched to the car's own capability list. Both can be changed later in the integration options.",
         "data": {
-          "profile": "Vehicle profile",
           "experimental_pinless_unlock": "Allow remote unlocking",
           "allow_vehicle_shutdown": "Allow remote vehicle shutdown"
         },
         "data_description": {
           "experimental_pinless_unlock": "Allow the Doors control to unlock the car. No PIN required. Leave off to use this control for locking only.",
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command."
-        }
-      },
-      "profile_custom": {
-        "title": "Choose supported equipment",
-        "description": "Turn off the fridge if your car has none, then select any other sensors or controls to omit.",
-        "data": {
-          "enable_fridge": "Fridge / warmer box fitted",
-          "omit_entities": "Entities to omit"
         }
       },
       "reauth_confirm": {
@@ -73,10 +64,9 @@
     "step": {
       "settings": {
         "title": "GAC Connect options",
-        "description": "Auto detect learns from usable readings and remembers them across restarts. Unknown features stay hidden unless you choose Always show. A detected state does not prove that remote commands work; command outcomes are listed separately in diagnostics. No commands are sent to test equipment.",
+        "description": "Sensors and controls are matched to the car's capability list and its reports. Use Always show and Omit to override them.",
         "data": {
-          "profile": "Vehicle profile",
-          "enable_entities": "Always show (Auto detect only)",
+          "enable_entities": "Always show",
           "allow_plaintext_push": "Allow unencrypted push connections (less secure)",
           "scan_interval": "Poll interval (seconds)",
           "track_parked": "Enable location tracking when parked",
@@ -91,13 +81,12 @@
           "ac_minutes": "A/C run time (minutes)"
         },
         "data_description": {
-          "profile": "Switch profiles here. Leaving the Aion UT preset clears its preset exclusions; Auto detect then uses reports to identify equipment, including variants.",
-          "enable_entities": "Show these entities even without detection evidence. Omit choices and the separate fridge and location settings still take priority. Remote unlocking and vehicle shutdown require their separate Allow settings. This does not prove a command is supported.",
+          "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking and shutdown need their Allow settings.",
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",
           "enable_fridge": "Allow fridge controls when detected. Turn off to remove them, for example on a trim without one. With Auto detect, Always show can reveal controls before usable fridge readings arrive.",
           "experimental_pinless_unlock": "Allow the Doors control to unlock the car. No PIN required. Leave off to use this control for locking only.",
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command; the Vehicle power sensor remains available when it is off.",
-          "omit_entities": "Select sensors and controls your vehicle does not have. Existing entities are disabled while selected and return with the same IDs if you clear them.",
+          "omit_entities": "Hide these entities even if the car has them. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "picture": "An image URL, or a /local/ path such as /local/my-car.png for a file in your config/www folder. Leave empty for the built-in AION V picture; other models show the entity's initials.",
           "track_parked": "Show the car's location while it is switched off. With either location setting on, the Home/Away location tracker and a GPS coordinates sensor are added; with both off, neither is shown. Coordinates remain redacted in downloaded diagnostics.",
           "track_moving": "Show the car's location while it is switched on. The car reports no speed or gear, so switched on counts as moving, even when stationary. While the car is in a state you do not track, both location entities show unknown and no position is recorded."
@@ -108,13 +97,18 @@
         "menu_options": {
           "settings": "Vehicle settings",
           "equipment": "Detected equipment",
+          "capabilities": "Refresh vehicle capabilities",
           "charging": "Charging schedule"
         },
         "description": "Vehicle settings are saved when you submit them. You can open another panel here, or close this dialog when finished."
       },
       "equipment": {
         "title": "Detected equipment",
-        "description": "These explanations describe integration choices, not a complete list of your car’s hardware. Observing a state does not prove both remote command directions work. No test commands are sent. Hardware readings that disappear temporarily remain remembered. Home Assistant’s own disabled-entity settings can still hide an included entity.\n\n{equipment}"
+        "description": "Which entities are shown, and why.\n\n{equipment}"
+      },
+      "capabilities": {
+        "title": "Refresh vehicle capabilities",
+        "description": "Read the list of features your car offers remotely from GAC's service, and show or hide entities to match. Do this after a software update or if entities look wrong. Your Omit and Always show choices still apply. One request; no command is sent to the car."
       },
       "charging": {
         "title": "Charging schedule",
@@ -155,7 +149,8 @@
       "quiet_times_equal": "Start and end must differ. Clear both to disable quiet hours.",
       "invalid_charge_window": "Enter different start and stop times in HH:MM format (00:00–23:59) and choose valid days.",
       "command_failed": "The request failed. Open Last command for the failure reason and service code, and check Polling status before trying again.",
-      "command_refused": "{reason}"
+      "command_refused": "{reason}",
+      "capability_read_failed": "The capability list could not be read. Equipment is still detected from the car's reports; try again later."
     },
     "abort": {
       "vehicle_not_loaded": "The vehicle integration is not loaded. Reconnect it before viewing or changing charging settings."

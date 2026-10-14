@@ -9,6 +9,7 @@ from ._vendor.gac_connect import (
     PushClient,
     decode_status,
     doors_locked,
+    equipment_from_capabilities,
     local_mobile,
     validate_clock,
     validate_weekly,
@@ -16,7 +17,7 @@ from ._vendor.gac_connect import (
 )
 
 __all__ = [
-    "Capabilities", "Support",
+    "Capabilities", "Support", "equipment_from_capabilities",
     "GacClient", "PushClient", "PAUSE_UNSUPPORTED", "decode_status", "doors_locked",
     "local_mobile", "validate_clock", "validate_weekly", "window_operation",
 ]

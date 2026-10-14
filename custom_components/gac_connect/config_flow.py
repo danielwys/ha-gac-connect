@@ -45,8 +45,7 @@ from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_sta
 from .helpers import async_build_client
 from .location import location_enabled, tracking_choices
 from .session_store import ConfigEntryStore
-from .profiles import profile_for
-from .entity_filter import OMIT_OPTIONS, UT_OMISSIONS, is_aion_ut, model_omissions
+from .entity_filter import OMIT_OPTIONS
 from .const import (
     CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_AC_MINUTES,
@@ -61,7 +60,6 @@ from .const import (
     CONF_MODEL,
     CONF_OMIT_ENTITIES,
     CONF_PICTURE,
-    CONF_PROFILE,
     CONF_QUIET_END,
     CONF_QUIET_START,
     CONF_SCAN_INTERVAL,
@@ -72,10 +70,6 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
-    PROFILE_AUTO,
-    PROFILE_CUSTOM,
-    PROFILE_UT,
-    PROFILE_V,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -93,14 +87,6 @@ REGION_SELECTOR = SelectSelector(SelectSelectorConfig(
     options=[SelectOptionDict(value=code, label=REGION_NAMES[code]) for code in REGIONS],
     mode=SelectSelectorMode.DROPDOWN,
 ))
-PROFILES = {
-    PROFILE_AUTO: "Auto detect",
-    PROFILE_UT: "Aion UT (omit fridge, steering wheel heat, sunroof, tyre readings and rear seat ventilation)",
-    PROFILE_V: "Aion V (allow fridge)",
-    PROFILE_CUSTOM: "Other or custom equipment",
-}
-
-
 def _thai_local_mobile(mobile: str) -> str:
     """Return a Thai national number for the library's +66 SMS requests."""
     compact = re.sub(r"[\s()-]", "", mobile)
@@ -114,6 +100,7 @@ def _thai_local_mobile(mobile: str) -> str:
 
 class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
+    MINOR_VERSION = 2   # 1.2: vehicle profiles removed
 
     def __init__(self) -> None:
         self._client: GacClient | None = None
@@ -263,53 +250,26 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(vin)
             self._abort_if_unique_id_configured()
             self._vehicle = by_vin[vin]
-            return await self.async_step_profile()
+            return await self.async_step_remote_controls()
         options = {v.vin: f"{v.model or 'Aion'} ({v.plate or v.vin[-4:]})" for v in vehicles}
         return self.async_show_form(
             step_id="vehicle", data_schema=vol.Schema({vol.Required(CONF_VIN): vol.In(options)}),
         )
 
-    # ---- step 5: choose a capability profile ----------------------------
-    async def async_step_profile(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    # ---- step 5: remote controls this integration may use ---------------
+    async def async_step_remote_controls(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._allow_unlock = user_input.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)
             self._allow_vehicle_shutdown = user_input.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)
-            profile = user_input["profile"]
-            if profile == PROFILE_CUSTOM:
-                return await self.async_step_profile_custom()
-            options = {
-                CONF_PROFILE: profile,
-                CONF_ENABLE_FRIDGE: profile != PROFILE_UT,
-                CONF_OMIT_ENTITIES: sorted(UT_OMISSIONS) if profile == PROFILE_UT else [],
-                CONF_ENABLE_ENTITIES: [],
-            }
-            return self._create_vehicle_entry(options)
-
-        model = (self._vehicle.model or "").strip().casefold()
-        suggested = PROFILE_UT if model.startswith("aion ut") else (
-            PROFILE_V if model.startswith("aion v") else PROFILE_CUSTOM
-        )
+            return self._create_vehicle_entry({CONF_ENABLE_FRIDGE: DEFAULT_ENABLE_FRIDGE,
+                                               CONF_OMIT_ENTITIES: [], CONF_ENABLE_ENTITIES: []})
         return self.async_show_form(
-            step_id="profile",
+            step_id="remote_controls",
             data_schema=vol.Schema({
-                vol.Required("profile", default=suggested): vol.In(PROFILES),
                 vol.Required(CONF_EXPERIMENTAL_PINLESS_UNLOCK, default=self._allow_unlock): bool,
                 vol.Required(CONF_ALLOW_VEHICLE_SHUTDOWN, default=self._allow_vehicle_shutdown): bool,
             }),
             description_placeholders={"model": self._vehicle.model or "your vehicle"},
-        )
-
-    async def async_step_profile_custom(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        if user_input is not None:
-            return self._create_vehicle_entry({**user_input, CONF_PROFILE: PROFILE_CUSTOM})
-        return self.async_show_form(
-            step_id="profile_custom",
-            data_schema=vol.Schema({
-                vol.Required(CONF_ENABLE_FRIDGE, default=DEFAULT_ENABLE_FRIDGE): bool,
-                vol.Optional(CONF_OMIT_ENTITIES, default=[]): cv.multi_select(OMIT_OPTIONS),
-            }),
         )
 
     def _create_vehicle_entry(self, options: dict[str, Any]) -> ConfigFlowResult:
@@ -357,7 +317,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
 
 class GacOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["settings", "equipment", "charging"])
+        return self.async_show_menu(step_id="init", menu_options=["settings", "equipment", "capabilities", "charging"])
 
     def _loaded_coordinator(self):
         runtime = getattr(self.config_entry, "runtime_data", None)
@@ -451,24 +411,28 @@ class GacOptionsFlow(OptionsFlow):
         return self.async_show_form(step_id="equipment", data_schema=vol.Schema({}),
                                     description_placeholders={"equipment": equipment_summary(self.config_entry)})
 
+    async def async_step_capabilities(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Read the car's capability list again, for example after a software update."""
+        if (coordinator := self._loaded_coordinator()) is None:
+            return self.async_abort(reason="vehicle_not_loaded")
+        manager = coordinator.capabilities
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                await manager.async_read_capability_list(coordinator.client, coordinator.vin)
+            except (GacError, HomeAssistantError) as err:
+                _LOGGER.warning("Capability list read failed: %s", err)
+                errors["base"] = "capability_read_failed"
+            else:
+                self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+                return await self.async_step_equipment()
+        return self.async_show_form(step_id="capabilities", data_schema=vol.Schema({}), errors=errors)
+
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = {**self.config_entry.options, **user_input}
-            previous_profile = profile_for(self.config_entry)
-            profile = user_input.setdefault(CONF_PROFILE, previous_profile)
-            if profile != previous_profile:
-                omitted = set(user_input.get(CONF_OMIT_ENTITIES, ()))
-                if previous_profile == PROFILE_UT:
-                    omitted -= UT_OMISSIONS
-                    user_input[CONF_ENABLE_FRIDGE] = True
-                if profile == PROFILE_UT:
-                    omitted |= UT_OMISSIONS
-                    user_input[CONF_ENABLE_FRIDGE] = False
-                user_input[CONF_OMIT_ENTITIES] = sorted(omitted)
-            if profile == PROFILE_AUTO and (
-                set(user_input.get(CONF_ENABLE_ENTITIES, ())) & set(user_input.get(CONF_OMIT_ENTITIES, ()))
-            ):
+            if set(user_input.get(CONF_ENABLE_ENTITIES, ())) & set(user_input.get(CONF_OMIT_ENTITIES, ())):
                 errors[CONF_ENABLE_ENTITIES] = "conflicting_entity_choices"
             picture = (user_input.get(CONF_PICTURE) or "").strip()
             if picture and not (picture.startswith("/") or picture.lower().startswith(("http://", "https://"))):
@@ -494,18 +458,13 @@ class GacOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
         opts = {**self.config_entry.options, **(user_input or {})}
         track_parked, track_moving = tracking_choices(opts)
-        forced = model_omissions(self.config_entry)
-        omit_options = {key: label for key, label in OMIT_OPTIONS.items() if key not in forced}
+        omit_options = dict(OMIT_OPTIONS)
         selected_omissions = [
             key for key in opts.get(CONF_OMIT_ENTITIES, ()) if key in omit_options
         ]
-        enable_options = {
-            key: value for key, value in OMIT_OPTIONS.items()
-            if key != "button:charge_pause" and key not in forced
-        }
+        enable_options = {key: value for key, value in OMIT_OPTIONS.items() if key != "button:charge_pause"}
         selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
         fields = {
-            vol.Optional(CONF_PROFILE, default=opts.get(CONF_PROFILE, profile_for(self.config_entry))): vol.In(PROFILES),
             vol.Optional(CONF_ENABLE_ENTITIES,
                          default=selected_enables): cv.multi_select(enable_options),
             vol.Optional(CONF_ALLOW_PLAINTEXT_PUSH,
@@ -527,8 +486,6 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_AC_MINUTES, default=opts.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)):
                 vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
         }
-        if not is_aion_ut(self.config_entry):
-            fields[vol.Optional(CONF_ENABLE_FRIDGE,
-                                default=opts.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))] = bool
+        fields[vol.Optional(CONF_ENABLE_FRIDGE, default=opts.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))] = bool
         schema = vol.Schema(fields)
         return self.async_show_form(step_id="settings", data_schema=schema, errors=errors)

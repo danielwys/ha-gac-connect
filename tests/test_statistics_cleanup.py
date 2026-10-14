@@ -20,7 +20,7 @@ from homeassistant.setup import async_setup_component
 
 from custom_components.gac_connect import async_setup, async_unload_entry
 from custom_components.gac_connect.const import DOMAIN
-from custom_components.gac_connect.entity_filter import UT_OMISSIONS, apply_registry_choices
+from custom_components.gac_connect.entity_filter import apply_registry_choices
 from custom_components.gac_connect.fridge import remove_entities
 from custom_components.gac_connect.statistics import async_setup_cleanup
 from test_session_store import make_entry
@@ -205,22 +205,6 @@ def test_normal_shutdown_preserves_statistics(tmp_path):
     asyncio.run(run())
 
 
-def test_ut_profile_removal_clears_all_eight_tyre_statistics(tmp_path):
-    async def run():
-        async with recorded_vehicle(tmp_path) as (hass, entry, registry):
-            removed = [sensor(registry, entry, key.split(":")[1]) for key in UT_OMISSIONS
-                       if key.startswith("sensor:")]
-            assert len(removed) == 8
-            retained = sensor(registry, entry, "soc")
-            await seed_statistics(hass, {entity.entity_id for entity in [*removed, retained]})
-            hass.config_entries.async_update_entry(entry, options={"profile": "aion_ut"})
-            apply_registry_choices(hass, entry)
-            assert all(registry.async_get(entity.entity_id) is None for entity in removed)
-            await assert_statistics(hass, {retained.entity_id})
-
-    asyncio.run(run())
-
-
 def test_fridge_registry_removal_also_cleans_up_sensor_statistics(tmp_path):
     async def run():
         async with recorded_vehicle(tmp_path) as (hass, entry, registry):
@@ -243,7 +227,8 @@ def test_omitting_hiding_unloading_and_reloading_preserve_statistics(tmp_path):
             hass.config_entries.async_update_entry(entry, options={"omit_entities": ["sensor:soc"]})
             apply_registry_choices(hass, entry)
             registry.async_update_entity(retained.entity_id, hidden_by=er.RegistryEntryHider.USER)
-            entry.runtime_data = SimpleNamespace(coordinator=SimpleNamespace(capabilities=None))
+            entry.runtime_data = SimpleNamespace(coordinator=SimpleNamespace(
+                capabilities=SimpleNamespace(async_close=AsyncMock())))
             with patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)):
                 assert await async_unload_entry(hass, entry)
             await entry._async_process_on_unload(hass)

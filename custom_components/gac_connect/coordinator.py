@@ -33,7 +33,6 @@ from .const import (
     CONF_QUIET_START,
     CONF_SCAN_INTERVAL,
     CONF_VIN,
-    PROFILE_AUTO,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
@@ -43,7 +42,6 @@ from .const import (
 from .api import PushClient
 from .capabilities import CapabilityManager
 from .command_tracking import CommandTracker
-from .profiles import profile_for
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,7 +121,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self.vin = entry.data[CONF_VIN]
         self._chosen_interval = interval
         self._stretch_logged: int | None = None
-        self.capabilities = CapabilityManager(hass, entry) if profile_for(entry) == PROFILE_AUTO else None
+        self.capabilities = CapabilityManager(hass, entry)
         self.commands = CommandTracker(self)
         # Command results arrive on the service's push feed; each one triggers
         # an immediate status refresh so entities show what the car actually did.

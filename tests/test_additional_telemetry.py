@@ -39,11 +39,10 @@ def test_gps_sensor_keeps_the_tracker_and_exposes_coordinate_attributes():
     assert gps.native_value is None
 
 
-@pytest.mark.parametrize('profile', ['auto_detect', 'aion_ut'])
 @pytest.mark.parametrize('enabled', [False, True])
-def test_coordinate_and_tracker_entities_share_privacy_setting(tmp_path, profile, enabled):
+def test_coordinate_and_tracker_entities_share_privacy_setting(tmp_path, enabled):
     async def run():
-        async with vehicle(tmp_path, options={'profile': profile, 'enable_tracker': enabled}) as (hass, entry, c):
+        async with vehicle(tmp_path, options={'enable_tracker': enabled}) as (hass, entry, c):
             added = []
             c.data = decode_status({'positionAccessors': [{'latitude': 12.3, 'longitude': 98.7}]})
             if c.capabilities:
@@ -93,7 +92,7 @@ def test_seat_level_selects_send_levels_and_correlate_only_their_session(tmp_pat
     from homeassistant.exceptions import HomeAssistantError
 
     async def run():
-        async with vehicle(tmp_path, options={'profile': 'aion_ut'}) as (hass, _, c):
+        async with vehicle(tmp_path) as (hass, _, c):
             c.data = decode_status({'seatTemperatureAccessors': [{'seat': seat_id, 'enableWind': 1, 'windStrength': 0}]})
             c.client.set_seat_ventilation_level = AsyncMock(return_value={'code': 13001, 'data': {'sessionId': 's1'}})
             sel = GacSeatVentilationSelect(c, seat_id)
@@ -126,7 +125,7 @@ def test_seat_level_selects_send_levels_and_correlate_only_their_session(tmp_pat
     asyncio.run(run())
 
 
-def test_seat_controls_require_manual_or_successful_command_evidence_in_auto_profile(tmp_path):
+def test_seat_controls_require_manual_or_successful_command_evidence(tmp_path):
     async def run():
         async with vehicle(tmp_path, options={'enable_entities': ['select:seat_1_ventilation']}) as (_, _, c):
             c.data = decode_status({'seatTemperatureAccessors': [
@@ -162,7 +161,7 @@ def test_command_failures_keep_safe_reason_and_service_code(tmp_path, error, rea
 def test_older_status_does_not_remove_climate_or_crash_the_charging_panel(tmp_path):
     """Reproduce the live partial-install failure with the older status schema."""
     async def run():
-        async with vehicle(tmp_path, options={'profile': 'aion_ut'}) as (hass, entry, c):
+        async with vehicle(tmp_path) as (hass, entry, c):
             current = decode_status({'chargingAccessors': [{'chargingMode': 1,
                 'dailyReservationStartTime': 79200000, 'dailyReservationStopTime': 21600000}],
                 'airConditionAccessors': [{'temperature': 24, 'windStrength': 0, 'enableAirCompressor': 0}]})
@@ -325,7 +324,7 @@ def test_older_entries_follow_their_single_location_setting(options, choices):
 @pytest.mark.parametrize('parked,moving', [(True, False), (False, True), (False, False)])
 def test_entities_exist_when_either_state_is_tracked(tmp_path, parked, moving):
     async def run():
-        options = {'profile': 'auto_detect', 'track_parked': parked, 'track_moving': moving}
+        options = {'track_parked': parked, 'track_moving': moving}
         async with vehicle(tmp_path, options=options) as (hass, entry, c):
             added = []
             c.data = located(0)

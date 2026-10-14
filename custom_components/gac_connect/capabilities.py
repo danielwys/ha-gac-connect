@@ -5,9 +5,11 @@ from dataclasses import replace
 import hashlib
 import logging
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
-from .api import Capabilities, Support, doors_locked
+from ._vendor.gac_connect import GacError
+from .api import Capabilities, Support, doors_locked, equipment_from_capabilities
 from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled
 from .const import (
@@ -67,6 +69,7 @@ class CapabilityManager:
         identity = f"{entry.data.get(CONF_REGION)}:{entry.data[CONF_VIN]}"
         self._vehicle_key = hashlib.sha256(identity.encode()).hexdigest()
         self._dirty = False
+        self.capability_list_read = False   # the car's own capability list has been read
 
     async def async_load(self) -> None:
         try:
@@ -76,9 +79,35 @@ class CapabilityManager:
             return
         if isinstance(data, dict) and data.get("vehicle_key") == self._vehicle_key:
             self.detector.restore(data.get("evidence"))
+            self.capability_list_read = data.get("capability_list_read") is True
 
     def _snapshot(self) -> dict:
-        return {"vehicle_key": self._vehicle_key, "evidence": self.detector.export_state()}
+        return {"vehicle_key": self._vehicle_key, "evidence": self.detector.export_state(),
+                "capability_list_read": self.capability_list_read}
+
+    async def async_read_capability_list_once(self, client, vin: str) -> None:
+        """Read the list at the first start; reports decide meanwhile if it cannot be read."""
+        if self.capability_list_read:
+            return
+        try:
+            await self.async_read_capability_list(client, vin)
+        except (GacError, HomeAssistantError) as err:
+            _LOGGER.info("Could not read the car's capability list; detecting equipment from its reports: %s", err)
+
+    async def async_read_capability_list(self, client, vin: str) -> int:
+        """Read what the car offers remotely and let it decide what is shown; saved at once.
+
+        Replaces any earlier list. Raises HomeAssistantError for an unusable answer;
+        the service's own errors propagate. Returns how many features it settled.
+        """
+        flags = equipment_from_capabilities(await client.get_control_capabilities(vin))
+        if not flags:
+            raise HomeAssistantError("The car's capability list was empty or incomplete")
+        self.detector.observe_equipment(flags, replace=True)
+        self.capability_list_read = True
+        self._dirty = False
+        await self._store.async_save(self._snapshot())
+        return len(flags)
 
     def _changed(self) -> None:
         self._dirty = True
@@ -92,12 +121,13 @@ class CapabilityManager:
         if self.detector.observe(status):
             self._changed()
 
-    def includes(self, entity_key: str) -> bool:
+    def includes(self, entity_key: str, *, user_choices: bool = True) -> bool:
+        """Whether an entity is shown; without ``user_choices``, as if Omit and Always show were empty."""
         if entity_key == "button:vehicle_power_off" and self.entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
             return False
         if entity_key in LOCATION_ENTITIES and not location_enabled(self.entry.options):
             return False
-        if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
+        if user_choices and entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
             return False
         if entity_key in FRIDGE_ENTITIES and self.entry.options.get(CONF_ENABLE_FRIDGE) is False:
             return False
@@ -107,7 +137,7 @@ class CapabilityManager:
             return False  # no actual continuous-pause operation exists
         if entity_key == "button:vehicle_power_off":
             return True  # the separate shutdown setting is an explicit opt-in
-        if entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
+        if user_choices and entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
             return True
         feature = ENTITY_FEATURES.get(entity_key)
         return feature is not None and self.detector.feature(feature).state is Support.SUPPORTED
@@ -135,29 +165,36 @@ class CapabilityManager:
             for key in ENTITY_FEATURES}
         return data
 
-    def explanation(self, entity_key: str) -> str:
-        """Explain effective visibility, with overrides before passive evidence."""
+    def decision(self, entity_key: str, *, user_choices: bool = True) -> tuple[bool, str]:
+        """Whether an entity is shown, and the short reason, overrides first."""
+        options = self.entry.options
         if entity_key == "button:charge_pause":
-            return "Hidden: continuous charging pause is not supported."
-        if entity_key == "button:vehicle_power_off" and self.entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
-            return "Hidden: remote vehicle shutdown is disabled in Vehicle settings."
-        if entity_key in self.entry.options.get(CONF_OMIT_ENTITIES, ()):
-            return "Hidden by your Omit choice."
-        if entity_key in LOCATION_ENTITIES and not location_enabled(self.entry.options):
-            return "Hidden: location tracking is turned off."
-        if entity_key in FRIDGE_ENTITIES and self.entry.options.get(CONF_ENABLE_FRIDGE) is False:
-            return "Hidden: fridge controls are turned off."
+            return False, "the car has no continuous pause"
+        if entity_key == "button:vehicle_power_off" and options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
+            return False, "remote shutdown is not allowed in Vehicle settings"
+        if user_choices and entity_key in options.get(CONF_OMIT_ENTITIES, ()):
+            return False, "your Omit choice"
+        if entity_key in LOCATION_ENTITIES and not location_enabled(options):
+            return False, "location tracking is off"
+        if entity_key in FRIDGE_ENTITIES and options.get(CONF_ENABLE_FRIDGE) is False:
+            return False, "fridge controls are off"
         if entity_key == "button:vehicle_power_off":
-            return "Shown: remote vehicle shutdown is enabled in Vehicle settings."
-        if entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
-            return "Shown by your Always show choice; this does not prove support."
+            return True, "remote shutdown is allowed in Vehicle settings"
+        if user_choices and entity_key in options.get(CONF_ENABLE_ENTITIES, ()):
+            return True, "your Always show choice"
         evidence = self.detector.feature(ENTITY_FEATURES.get(entity_key, ""))
-        if evidence.source == "observed_telemetry":
-            return "Shown: a usable vehicle reading was observed."
-        if evidence.source == "confirmed_command":
-            return "Shown: a matching successful command result was received."
-        if evidence.source == "model_default":
-            return "Hidden by the model default; positive vehicle evidence can override this."
+        shown = self.includes(entity_key, user_choices=user_choices)
         if evidence.source == "vehicle_equipment":
-            return "Shown by vehicle equipment evidence." if self.includes(entity_key) else "Hidden by vehicle equipment evidence."
-        return "Hidden: no usable evidence yet. Missing data does not prove absence."
+            return shown, ("the car's capability list offers it" if shown
+                           else "the car's capability list does not offer it remotely")
+        if evidence.source == "observed_telemetry":
+            return shown, "seen in the car's reports"
+        if evidence.source == "confirmed_command":
+            return shown, "a command to it succeeded"
+        if evidence.source == "model_default":
+            return shown, "not fitted to this model"
+        return shown, "not seen in the car's reports yet"
+
+    def explanation(self, entity_key: str) -> str:
+        shown, reason = self.decision(entity_key)
+        return f"{'Shown' if shown else 'Hidden'}: {reason}."

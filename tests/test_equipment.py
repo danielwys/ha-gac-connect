@@ -1,14 +1,25 @@
-"""Explain observations, absence of evidence and overrides without probing."""
+"""Group entities by whether they are shown and why, without probing the car."""
 import asyncio
+import re
 from types import SimpleNamespace
 
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.config_flow import GacOptionsFlow
+from custom_components.gac_connect.entity_filter import OMIT_OPTIONS
 from custom_components.gac_connect.equipment import equipment_summary
 from test_autodetect import vehicle
 
 
-def test_options_menu_and_read_only_equipment_explanations(tmp_path):
+def groups(text):
+    """Heading -> items, from the summary's markdown."""
+    found = {}
+    for block in text.split("\n\n**")[0:]:
+        heading, _, items = block.strip("*").partition("**\n\n")
+        found[heading] = items.split("\n")
+    return found
+
+
+def test_entities_are_grouped_by_reason_with_short_details(tmp_path):
     async def run():
         async with vehicle(tmp_path, model='Aion UT', options={
             'enable_entities': ['button:horn'], 'omit_entities': ['sensor:pm25'], 'enable_fridge': False,
@@ -22,16 +33,23 @@ def test_options_menu_and_read_only_equipment_explanations(tmp_path):
             assert menu['type'] == 'menu' and 'equipment' in menu['menu_options']
             page = await flow.async_step_equipment()
             text = page['description_placeholders']['equipment']
-            assert 'usable vehicle reading was observed' in text
-            assert 'Successful command results: sunroof-close.' in text
-            assert 'Successful command results: sunroof-open' not in text
-            assert 'no usable evidence yet' in text
-            assert 'Hidden by the model default' in text
-            assert 'Hidden by your Omit choice' in text
-            assert 'Shown by your Always show choice' in text
-            assert 'fridge controls are turned off' in text
-            assert 'location tracking is turned off' in text
-            assert 'VIN' not in text
+            found = groups(text)
+            assert list(found) == ['Your choices (Vehicle settings)', "Shown (seen in the car's reports, unless noted)",
+                                   "Hidden (not seen in the car's reports yet, unless noted)"]
+            assert found['Your choices (Vehicle settings)'] == [
+                '- Sound horn (sounds the horn): always shown; otherwise hidden',
+                '- Cabin PM2.5 (µg/m³): omitted; would be hidden anyway',
+            ]
+            assert found["Shown (seen in the car's reports, unless noted)"] == [
+                '- Steering wheel heat (on/off)', '- Sunroof (open/close) — a command to it succeeded']
+            hidden = found["Hidden (not seen in the car's reports yet, unless noted)"]
+            assert '- Climate (Off, On, Fan only; 18–32 °C; fan 1–7; Heating and Cooling presets)' in hidden
+            assert '- Tyre 1 pressure (kPa) — not fitted to this model' in hidden
+            assert '- Fridge mode (Off, Refrigerate, Heat, Freeze) — fridge controls are off' in hidden
+            assert '- Location (home/away and map) — location tracking is off' in hidden
+            assert '- Pause charging — the car has no continuous pause' in hidden
+            assert sum(len(items) for items in found.values()) == len(OMIT_OPTIONS)   # every entity, once
+            assert 'VIN' not in text and not re.search(r'[.!?] [A-Z][a-z]+ [a-z]+ [a-z]+', text)   # no prose
             assert (await flow.async_step_equipment({}))['type'] == 'menu'
             assert dict(entry.options) == before
             c.client.command.assert_not_called()
@@ -39,10 +57,14 @@ def test_options_menu_and_read_only_equipment_explanations(tmp_path):
     asyncio.run(run())
 
 
-def test_unloaded_entry_explains_profile_without_claiming_detection():
+def test_every_decision_matches_what_is_shown(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, model='Aion UT') as (_, _, c):
+            for key in OMIT_OPTIONS:
+                assert c.capabilities.decision(key)[0] is c.capabilities.includes(key), key
+    asyncio.run(run())
+
+
+def test_an_unloaded_vehicle_says_so():
     entry = SimpleNamespace(data={'model': 'Aion UT'}, options={})
-    text = equipment_summary(entry)
-    assert 'Auto detect evidence is available only while that profile is loaded' in text
-    assert 'Omitted by the selected model profile' in text
-    assert '**Switch · Fridge** — Omitted by the selected model profile.' in text
-    assert 'a usable vehicle reading was observed' not in text
+    assert equipment_summary(entry) == 'The vehicle is not loaded. Reconnect it to see its equipment.'
