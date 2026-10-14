@@ -1,4 +1,4 @@
-"""Services: charge_now, charge_pause, set_charge_window, send_command."""
+"""Services: charge_now, set_charge_window, send_command, get_control_capabilities."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from homeassistant.helpers import config_validation as cv
 
 from ._vendor.gac_connect.errors import GacError
 
-from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
+from .api import validate_clock, validate_weekly
 from .command_tracking import async_send
 from .charging import window_target
 from .capability_report import cabin_capability_report, full_capability_report
@@ -54,9 +54,6 @@ def async_register_services(hass: HomeAssistant) -> None:
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
-    async def charge_pause(call: ServiceCall) -> None:
-        raise ServiceValidationError(PAUSE_UNSUPPORTED)
-
     async def set_charge_window(call: ServiceCall) -> None:
         coordinator, vin = _resolve(hass, call)
         start, stop = call.data[ATTR_START], call.data.get(ATTR_STOP)
@@ -97,7 +94,6 @@ def async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "charge_now", charge_now, base.extend({vol.Optional(ATTR_UNTIL_SOC): cv.boolean})
     )
-    hass.services.async_register(DOMAIN, "charge_pause", charge_pause, base)
     hass.services.async_register(
         DOMAIN,
         "set_charge_window",

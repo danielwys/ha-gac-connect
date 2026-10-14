@@ -8,13 +8,11 @@ from dataclasses import dataclass
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ._vendor.gac_connect.client import GacClient
 
 from . import GacConfigEntry
-from .api import PAUSE_UNSUPPORTED
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
@@ -30,7 +28,6 @@ BUTTONS: tuple[GacButton, ...] = (
     GacButton(key="vehicle_power_off", command="vehicle-power-off", translation_key="vehicle_power_off",
               icon="mdi:power", press=lambda c, vin: c.command(vin, "vehicle-power-off")),
     GacButton(key="charge_now", command="charge-now", translation_key="charge_now", press=lambda c, vin: c.charge_now(vin)),
-    GacButton(key="charge_pause", command="charge-pause", translation_key="charge_pause", press=lambda c, vin: c.charge_pause(vin)),
     GacButton(key="horn", command="horn-on", translation_key="horn", icon="mdi:bullhorn", press=lambda c, vin: c.command(vin, "horn-on")),
 )
 
@@ -48,12 +45,8 @@ class GacButtonEntity(GacEntity, ButtonEntity):
     def __init__(self, coordinator: GacCoordinator, description: GacButton) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
-        if description.key == "charge_pause":
-            self._attr_extra_state_attributes = {"action_supported": False, "reason": PAUSE_UNSUPPORTED}
 
     async def async_press(self) -> None:
-        if self.entity_description.key == "charge_pause":
-            raise ServiceValidationError(PAUSE_UNSUPPORTED)
         await self._send(self.entity_description.press(self.coordinator.client, self.coordinator.vin),
                          command=self.entity_description.command)
 

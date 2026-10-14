@@ -375,15 +375,6 @@ def test_bad_charge_mode_does_not_abort_all_telemetry(raw):
     assert s.soc == 65
 
 
-def test_pause_does_not_create_recurring_charging_window():
-    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
-
-    c = coord(VehicleStatus())
-    with pytest.raises(CommandError, match="03:00 to 03:30"):
-        asyncio.run(c.client.charge_pause(c.vin))
-    c.client.command.assert_not_awaited()
-
-
 @pytest.mark.parametrize("hour", [0, 2, 5, 12, 23])
 def test_overnight_window_struct_dates_are_ordered(hour):
     op = window_operation(
@@ -799,24 +790,16 @@ def service_registry(c):
     return registered
 
 
-@pytest.mark.parametrize("surface", ["button", "service", "client"])
-def test_pause_is_blocked_at_every_entry_point(surface):
-    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
-    from homeassistant.exceptions import ServiceValidationError
-
-    from custom_components.gac_connect.button import BUTTONS, GacButtonEntity
+def test_there_is_no_pause_anywhere_and_the_old_button_is_retired():
+    # The app has no pause; Scheduled charging on blocks AC charging outside its window.
+    from custom_components.gac_connect import _RETIRED
+    from custom_components.gac_connect.button import BUTTONS
 
     c = coord(VehicleStatus())
-    if surface == "button":
-        d = next(d for d in BUTTONS if d.key == "charge_pause")
-        action = GacButtonEntity(c, d).async_press()
-    elif surface == "service":
-        action = service_registry(c)["charge_pause"][0](SimpleNamespace(data={}))
-    else:
-        action = c.client.charge_pause(c.vin)
-    with pytest.raises((ServiceValidationError, CommandError), match="Continuous charging pause"):
-        asyncio.run(action)
-    c.client.command.assert_not_awaited()
+    assert "charge_pause" not in {d.key for d in BUTTONS}
+    assert "charge_pause" not in service_registry(c)
+    assert not hasattr(c.client, "charge_pause")
+    assert ("button", "charge_pause") in _RETIRED
 
 
 @pytest.mark.parametrize("until_soc", [False, True])

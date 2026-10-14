@@ -2,7 +2,7 @@
   "format": 1,
   "source": "https://github.com/leecaochang/gac-connect",
   "upstream": "https://github.com/wattferry/gac-connect",
-  "commit": "4acce42bf9e9200ef6d805b24396e1e5ae231f25",
+  "commit": "f589154e79d68689bb87031622fb5dfb4a656971",
   "version": "0.4.0b11",
   "requires_python": ">=3.11",
   "dependencies": [
@@ -14,14 +14,14 @@
     "cli.py"
   ],
   "sha256": {
-    "__init__.py": "082df262ff014a05eab48197528c0685b68464f004290d9fa6586d21cb01edb6",
+    "__init__.py": "ca47049c782ae0d7b8e3076eb6af580032cade86ae686e7f454d9ff5aa6dc3e2",
     "gac_connect/LICENSE": "57bc988e8f2b38d66b35f0bea5247f28978cd1bb83b91308a4d4a23b0b707108",
-    "gac_connect/__init__.py": "71e8f2537c452c0218b4b590cfdc9f492c0b0573e8f2fe104661ae67c1f0a9b6",
+    "gac_connect/__init__.py": "54084cf2da4d85f188c4a8b7d25b647707f4e5378e6c9f4d6b2a731c9639a216",
     "gac_connect/_material.pem": "fd0f684059f51cc9df4ac60f54618ee7b7f3ae1dc0e7896d903b6729731a5e38",
     "gac_connect/_material_uk.pem": "5841e40ade597509d837fa6bf779aaf1a6b088213d802bb2e4a895fc8f67f95c",
     "gac_connect/auth.py": "c88ac6746d668f0e320ef4f4bd7eabbd24bbc73818e4f0bfe6132b3e6bb8827a",
-    "gac_connect/capabilities.py": "6b09d17cbecc944e9ced1f012f6ab85f4f4aa9132008eaea84d64bf4f766e129",
-    "gac_connect/client.py": "aa1369873de0cc0c2b962385596110aee03e9ae0aabf39ae79b5e5e4e10ad963",
+    "gac_connect/capabilities.py": "5762370cb4d94c29a14e596389cf334e17ae89ca9cfe237522916e85f40c61ae",
+    "gac_connect/client.py": "b5a02bcc286cbdce48975ef56602efdbd4308ab1171182665657ce762bbfdc68",
     "gac_connect/commands.py": "c03c0f089ca0148abbfcc448909c26462eecfa1be9363e2b635c34a8ff6f2c8c",
     "gac_connect/const.py": "600947443dc82802b270ff3e9ef8aa0f56fb41fdad96973071f5c15ed3400852",
     "gac_connect/crypto.py": "0549e8c0f2d696d460cc879654c9ab22112d0247d68e2c6dc42d705b3c86d700",
@@ -34,6 +34,6 @@
     "gac_connect/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "gac_connect/session.py": "f1cf8f30cb461e0813d54718596d13af13677c3dbfa8fd0c78ba23bc066626a7",
     "gac_connect/signing.py": "57acfbbe3a704a09e9a9c2930a3269d064b91a8561948e3899e9bc28ca43873f",
-    "gac_connect/vehicle.py": "ef13c716140c0c71adede3375d0451877d8d5e90d664edff7ed3d39f277d600e"
+    "gac_connect/vehicle.py": "b3a5645350c4911bfedd25f6abf07a893c16a6c36e66183b46c86a2b50b4b68a"
   }
 }

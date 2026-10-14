@@ -163,8 +163,6 @@ class CapabilityManager:
             return False
         if entity_key == "button:refresh":
             return True
-        if entity_key == "button:charge_pause":
-            return False  # no actual continuous-pause operation exists
         if entity_key == "button:vehicle_power_off":
             return True  # the separate shutdown setting is an explicit opt-in
         if user_choices and entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
@@ -205,8 +203,6 @@ class CapabilityManager:
     def decision(self, entity_key: str, *, user_choices: bool = True) -> tuple[bool, str]:
         """Whether an entity is shown, and the short reason, overrides first."""
         options = self.entry.options
-        if entity_key == "button:charge_pause":
-            return False, "the car has no continuous pause"
         if entity_key == "button:vehicle_power_off" and options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True:
             return False, "remote shutdown is not allowed in Vehicle settings"
         if user_choices and entity_key in options.get(CONF_OMIT_ENTITIES, ()):

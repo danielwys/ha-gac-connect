@@ -144,7 +144,6 @@ def test_manual_overrides_respect_privacy_and_unlock_opt_in(tmp_path):
             assert not manager.includes("cover:sunroof")
             assert not manager.includes("switch:fridge")
             assert not manager.includes("device_tracker:location")
-            assert not manager.includes("button:charge_pause")
             tracker = importlib.import_module("custom_components.gac_connect.device_tracker")
             add = Mock()
             await tracker.async_setup_entry(hass, entry, add)
@@ -419,4 +418,4 @@ def test_diagnostics_explain_unknown_observed_and_forced_features_without_raw_va
 
 
 def test_every_configurable_entity_has_a_detection_rule_or_is_explicitly_unsupported():
-    assert set(OMIT_OPTIONS) - set(ENTITY_FEATURES) == {"button:charge_pause"}
+    assert set(OMIT_OPTIONS) - set(ENTITY_FEATURES) == set()

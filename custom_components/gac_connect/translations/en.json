@@ -345,9 +345,6 @@
       "charge_now": {
         "name": "Charge now"
       },
-      "charge_pause": {
-        "name": "Pause charging"
-      },
       "refresh": {
         "name": "Refresh"
       },

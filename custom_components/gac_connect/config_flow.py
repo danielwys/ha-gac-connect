@@ -475,7 +475,7 @@ class GacOptionsFlow(OptionsFlow):
         selected_omissions = [
             key for key in opts.get(CONF_OMIT_ENTITIES, ()) if key in omit_options
         ]
-        enable_options = {key: value for key, value in OMIT_OPTIONS.items() if key != "button:charge_pause"}
+        enable_options = dict(OMIT_OPTIONS)
         selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
         # The run times the car's capability list allows, once read.
         shortest, longest = remote_choices(self._loaded_coordinator(), "ac_minutes_range",

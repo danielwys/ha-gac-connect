@@ -12,15 +12,6 @@ charge_now:
       description: Charge until the target state of charge instead of a stop time.
       selector: { boolean: {} }
 
-charge_pause:
-  name: Pause charging
-  description: Unavailable. The old command permitted charging daily from 03:00 to 03:30; use Set charge window for an explicit schedule.
-  fields:
-    vin:
-      name: VIN
-      description: Which vehicle (optional if you have only one).
-      selector: { text: {} }
-
 set_charge_window:
   name: Set charge window
   description: Charge only inside a time window, once (no days) or repeating on the chosen days, like the app.

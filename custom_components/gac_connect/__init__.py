@@ -111,6 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
 _RETIRED: tuple[tuple[str, str], ...] = (
     ("button", "flash_lights"),
     ("button", "precondition_battery"),        # now a switch
+    ("button", "charge_pause"),                # the car has no pause; Scheduled charging on is one
     ("switch", "seat_1_ventilation"), ("switch", "seat_2_ventilation"),   # now level selects
 )
 

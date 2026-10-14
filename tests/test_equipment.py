@@ -47,7 +47,6 @@ def test_entities_are_grouped_by_reason_with_short_details(tmp_path):
             assert '- Tyre 1 pressure (kPa) — not fitted to this model' in hidden
             assert '- Fridge mode (Off, Refrigerate, Heat, Freeze) — fridge controls are off' in hidden
             assert '- Location (home/away and map) — location tracking is off' in hidden
-            assert '- Pause charging — the car has no continuous pause' in hidden
             assert sum(len(items) for items in found.values()) == len(OMIT_OPTIONS)   # every entity, once
             assert 'VIN' not in text and not re.search(r'[.!?] [A-Z][a-z]+ [a-z]+ [a-z]+', text)   # no prose
             assert (await flow.async_step_equipment({}))['type'] == 'menu'
