@@ -9,7 +9,7 @@ import pytest
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.command_tracking import async_send
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
-from custom_components.gac_connect._vendor.gac_connect.errors import GacError
+from custom_components.gac_connect._vendor.gac_connect.errors import CommandError, GacError
 from custom_components.gac_connect._vendor.gac_connect.push import PushResult
 from homeassistant.exceptions import HomeAssistantError
 from test_autodetect import result, vehicle
@@ -172,6 +172,20 @@ def test_refusal_while_waiting_fails_the_action_with_its_reason(tmp_path, comman
             assert (attributes['failure_reason'], attributes['response_code']) == ('vehicle_rejected', '13005')
     asyncio.run(run())
 
+
+
+def test_a_gateway_refusal_reads_like_one_from_the_car(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            refused = CommandError(f"command rejected: {CONDITIONS} (code 13005)", code=13005)
+            with pytest.raises(CommandError) as err:
+                await async_send(c, 'lock', AsyncMock(side_effect=refused)())
+            assert str(err.value) == (f"The car refused the request: {CONDITIONS} (code 13005). The GAC app lists "
+                                      "these conditions: the car is not moving; all doors are closed; "
+                                      "the bonnet and boot are closed.")
+            assert err.value.code == '13005' and err.value.__cause__ is refused
+            assert c.commands.attributes()['failure_reason'] == 'gateway_rejected'
+    asyncio.run(run())
 
 def test_early_refusal_fails_the_action_without_a_push_wait(tmp_path):
     async def run():

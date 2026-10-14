@@ -63,12 +63,16 @@ class CommandRecord:
     answered: asyncio.Event = field(default_factory=asyncio.Event, repr=False, compare=False)
 
 
+def refusal_text(command: str, code: object, reason: str | None) -> str:
+    """One wording for a refusal, whether the gateway answered it or the car pushed it."""
+    detail = f"{reason} (code {code})" if reason else f"result code {code}"
+    hint = refusal_hint(code, command)
+    return f"The car refused the request: {detail}." + (f" {hint}" if hint else "")
+
+
 def refusal_message(record: CommandRecord) -> str:
     """Explain a refusal reported by the car."""
-    code = record.response_code
-    detail = f"{record.refusal_reason} (code {code})" if record.refusal_reason else f"result code {code}"
-    hint = refusal_hint(code, record.command)
-    return f"The car refused the request: {detail}." + (f" {hint}" if hint else "")
+    return refusal_text(record.command, record.response_code, record.refusal_reason)
 
 
 class CommandTracker:
@@ -157,6 +161,9 @@ class CommandTracker:
             if isinstance(err, CommandError):
                 record.response_code = getattr(err, "code", None)
                 record.failure_reason = "gateway_rejected" if record.response_code else "command_error"
+                if record.response_code:
+                    raise CommandError(refusal_text(command, record.response_code, err.reason),
+                                       code=record.response_code) from err
             elif isinstance(err, (AuthError, TokenInvalidError)):
                 record.failure_reason = "authentication"
             else:
