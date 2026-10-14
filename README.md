@@ -65,16 +65,17 @@ the car refuses a command, the action fails with the car's reason.
 
 | Entity | Type | Description |
 |---|---|---|
-| Climate | climate | Modes Off, On (heat/cool to target) and Fan only (blower without compressor). Target 18–32 °C. Fan 1–7, or Off to stop the A/C. Airflow: Cabin, Cabin + Feet, Feet, Feet + Windscreen (car switched on). Presets Heating (Auto at 32 °C) and Cooling (Auto at 18 °C). Each start runs for the A/C run time. |
+| Climate | climate | Modes Off, On (heat/cool to target) and Fan only (blower without compressor). Target temperature, fan speeds and airflow choices follow the car's capability list. Fan Off stops the A/C; airflow changes need the car switched on. Presets Heating (Auto at the highest target) and Cooling (Auto at the lowest). Each remote start runs for the Pre-conditioning run time. |
 | Pre-conditioning | switch | Cabin A/C on or off. |
-| Recirculation | switch | On recirculates, off draws fresh air. Changes only while the A/C runs. |
-| Unrestricted charging | switch | On charges whenever plugged in. Off returns to the car's charging schedule. |
-| Battery preconditioning | switch | Starts or cancels battery preconditioning. |
+| Pre-conditioning run time | number (configuration) | How long a remote A/C start runs before the car ends it, within the car's capability list (default 30 minutes). Once the car is switched on, its own climate control takes over. |
+| Recirculation | switch | On recirculates, off draws fresh air. Changes only while the A/C runs. Shown when the car's capability list offers both. |
+| Scheduled charging | switch | On follows the car's charging schedule. Off charges whenever plugged in. |
+| Battery preconditioning | switch | Starts or cancels battery preconditioning; the car runs it for up to 1.5 hours. |
 | Steering wheel heat | switch | On or off. |
-| Ventilation | switch | Cabin ventilation on or off. |
+| Ventilation | switch | Lowers the windows 2–3 cm and runs fresh-air circulation for 5 minutes. |
 | Flash lights | switch | Flashes the lights. |
-| Driver seat ventilation | select | Off, Low, Medium, High. Choosing a level replaces the console's Smart mode. |
-| Front passenger seat ventilation | select | Off, Low, Medium, High. |
+| Driver seat ventilation | select | Off and the levels the car's capability list offers (up to Low, Medium, High). Choosing a level replaces the console's Smart mode. |
+| Front passenger seat ventilation | select | As for the driver seat. |
 | Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. |
 | Windows | cover | Open or close all windows. |
 | Sunroof | cover | Open or close. |
@@ -84,8 +85,8 @@ the car refuses a command, the action fails with the car's reason.
 | Refresh | button | Reads the car's status now. |
 | Turn vehicle off | button | Switches the car off. Only with **Allow remote vehicle shutdown**. |
 | Fridge | switch | Fridge on or off (cars with a fridge). |
-| Fridge mode | select | Off, Refrigerate, Heat, Freeze. |
-| Fridge temperature | number | Refrigerate 0–20 °C, Heat 35–50 °C, Freeze −15 to −1 °C. |
+| Fridge mode | select | Off and the modes the car's capability list offers: Refrigerate, Heat, Freeze. |
+| Fridge temperature | number | Each mode's range from the car's capability list; otherwise Refrigerate 0–20 °C, Heat 35–50 °C, Freeze −15 to −1 °C. |
 | Location | device_tracker | Home/away and map position. Optional. |
 
 ### Sensors
@@ -95,7 +96,7 @@ the car refuses a command, the action fails with the car's reason.
 | Battery | State of charge, %. |
 | Range | Remaining range, km. |
 | Odometer | km. |
-| Charging schedule | Unrestricted or Scheduled; the reported window and days as attributes. |
+| Charging schedule | Scheduled charging or Whenever plugged in; the reported window and days as attributes. |
 | Reported charge window start / stop | Window times as the car reports them. |
 | Charge power, Charge current, Charge voltage | While charging. |
 | Estimated charge time | Minutes of charging remaining. |
@@ -127,6 +128,8 @@ the car refuses a command, the action fails with the car's reason.
 | Door | A door open. |
 | Window | A window open. |
 | Boot | Boot open. |
+| Hood | Hood (bonnet) open. |
+| Brake fluid | Problem when the car reports a brake-fluid alarm, as the app's Brake fluid check does. |
 | A/C auto mode | A/C in Auto. |
 | A/C compressor | Compressor selected (off in Fan only). |
 | Anti-theft enabled | Alarm armed. |
@@ -145,13 +148,11 @@ the car refuses a command, the action fails with the car's reason.
 | Poll interval | 300 s | Minimum 60 s. Lengthened automatically when several vehicles share the request budget. |
 | Enable location tracking when parked | off | Show the location while the car is switched off. |
 | Enable location tracking when moving | off | Show the location while the car is switched on. |
-| Fridge / warmer box controls | on | Turn off on a trim that reports a fridge it does not have. |
 | Allow remote unlocking | off | Lets the Doors lock unlock the car. |
 | Allow remote vehicle shutdown | off | Shows Turn vehicle off. |
 | Omit unsupported entities | none | Hide entities even if the car has them. |
-| Car picture on the map | AION V picture, or initials | Image URL or `/local/…` path. |
+| Car picture on the map | the model's bundled picture, if there is one, or initials | Image URL or `/local/…` path. |
 | Quiet hours start / end | none | No polling between these times (HH:MM). |
-| A/C run time | 30 min | 5–60 minutes per A/C start. |
 
 **Detected equipment** lists which entities are shown and why, starting with your
 Always show and Omit choices.
@@ -167,13 +168,13 @@ charge now or refresh.
 | Action | Fields | Description |
 |---|---|---|
 | `gac_connect.charge_now` | `vin`, `until_soc` | Charge whenever plugged in. |
-| `gac_connect.set_charge_window` | `vin`, `start`, `stop`, `weekly`, `until_soc` | Charge only between `start` and `stop` (HH:MM; a stop before the start runs overnight). `weekly`: Mon=1, Tue=2 … Sun=64; 127 every day; 0 or omitted once. |
-| `gac_connect.charge_pause` | `vin` | Unavailable; use `set_charge_window`. |
+| `gac_connect.set_charge_window` | `vin`, `start`, `stop`, `weekly`, `until_soc` | Charge only between `start` and `stop` (HH:MM; a stop before the start runs overnight). `weekly`: Mon=1, Tue=2 … Sun=64; 127 every day; 0 or omitted once. `stop` is not needed with `until_soc`. |
 | `gac_connect.send_command` | `vin`, `command`, `params` | Send a command by name, for example `horn-on` or `aircon-manual-on`, with optional parameters. Unlock and shutdown need their options; PIN commands are refused. |
 | `gac_connect.get_control_capabilities` | `vin` | Return the car's capability list (numeric fields only). |
 
 `vin` is needed only with more than one vehicle. `until_soc` stops at the car's
-own target charge level instead of the stop time; some cars refuse it.
+own target charge level instead of the stop time, like the app's "Charge cutoff SOC".
+No stop time is sent then, and the car keeps its saved one.
 
 ## Events
 
@@ -191,11 +192,12 @@ own target charge level instead of the stop time; some cars refuse it.
 ## Examples
 
 - [`docs/example-dashboard.yaml`](docs/example-dashboard.yaml): a car dashboard
-  using built-in cards. Replace the `aion_v` entity prefix with yours and paste it
-  into a new dashboard's raw configuration editor.
+  using built-in cards. Its entity IDs start with `my_car`: replace that with
+  your car's entity prefix and paste it into a new dashboard's raw configuration
+  editor.
 - [`docs/example-automations.yaml`](docs/example-automations.yaml): alerts for low
-  tyre pressure, low 12 V battery, car left unlocked, and doors, windows or boot
-  left open.
+  tyre pressure, low 12 V battery, car left unlocked, and doors, windows, boot or
+  hood left open.
 - [`docs/example-trips.yaml`](docs/example-trips.yaml): weekly, monthly and yearly
   distance and estimated consumption from odometer and battery readings. The
   service reports no trip history.
