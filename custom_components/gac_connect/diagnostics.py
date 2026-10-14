@@ -1,6 +1,7 @@
 """Diagnostics with personal data redacted."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -44,6 +45,33 @@ def _mask(value: Any) -> Any:
     return None if value is None else "**REDACTED**"
 
 
+def _shape(value: str, known: dict[str, str]) -> str:
+    """A push identifier with the VIN and mobile named and any other ID reduced to its length."""
+    for label, secret in known.items():
+        if len(secret) >= 6:
+            value = re.sub(re.escape(secret), f"<{label}>", value, flags=re.IGNORECASE)
+
+    def token(match: re.Match) -> str:
+        text = match.group()
+        if text in known or not (len(text) >= 20 or (len(text) >= 6 and any(c.isdigit() for c in text))):
+            return text
+        return f"<{len(text)} digits>" if text.isdigit() else f"<{len(text)} chars>"
+    return re.sub(r"[A-Za-z0-9]+", token, value)
+
+
+def _push(coordinator, entry) -> dict[str, Any] | None:
+    """What the push channel sends in the clear on a plaintext broker, without the values."""
+    push = getattr(coordinator, "push", None)
+    broker = getattr(push, "broker", None)
+    if broker is None:
+        return None
+    mobile = re.sub(r"\D", "", str(entry.data.get("mobile") or "")).lstrip("0")
+    known = {"VIN": str(entry.data.get("vin") or getattr(coordinator, "vin", None) or ""), "mobile": mobile}
+    return {"connected": push.connected is True, "tls": broker.tls, "host": broker.host, "port": broker.port,
+            "topics": [_shape(topic, known) for topic in broker.topics],
+            "client_id": _shape(broker.client_id, known), "username": _shape(broker.username, known)}
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: GacConfigEntry
 ) -> dict[str, Any]:
@@ -72,6 +100,7 @@ async def async_get_config_entry_diagnostics(
         "status_updated_ms": status.updated_ms if status else None,
         "status_online": status.online if status else None,
         "commands": coordinator.commands.attributes() if getattr(coordinator, "commands", None) else None,
+        "push": _push(coordinator, entry),
         "status_raw": async_redact_data(raw, TO_REDACT),
         "capabilities": coordinator.capabilities.diagnostics() if getattr(coordinator, "capabilities", None) else None,
     }

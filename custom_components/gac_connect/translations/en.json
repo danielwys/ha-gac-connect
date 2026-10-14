@@ -80,7 +80,7 @@
         },
         "data_description": {
           "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking and shutdown need their Allow settings.",
-          "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends broker credentials without TLS and allows network interception or forged results. Polling continues when disabled.",
+          "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends the broker credentials and topic names without TLS, which allows network interception or forged results. On GAC's Southeast Asia service they include an account number, but not the VIN or phone number. Polling continues when disabled.",
           "experimental_pinless_unlock": "Allow the Doors control to unlock the car. No PIN required. Leave off to use this control for locking only.",
           "allow_vehicle_shutdown": "Show the Turn vehicle off button and allow shutdown commands. Off by default. Enabling this setting does not send a command; the Vehicle power sensor remains available when it is off.",
           "omit_entities": "Hide these entities even if the car has them. Existing entities are disabled while selected and return with the same IDs if you clear them.",
