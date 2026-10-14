@@ -7,15 +7,17 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GacConfigEntry, fridge
+from .capabilities import remote_choices
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .requested import GacRequestedEntity
 from .seats import reported_seat
 
-# Ventilation strength 0–3, verified on an Aion UT's front seats.
-SEAT_LEVELS = {"off": 0, "low": 1, "medium": 2, "high": 3}
-SEAT_LEVEL_NAMES = {level: name for name, level in SEAT_LEVELS.items()}
+# Ventilation strengths 1–3, verified on an Aion UT's front seats; a seat offers the
+# levels its capability list includes, and these until the list is read.
+SEAT_LEVEL_NAMES = {1: "low", 2: "medium", 3: "high"}
+DEFAULT_SEAT_LEVELS = (1, 2, 3)
 
 
 async def async_setup_entry(
@@ -35,12 +37,14 @@ class GacSeatVentilationSelect(GacRequestedEntity, SelectEntity):
     """
 
     _attr_icon = "mdi:car-seat-cooler"
-    _attr_options = list(SEAT_LEVELS)
 
     def __init__(self, coordinator: GacCoordinator, seat: int) -> None:
         super().__init__(coordinator, f"seat_{seat}_ventilation")
         self._seat = seat
         self._attr_translation_key = f"seat_{seat}_ventilation"
+        levels = remote_choices(coordinator, f"seat_{seat}_ventilation_levels", DEFAULT_SEAT_LEVELS)
+        self._levels = {"off": 0, **{SEAT_LEVEL_NAMES[level]: level for level in levels if level in SEAT_LEVEL_NAMES}}
+        self._attr_options = list(self._levels)
 
     def _reported(self) -> str | None:
         seat = reported_seat(self.status, self._seat)
@@ -49,16 +53,17 @@ class GacSeatVentilationSelect(GacRequestedEntity, SelectEntity):
         if not seat.ventilation_on:
             return "off"
         strength = seat.ventilation_strength
-        return SEAT_LEVEL_NAMES.get(int(strength)) if strength is not None and strength == int(strength) else None
+        name = SEAT_LEVEL_NAMES.get(int(strength)) if strength is not None and strength == int(strength) else None
+        return name if name in self._levels else None
 
     @property
     def current_option(self) -> str | None:
         return self._value
 
     async def async_select_option(self, option: str) -> None:
-        if option not in SEAT_LEVELS:
+        if option not in self._levels:
             raise ServiceValidationError(f"Unknown seat ventilation level {option!r}")
-        level = SEAT_LEVELS[option]
+        level = self._levels[option]
         client, vin = self.coordinator.client, self.coordinator.vin
         await self._run(option, lambda: client.set_seat_ventilation_level(vin, self._seat, level),
                         command=f"seat-{self._seat}-ventilation-{'on' if level else 'off'}")

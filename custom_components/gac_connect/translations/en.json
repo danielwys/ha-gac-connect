@@ -406,7 +406,9 @@
               "cabin": "Cabin",
               "cabin_feet": "Cabin + Feet",
               "feet": "Feet",
-              "feet_windscreen": "Feet + Windscreen"
+              "feet_windscreen": "Feet + Windscreen",
+              "windscreen": "Windscreen",
+              "all": "Cabin + Feet + Windscreen"
             }
           }
         }

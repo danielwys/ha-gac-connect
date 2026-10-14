@@ -14,7 +14,7 @@ from custom_components.gac_connect._vendor.gac_connect.errors import GacError
 from custom_components.gac_connect._vendor.gac_connect.models import VehicleStatus
 from custom_components.gac_connect._vendor.gac_connect.push import PushResult
 from custom_components.gac_connect.cabin import controller
-from custom_components.gac_connect.climate import AIRFLOW_MODES
+from custom_components.gac_connect.climate import AIRFLOW_NAMES
 from test_autodetect import vehicle
 from test_regressions import ACCEPTED, climate, scheduled  # noqa: F401
 
@@ -152,7 +152,7 @@ def test_climate_translates_every_calibrated_outlet_and_enables_only_implemented
     root = Path(__file__).resolve().parents[1]
     strings = json.loads((root / "custom_components/gac_connect/translations/en.json").read_text())
     labels = strings["entity"]["climate"]["climate"]["state_attributes"]["swing_mode"]["state"]
-    assert set(labels) == set(AIRFLOW_MODES)
+    assert set(labels) == set(AIRFLOW_NAMES.values())
     assert labels["feet_windscreen"] == "Feet + Windscreen"
     assert int(entity.supported_features) == 441
 

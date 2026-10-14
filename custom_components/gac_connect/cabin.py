@@ -18,15 +18,18 @@ from ._vendor.gac_connect import GacError, command_session_id
 from ._vendor.gac_connect.commands import validate_blowing_mode, validate_climate, validate_cycling_mode
 from ._vendor.gac_connect.push import PushResult
 
+from .capabilities import remote_choices
 from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES, SIGNAL_COMMAND_RESULT
 from .command_tracking import async_send
 
 _LOGGER = logging.getLogger(__name__)
 DEFAULT_TARGET_C = 24.0
 REQUEST_SECONDS = 180
-# The UT cloud advertises 7; the user's trials confirmed 7 and rejected 8–10.
-# Console telemetry still has ten speeds and must not be clipped to this limit.
-REMOTE_FAN_MAX = 7
+# Remote choices until the car's capability list is read; an Aion UT lists the same,
+# and trials confirmed speeds 1–7 (8–10 rejected) and outlets 1–4 (5 rejected).
+# Console telemetry still has ten speeds and must not be clipped to the remote range.
+DEFAULT_FAN_SPEEDS = tuple(range(1, 8))
+DEFAULT_BLOWING_MODES = (1, 2, 3, 4)
 
 
 def _remote_temperature(target: float) -> float:
@@ -127,6 +130,16 @@ class CabinController:
         if not math.isfinite(speed) or speed != int(speed) or not 0 <= speed <= 10:
             return None
         return "off" if speed == 0 else str(int(speed))
+
+    @property
+    def fan_speeds(self) -> tuple[int, ...]:
+        """The manual blower speeds this car accepts remotely."""
+        return remote_choices(self.coordinator, "fan_speeds", DEFAULT_FAN_SPEEDS)
+
+    @property
+    def blowing_modes(self) -> tuple[int, ...]:
+        """The raw outlet codes this car accepts remotely."""
+        return remote_choices(self.coordinator, "blowing_modes", DEFAULT_BLOWING_MODES)
 
     @property
     def blowing_mode(self) -> int | None:
@@ -246,10 +259,13 @@ class CabinController:
             await self._command(True, compressor=not fan_only)
 
     async def async_set_fan_speed(self, speed: int) -> None:
-        if type(speed) is not int or not 1 <= speed <= REMOTE_FAN_MAX:
+        speeds = self.fan_speeds
+        if not speeds:
+            raise ServiceValidationError("The car's capability list offers no remote fan speeds")
+        if type(speed) is not int or speed not in speeds:
+            higher = f" Speeds above {speeds[-1]} are available on the vehicle console." if speeds[-1] < 10 else ""
             raise ServiceValidationError(
-                f"Remote fan speed must be an integer from 1 to {REMOTE_FAN_MAX}; "
-                "use Off to stop A/C. Speeds 8–10 are available on the vehicle console."
+                f"Remote fan speed must be an integer from {speeds[0]} to {speeds[-1]}; use Off to stop A/C.{higher}"
             )
         async with self.lock:
             await self._command(True, fan_speed=speed)
@@ -259,6 +275,8 @@ class CabinController:
             mode = validate_blowing_mode(mode)
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
+        if mode not in self.blowing_modes:
+            raise ServiceValidationError(f"The car's capability list does not offer airflow outlet code {mode}")
         async with self.lock:
             if getattr(self.coordinator.data, "power_on", None) is not True:
                 raise ServiceValidationError(

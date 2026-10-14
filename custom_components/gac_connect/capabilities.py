@@ -9,7 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
 from ._vendor.gac_connect import GacError
-from .api import Capabilities, Support, doors_locked, equipment_from_capabilities
+from .api import Capabilities, Support, doors_locked, equipment_from_capabilities, ranges_from_capabilities
 from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled
 from .const import (
@@ -61,6 +61,19 @@ def store_key(entry_id: str) -> str:
     return f"{DOMAIN}.capabilities.{entry_id}"
 
 
+def _restore_ranges(data) -> dict[str, tuple[int, ...]]:
+    if not isinstance(data, dict):
+        return {}
+    return {key: tuple(values) for key, values in data.items() if isinstance(key, str) and isinstance(values, list)
+            and all(type(value) is int for value in values)}
+
+
+def remote_choices(coordinator, name: str, default: tuple[int, ...]) -> tuple[int, ...]:
+    """What the car's capability list offers for a remote setting, or ``default`` until it is read."""
+    manager = getattr(coordinator, "capabilities", None)
+    return manager.ranges.get(name, default) if manager is not None else default
+
+
 class CapabilityManager:
     def __init__(self, hass, entry) -> None:
         self.entry = entry
@@ -70,6 +83,7 @@ class CapabilityManager:
         self._vehicle_key = hashlib.sha256(identity.encode()).hexdigest()
         self._dirty = False
         self.capability_list_read = False   # the car's own capability list has been read
+        self.ranges: dict[str, tuple[int, ...]] = {}   # its remote fan, outlet and seat choices
 
     async def async_load(self) -> None:
         try:
@@ -79,11 +93,14 @@ class CapabilityManager:
             return
         if isinstance(data, dict) and data.get("vehicle_key") == self._vehicle_key:
             self.detector.restore(data.get("evidence"))
-            self.capability_list_read = data.get("capability_list_read") is True
+            # A list saved before ranges were kept is read once more at this start.
+            self.capability_list_read = data.get("capability_list_read") is True and "ranges" in data
+            self.ranges = _restore_ranges(data.get("ranges"))
 
     def _snapshot(self) -> dict:
         return {"vehicle_key": self._vehicle_key, "evidence": self.detector.export_state(),
-                "capability_list_read": self.capability_list_read}
+                "capability_list_read": self.capability_list_read,
+                "ranges": {key: list(values) for key, values in self.ranges.items()}}
 
     async def async_read_capability_list_once(self, client, vin: str) -> None:
         """Read the list at the first start; reports decide meanwhile if it cannot be read."""
@@ -100,10 +117,12 @@ class CapabilityManager:
         Replaces any earlier list. Raises HomeAssistantError for an unusable answer;
         the service's own errors propagate. Returns how many features it settled.
         """
-        flags = equipment_from_capabilities(await client.get_control_capabilities(vin))
+        data = await client.get_control_capabilities(vin)
+        flags = equipment_from_capabilities(data)
         if not flags:
             raise HomeAssistantError("The car's capability list was empty or incomplete")
         self.detector.observe_equipment(flags, replace=True)
+        self.ranges = ranges_from_capabilities(data)
         self.capability_list_read = True
         self._dirty = False
         await self._store.async_save(self._snapshot())
@@ -163,6 +182,7 @@ class CapabilityManager:
             "disable" if key in self.entry.options.get(CONF_OMIT_ENTITIES, ()) else
             "enable" if key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()) else "automatic")}
             for key in ENTITY_FEATURES}
+        data["ranges"] = {key: list(values) for key, values in self.ranges.items()}
         return data
 
     def decision(self, entity_key: str, *, user_choices: bool = True) -> tuple[bool, str]:

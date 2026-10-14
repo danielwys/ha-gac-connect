@@ -11,13 +11,14 @@ from ._vendor.gac_connect import (
     doors_locked,
     equipment_from_capabilities,
     local_mobile,
+    ranges_from_capabilities,
     validate_clock,
     validate_weekly,
     window_operation,
 )
 
 __all__ = [
-    "Capabilities", "Support", "equipment_from_capabilities",
+    "Capabilities", "Support", "equipment_from_capabilities", "ranges_from_capabilities",
     "GacClient", "PushClient", "PAUSE_UNSUPPORTED", "decode_status", "doors_locked",
     "local_mobile", "validate_clock", "validate_weekly", "window_operation",
 ]

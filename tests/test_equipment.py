@@ -43,7 +43,7 @@ def test_entities_are_grouped_by_reason_with_short_details(tmp_path):
             assert found["Shown (seen in the car's reports, unless noted)"] == [
                 '- Steering wheel heat (on/off)', '- Sunroof (open/close) — a command to it succeeded']
             hidden = found["Hidden (not seen in the car's reports yet, unless noted)"]
-            assert '- Climate (Off, On, Fan only; 18–32 °C; fan 1–7; Heating and Cooling presets)' in hidden
+            assert '- Climate (Off, On, Fan only; 18–32 °C; fan 1–7; 4 airflow choices; Heating and Cooling presets)' in hidden
             assert '- Tyre 1 pressure (kPa) — not fitted to this model' in hidden
             assert '- Fridge mode (Off, Refrigerate, Heat, Freeze) — fridge controls are off' in hidden
             assert '- Location (home/away and map) — location tracking is off' in hidden

@@ -24,12 +24,9 @@ from .entity_filter import add_configured_entities
 MIN_TEMP_C, MAX_TEMP_C = 18.0, 32.0
 PRESET_HEATING, PRESET_COOLING = "heating", "cooling"
 APP_PRESETS = {PRESET_HEATING: MAX_TEMP_C, PRESET_COOLING: MIN_TEMP_C}
-FAN_MODES = ["off", *(str(speed) for speed in range(1, cabin.REMOTE_FAN_MAX + 1))]
-# Physically verified remote selections with the user's UT ready to drive.
-AIRFLOW_MODES = {"cabin": 1, "cabin_feet": 2, "feet": 3, "feet_windscreen": 4}
-AIRFLOW_NAMES = {code: name for name, code in AIRFLOW_MODES.items()}
-# Console reports can include selections the gateway cannot remotely select.
-REPORTED_AIRFLOW_NAMES = {**AIRFLOW_NAMES, 5: "windscreen", 7: "all"}
+# Outlet codes calibrated on an Aion UT's console; 1–4 also worked remotely there. Each is
+# offered where the car's capability list includes it, and console reports can show the rest.
+AIRFLOW_NAMES = {1: "cabin", 2: "cabin_feet", 3: "feet", 4: "feet_windscreen", 5: "windscreen", 7: "all"}
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_entities: AddEntitiesCallback) -> None:
@@ -39,13 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_enti
 class GacClimate(GacEntity, ClimateEntity):
     _attr_translation_key = "climate"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.TURN_OFF
-        | ClimateEntityFeature.PRESET_MODE | ClimateEntityFeature.FAN_MODE | ClimateEntityFeature.SWING_MODE
-    )
     _attr_preset_modes = list(APP_PRESETS)
-    _attr_fan_modes = FAN_MODES
-    _attr_swing_modes = list(AIRFLOW_MODES)
     _attr_min_temp = MIN_TEMP_C
     _attr_max_temp = MAX_TEMP_C
     _attr_target_temperature_step = 1.0
@@ -58,6 +49,17 @@ class GacClimate(GacEntity, ClimateEntity):
         # Fan only is the console's Fan: the blower runs without the compressor.
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT_COOL, HVACMode.FAN_ONLY]
         self._cabin = cabin.controller(coordinator)
+        # The car's remote choices; a refreshed capability list reloads the entry.
+        self._attr_fan_modes = ["off", *(str(speed) for speed in self._cabin.fan_speeds)]
+        self._airflow = {AIRFLOW_NAMES[code]: code for code in self._cabin.blowing_modes if code in AIRFLOW_NAMES}
+        self._attr_swing_modes = list(self._airflow)
+        features = (ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_ON
+                    | ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.PRESET_MODE)
+        if self._cabin.fan_speeds:
+            features |= ClimateEntityFeature.FAN_MODE
+        if self._airflow:
+            features |= ClimateEntityFeature.SWING_MODE
+        self._attr_supported_features = features
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -90,11 +92,12 @@ class GacClimate(GacEntity, ClimateEntity):
     def fan_mode(self) -> str | None:
         # Console-only speeds remain in reported_fan_strength and the sensor.
         mode = self._cabin.fan_mode
-        return mode if mode in FAN_MODES else None
+        return mode if mode in self._attr_fan_modes else None
 
     @property
     def swing_mode(self) -> str | None:
-        return AIRFLOW_NAMES.get(self._cabin.blowing_mode)
+        name = AIRFLOW_NAMES.get(self._cabin.blowing_mode)
+        return name if name in self._airflow else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -105,7 +108,7 @@ class GacClimate(GacEntity, ClimateEntity):
                 "reported_auto_mode": getattr(status, "ac_auto_on", None),
                 "reported_compressor": getattr(status, "ac_compressor_on", None),
                 "reported_blowing_mode": blowing_mode,
-                "reported_airflow": REPORTED_AIRFLOW_NAMES.get(blowing_mode) if type(blowing_mode) is int else None,
+                "reported_airflow": AIRFLOW_NAMES.get(blowing_mode) if type(blowing_mode) is int else None,
                 "reported_cycling_mode": getattr(status, "ac_cycling_mode", None)}
 
     def _handle_coordinator_update(self) -> None:
@@ -139,9 +142,11 @@ class GacClimate(GacEntity, ClimateEntity):
         await self._cabin.async_set_power(False)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        if fan_mode not in FAN_MODES:
+        if fan_mode not in self._attr_fan_modes:
+            speeds = self._cabin.fan_speeds
             raise ServiceValidationError(
-                f"Unsupported remote fan mode; choose Off or a speed from 1 to {cabin.REMOTE_FAN_MAX}"
+                f"Unsupported remote fan mode; choose Off or a speed from {speeds[0]} to {speeds[-1]}" if speeds
+                else "The car's capability list offers no remote fan speeds"
             )
         if fan_mode == "off":
             await self._cabin.async_set_power(False)
@@ -149,9 +154,12 @@ class GacClimate(GacEntity, ClimateEntity):
             await self._cabin.async_set_fan_speed(int(fan_mode))
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        if not isinstance(swing_mode, str) or swing_mode not in AIRFLOW_MODES:
-            raise ServiceValidationError("Unsupported airflow; choose cabin, cabin_feet, feet or feet_windscreen")
-        await self._cabin.async_set_blowing_mode(AIRFLOW_MODES[swing_mode])
+        if not isinstance(swing_mode, str) or swing_mode not in self._airflow:
+            raise ServiceValidationError(
+                f"Unsupported airflow; choose {', '.join(self._airflow)}" if self._airflow
+                else "The car's capability list offers no remote airflow choice"
+            )
+        await self._cabin.async_set_blowing_mode(self._airflow[swing_mode])
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         if preset_mode not in APP_PRESETS:

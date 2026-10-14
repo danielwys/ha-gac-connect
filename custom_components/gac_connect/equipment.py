@@ -1,8 +1,11 @@
 """Which entities are shown and why, without telemetry or identifiers."""
 from collections import Counter
 
+from .cabin import DEFAULT_BLOWING_MODES, DEFAULT_FAN_SPEEDS
+from .climate import AIRFLOW_NAMES
 from .const import CONF_ENABLE_ENTITIES, CONF_OMIT_ENTITIES
 from .entity_filter import ENTITY_CHOICES
+from .select import DEFAULT_SEAT_LEVELS, SEAT_LEVEL_NAMES
 
 # What each entity reports or does, in a few words.
 DETAILS: dict[str, str] = {
@@ -30,9 +33,7 @@ DETAILS: dict[str, str] = {
     "switch:recirculation": "on recirculates, off fresh air; while the A/C runs",
     "switch:precondition_battery": "on/off", "switch:fridge": "on/off",
     "cover:windows": "open/close", "cover:sunroof": "open/close", "cover:tailgate": "open/close",
-    "climate:climate": "Off, On, Fan only; 18–32 °C; fan 1–7; Heating and Cooling presets",
     "lock:doors": "lock; unlock if allowed",
-    "select:seat_1_ventilation": "Off, Low, Medium, High", "select:seat_2_ventilation": "Off, Low, Medium, High",
     "select:fridge_mode": "Off, Refrigerate, Heat, Freeze",
     "number:fridge_temperature": "0–20, 35–50 or −15 to −1 °C by mode",
     "device_tracker:location": "home/away and map",
@@ -42,18 +43,36 @@ ORDER = ("climate", "switch", "select", "number", "cover", "lock", "button", "de
 ENTITIES = {f"{domain}:{key}": label for domain in ORDER for key, label in ENTITY_CHOICES[domain].items()}
 
 
+def _remote_details(ranges: dict) -> dict[str, str]:
+    """Details that follow the car's remote choices, as the entities offer them."""
+    speeds = ranges.get("fan_speeds", DEFAULT_FAN_SPEEDS)
+    outlets = [code for code in ranges.get("blowing_modes", DEFAULT_BLOWING_MODES) if code in AIRFLOW_NAMES]
+    climate = ["Off, On, Fan only", "18–32 °C"]
+    if speeds:
+        climate.append(f"fan {speeds[0]}–{speeds[-1]}" if len(speeds) > 1 else f"fan {speeds[0]}")
+    if outlets:
+        climate.append(f"{len(outlets)} airflow choice{'s' if len(outlets) > 1 else ''}")
+    details = {"climate:climate": "; ".join([*climate, "Heating and Cooling presets"])}
+    for seat in (1, 2):
+        levels = ranges.get(f"seat_{seat}_ventilation_levels", DEFAULT_SEAT_LEVELS)
+        names = [SEAT_LEVEL_NAMES[level].title() for level in levels if level in SEAT_LEVEL_NAMES]
+        details[f"select:seat_{seat}_ventilation"] = ", ".join(["Off", *names])
+    return details
+
+
 def equipment_summary(entry) -> str:
     runtime = getattr(entry, "runtime_data", None)
     manager = getattr(getattr(runtime, "coordinator", None), "capabilities", None)
     if manager is None:
         return "The vehicle is not loaded. Reconnect it to see its equipment."
     decide = manager.decision
+    details = {**DETAILS, **_remote_details(manager.ranges)}
     omitted = set(entry.options.get(CONF_OMIT_ENTITIES, ()))
     always = set(entry.options.get(CONF_ENABLE_ENTITIES, ()))
     choices: list[str] = []
     rows: dict[bool, list[tuple[str, str]]] = {True: [], False: []}
     for key, label in ENTITIES.items():
-        detail = DETAILS.get(key)
+        detail = details.get(key)
         line = f"- {label} ({detail})" if detail else f"- {label}"
         if key in omitted or key in always:
             # What the car's evidence alone would decide, so an override that changes nothing shows.
