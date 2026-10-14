@@ -84,6 +84,9 @@ def test_capability_action_uses_vendored_success_parser_before_scrubbing_respons
     })})
     handler, schema = service_registry(coordinator)["get_control_capabilities"]
     result = asyncio.run(handler(SimpleNamespace(data=schema({}))))
+    assert result["all"]["groups"]["remoteCapability"] == {
+        "airConditionCapabilities": [{"supportBlowingModes": [1, 2, 3, 4]}]}
+    del result["all"]
     assert result == {"airConditionCapabilities": [{"supportBlowingModes": [1, 2, 3, 4]}],
                       "seatTemperatureCapabilities": None, "chargingCapabilities": None}
     coordinator.client._iov_read.assert_awaited_once_with(
@@ -110,3 +113,26 @@ def test_charging_capabilities_are_projected_for_mode_discovery():
         "weeklyReservationCapability": 3, "vin": "PRIVATE-VIN", "note": "PRIVATE-TEXT"}]}))
     assert result["chargingCapabilities"] == [{"supportChargingModes": [0, 1, 2], "chargingModeCapability": 3,
                                                "chargingEndWithSocCapability": None, "weeklyReservationCapability": 3}]
+
+
+
+def test_full_report_keeps_every_group_but_only_numbers():
+    from custom_components.gac_connect.capability_report import full_capability_report
+    data = {"capabilities": [{"vin": "LVIN123", "capability": {
+        "remoteCapability": {
+            "sunroofCapabilities": [{"controlCapability": 0, "sunroof": 1, "name": "Sunroof"}],
+            "hornCapabilities": [{"controlCapability": 3, "optionCapabilityExt": {"level": "2", "note": "x"}}],
+            "seatTemperatureCapabilities": [{"seat": 3, "enableWindCapability": 0, "supportTemperatureModes": [0, 3]}],
+        },
+        "localCapability": {"owner": "LVIN123", "screen": 1},
+    }}]}
+    report = full_capability_report(data)
+    assert report["record_fields"] == ["capability", "vin"]
+    assert report["sections"] == ["localCapability", "remoteCapability"]
+    remote = report["groups"]["remoteCapability"]
+    assert remote["sunroofCapabilities"] == [{"controlCapability": 0, "sunroof": 1}]
+    assert remote["hornCapabilities"] == [{"controlCapability": 3, "optionCapabilityExt": {"level": "2"}}]
+    assert remote["seatTemperatureCapabilities"] == [{"seat": 3, "enableWindCapability": 0,
+                                                     "supportTemperatureModes": [0, 3]}]
+    assert report["groups"]["localCapability"] == {"screen": 1}
+    assert "LVIN123" not in str(report)

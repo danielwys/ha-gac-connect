@@ -1,4 +1,4 @@
-"""A bounded cabin/seat projection of the app's raw capability response."""
+"""Bounded projections of the app's raw capability response."""
 from __future__ import annotations
 
 import math
@@ -65,3 +65,28 @@ def cabin_capability_report(data: dict) -> dict:
             for item in items[:16] if isinstance(item, dict)
         ] if isinstance(items, list) else None
     return result
+
+
+def _numeric_tree(value, depth: int = 0):
+    """Keep numeric flags, ranges, IDs and lists, through nested records; drop text and identifiers."""
+    if isinstance(value, dict) and depth < 5:
+        kept = {key: _numeric_tree(item, depth + 1) for key, item in list(value.items())[:64] if isinstance(key, str)}
+        return {key: item for key, item in kept.items() if item is not None}
+    if isinstance(value, list) and depth < 5 and value and all(isinstance(item, dict) for item in value):
+        return [_numeric_tree(item, depth + 1) for item in value[:16]]
+    return _value(value)
+
+
+def full_capability_report(data: dict) -> dict:
+    """Every capability group of the app's first record, numeric content only, without interpreting it."""
+    records = data.get("capabilities")
+    record = records[0] if isinstance(records, list) and records else data
+    capability = record.get("capability", record) if isinstance(record, dict) else None
+    if not isinstance(capability, dict):
+        raise HomeAssistantError("The capability response has no usable vehicle record")
+    return {
+        "record_fields": sorted(key for key in record if isinstance(key, str)),
+        "sections": sorted(key for key in capability if isinstance(key, str)),
+        "groups": {section: _numeric_tree(groups) for section, groups in sorted(capability.items())
+                   if isinstance(section, str) and isinstance(groups, dict)},
+    }

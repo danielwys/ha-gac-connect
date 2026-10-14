@@ -12,7 +12,7 @@ from ._vendor.gac_connect.errors import GacError
 from .api import PAUSE_UNSUPPORTED, validate_clock, validate_weekly
 from .command_tracking import async_send
 from .charging import window_target
-from .capability_report import cabin_capability_report
+from .capability_report import cabin_capability_report, full_capability_report
 from .const import DOMAIN
 
 ATTR_VIN = "vin"
@@ -89,7 +89,8 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def get_control_capabilities(call: ServiceCall) -> dict:
         coordinator, vin = _resolve(hass, call)
         try:
-            return cabin_capability_report(await coordinator.client.get_control_capabilities(vin))
+            data = await coordinator.client.get_control_capabilities(vin)
+            return {**cabin_capability_report(data), "all": full_capability_report(data)}
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
