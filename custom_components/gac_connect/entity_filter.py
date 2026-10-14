@@ -45,7 +45,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "charge_switch": "Scheduled charging", "climate_power": "Pre-conditioning",
         "steering_heat": "Steering wheel heat", "lights": "Flash lights",
         "ventilation": "Ventilation", "recirculation": "Recirculation",
-        "precondition_battery": "Battery preconditioning",
+        "precondition_battery": "Smart battery temp",
         "fridge": "Fridge",
     },
     "cover": {"windows": "Windows", "sunroof": "Sunroof", "tailgate": "Boot"},

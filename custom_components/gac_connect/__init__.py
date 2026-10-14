@@ -60,6 +60,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     1.4: the Fridge / warmer box controls option was removed (the capability list decides);
     an owner's Off becomes Omit for each fridge entity.
+
+    1.5: Battery preconditioning took the app's name, Smart battery temp, and its default
+    entity ID follows. A custom ID is left alone.
     """
     if entry.version == 1 and entry.minor_version < 2:
         options = dict(entry.options)
@@ -70,19 +73,27 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             options[CONF_ENABLE_FRIDGE] = True
         hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
     if entry.version == 1 and entry.minor_version < 3:
-        registry = er.async_get(hass)
-        entity_id = registry.async_get_entity_id("switch", DOMAIN, f"{entry.data[CONF_VIN]}_charge_switch")
-        if entity_id and entity_id.endswith("_unrestricted_charging"):
-            renamed = entity_id.removesuffix("_unrestricted_charging") + "_scheduled_charging"
-            if registry.async_get(renamed) is None:
-                registry.async_update_entity(entity_id, new_entity_id=renamed)
+        _rename_default_id(hass, entry, "charge_switch", "_unrestricted_charging", "_scheduled_charging")
         hass.config_entries.async_update_entry(entry, minor_version=3)
     if entry.version == 1 and entry.minor_version < 4:
         options = dict(entry.options)
         if options.pop(CONF_ENABLE_FRIDGE, None) is False:
             options[CONF_OMIT_ENTITIES] = sorted(set(options.get(CONF_OMIT_ENTITIES, ())) | FRIDGE_ENTITIES)
         hass.config_entries.async_update_entry(entry, options=options, minor_version=4)
+    if entry.version == 1 and entry.minor_version < 5:
+        _rename_default_id(hass, entry, "precondition_battery", "_battery_preconditioning", "_smart_battery_temp")
+        hass.config_entries.async_update_entry(entry, minor_version=5)
     return True
+
+
+def _rename_default_id(hass: HomeAssistant, entry: ConfigEntry, key: str, old: str, new: str) -> None:
+    """Give a switch whose default entity ID ends in ``old`` the ending ``new``, unless that ID is taken."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("switch", DOMAIN, f"{entry.data[CONF_VIN]}_{key}")
+    if entity_id and entity_id.endswith(old):
+        renamed = entity_id.removesuffix(old) + new
+        if registry.async_get(renamed) is None:
+            registry.async_update_entity(entity_id, new_entity_id=renamed)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:

@@ -96,7 +96,8 @@ def _thai_local_mobile(mobile: str) -> str:
 
 class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 4   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed
+    MINOR_VERSION = 5   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed;
+                        # 1.5: Smart battery temp entity ID
 
     def __init__(self) -> None:
         self._client: GacClient | None = None

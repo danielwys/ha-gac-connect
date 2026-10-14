@@ -274,10 +274,10 @@ views:
             entity: button.my_car_sound_horn
             name: Horn
           - type: tile
-            entity: switch.my_car_battery_preconditioning
-            name: Warm the battery
+            entity: switch.my_car_smart_battery_temp
+            name: Smart battery temp
             tap_action: { action: toggle }
-            # Conditions the pack before fast charging in the cold.
+            # Warms or cools the battery, for example before fast charging.
           - type: tile
             entity: button.my_car_refresh
             name: Refresh
