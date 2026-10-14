@@ -54,7 +54,7 @@ BINARY_SENSORS: tuple[GacBinary, ...] = (
     GacBinary(key="ac_compressor", translation_key="ac_compressor", icon="mdi:air-conditioner",
               entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "ac_compressor_on", None)),
     GacBinary(key="anti_theft", translation_key="anti_theft", icon="mdi:shield-car",
-              entity_category=EntityCategory.DIAGNOSTIC, value=lambda s: getattr(s, "anti_theft_on", None)),
+              value=lambda s: getattr(s, "anti_theft_on", None)),
     *(GacBinary(key=f"seat_{i}_ventilation", translation_key=f"seat_{i}_ventilation",
                icon="mdi:car-seat-cooler", entity_category=EntityCategory.DIAGNOSTIC,
                value=lambda s, i=i: ventilation_state(s, i))

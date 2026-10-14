@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -59,6 +60,7 @@ class GacButtonEntity(GacEntity, ButtonEntity):
 
 class GacRefreshButton(GacEntity, ButtonEntity):
     _attr_translation_key = "refresh"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC   # reads the cloud status; controls nothing in the car
 
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "refresh")
