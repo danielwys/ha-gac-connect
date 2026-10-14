@@ -15,7 +15,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_call_later
 
 from ._vendor.gac_connect import GacError, command_session_id
-from ._vendor.gac_connect.commands import validate_blowing_mode, validate_climate, validate_cycling_mode
+from ._vendor.gac_connect.commands import (
+    CLIMATE_MINUTES_RANGE, CLIMATE_TEMP_RANGE, validate_blowing_mode, validate_climate, validate_cycling_mode,
+)
 from ._vendor.gac_connect.push import PushResult
 
 from .capabilities import remote_choices
@@ -30,15 +32,8 @@ REQUEST_SECONDS = 180
 # Console telemetry still has ten speeds and must not be clipped to the remote range.
 DEFAULT_FAN_SPEEDS = tuple(range(1, 8))
 DEFAULT_BLOWING_MODES = (1, 2, 3, 4)
-
-
-def _remote_temperature(target: float) -> float:
-    """Match the app's whole-degree commands without rounding vehicle reports."""
-    try:
-        validate_climate(target, DEFAULT_AC_MINUTES)
-    except ValueError as err:
-        raise ServiceValidationError(str(err)) from err
-    return float(math.floor(float(target) + 0.5))
+DEFAULT_TEMPERATURE_RANGE = tuple(int(value) for value in CLIMATE_TEMP_RANGE)   # °C, as the UT lists
+DEFAULT_MINUTES_RANGE = CLIMATE_MINUTES_RANGE
 
 
 @dataclass
@@ -88,13 +83,38 @@ class CabinController:
             listener()
 
     @property
+    def temperature_range(self) -> tuple[int, ...]:
+        """(lowest, highest) target this car accepts remotely, in whole °C."""
+        return remote_choices(self.coordinator, "ac_temperature_range", DEFAULT_TEMPERATURE_RANGE)
+
+    @property
+    def minutes_range(self) -> tuple[int, ...]:
+        """(shortest, longest) run this car accepts remotely, in minutes."""
+        return remote_choices(self.coordinator, "ac_minutes_range", DEFAULT_MINUTES_RANGE)
+
+    @property
     def run_minutes(self) -> int:
+        """The configured run time, kept within the car's range."""
         minutes = self.coordinator.config_entry.options.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)
         try:
             _, duration = validate_climate(DEFAULT_TARGET_C, minutes)
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
-        return duration
+        span = self.minutes_range
+        return min(max(duration, span[0]), span[1]) if span else duration
+
+    def _remote_temperature(self, target: float) -> float:
+        """Match the app's whole-degree commands without rounding vehicle reports."""
+        try:
+            validate_climate(target, DEFAULT_AC_MINUTES)
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        value, span = float(math.floor(float(target) + 0.5)), self.temperature_range
+        if not span:
+            raise ServiceValidationError("The car's capability list offers no remote temperature setting")
+        if not span[0] <= value <= span[1]:
+            raise ServiceValidationError(f"temperature must be between {span[0]} and {span[1]} °C")
+        return value
 
     @property
     def target(self) -> float:
@@ -306,7 +326,7 @@ class CabinController:
     async def async_set_temperature(
         self, target: float, *, on: bool | None = None, automatic: bool = False, compressor: bool | None = None
     ) -> None:
-        target = _remote_temperature(target)
+        target = self._remote_temperature(target)
         async with self.lock:
             if on is None and self.on is not True:
                 self._selected_target = target
@@ -328,7 +348,7 @@ class CabinController:
         previous, selection, compressor_now = self._req, self._selected_target, self.compressor
         setpoint = target if target is not None else self.target
         if on:
-            setpoint = _remote_temperature(setpoint)
+            setpoint = self._remote_temperature(setpoint)
         duration = self.run_minutes if on and not temperature_only else None
         req = _Request(on, setpoint if on else None, monotonic() + REQUEST_SECONDS,
                        selection_before=selection, baseline=self.coordinator.data)

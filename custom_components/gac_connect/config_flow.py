@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 import aiohttp
 import voluptuous as vol
+from ._vendor.gac_connect.commands import CLIMATE_MINUTES_RANGE
 from ._vendor.gac_connect.const import LISTED_REGIONS
 from ._vendor.gac_connect.errors import GacError, LoginError, RateLimitedError
 
@@ -41,6 +42,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
+from .capabilities import remote_choices
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .location import location_enabled, tracking_choices
@@ -464,6 +466,9 @@ class GacOptionsFlow(OptionsFlow):
         ]
         enable_options = {key: value for key, value in OMIT_OPTIONS.items() if key != "button:charge_pause"}
         selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
+        # The run times the car's capability list allows, once read.
+        shortest, longest = remote_choices(self._loaded_coordinator(), "ac_minutes_range",
+                                           CLIMATE_MINUTES_RANGE) or CLIMATE_MINUTES_RANGE
         fields = {
             vol.Optional(CONF_ENABLE_ENTITIES,
                          default=selected_enables): cv.multi_select(enable_options),
@@ -484,7 +489,7 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_QUIET_START, default=opts.get(CONF_QUIET_START, "")): str,
             vol.Optional(CONF_QUIET_END, default=opts.get(CONF_QUIET_END, "")): str,
             vol.Optional(CONF_AC_MINUTES, default=opts.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)):
-                vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
+                vol.All(vol.Coerce(int), vol.Range(min=shortest, max=longest)),
         }
         fields[vol.Optional(CONF_ENABLE_FRIDGE, default=opts.get(CONF_ENABLE_FRIDGE, DEFAULT_ENABLE_FRIDGE))] = bool
         schema = vol.Schema(fields)

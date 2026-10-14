@@ -5,15 +5,18 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+import voluptuous as vol
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
+from custom_components.gac_connect import fridge
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.capabilities import CapabilityManager
 from custom_components.gac_connect.climate import GacClimate
 from custom_components.gac_connect.config_flow import GacOptionsFlow
 from custom_components.gac_connect.equipment import equipment_summary
-from custom_components.gac_connect.select import GacSeatVentilationSelect
+from custom_components.gac_connect.number import GacFridgeTemperature
+from custom_components.gac_connect.select import GacFridgeModeSelect, GacSeatVentilationSelect
 from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
 from test_autodetect import vehicle
 
@@ -85,6 +88,7 @@ def setup_flow(hass, entry, coordinator):
     flow.hass, flow.handler = hass, entry.entry_id
     hass.config_entries.async_schedule_reload = Mock()
     entry.runtime_data = type("Runtime", (), {"coordinator": coordinator})()
+    coordinator.client.timezone = "Asia/Bangkok"
     return flow
 
 
@@ -158,7 +162,7 @@ def test_the_ut_list_keeps_its_verified_choices_and_they_survive_a_restart(tmp_p
             restored = CapabilityManager(hass, entry)
             await restored.async_load()
             assert restored.ranges == c.capabilities.ranges
-            assert restored.ranges["seat_3_ventilation_levels"] == ()
+            assert "seat_3_ventilation_levels" not in restored.ranges     # a switched-off group states nothing
     asyncio.run(run())
 
 
@@ -204,18 +208,95 @@ def test_a_list_without_remote_fan_or_airflow_drops_those_controls(tmp_path):
     asyncio.run(run())
 
 
-def test_a_list_saved_before_ranges_were_kept_is_read_once_more(tmp_path):
+@pytest.mark.parametrize("saved", [{"ranges": None, "ranges_version": None},       # before ranges were kept
+                                   {"ranges": {"fan_speeds": [1, 2, 3, 4, 5, 6, 7]}, "ranges_version": None}])
+def test_a_list_saved_by_an_earlier_version_is_read_once_more(tmp_path, saved):
     async def run():
         async with vehicle(tmp_path) as (hass, entry, c):
             c.client.get_control_capabilities = AsyncMock(return_value=UT_LIST)
             await c.capabilities.async_read_capability_list(c.client, "VIN")
-            snapshot = c.capabilities._snapshot()
-            del snapshot["ranges"]
-            await c.capabilities._store.async_save(snapshot)
+            snapshot = {**c.capabilities._snapshot(), **saved}
+            await c.capabilities._store.async_save({key: value for key, value in snapshot.items() if value is not None})
             older = CapabilityManager(hass, entry)
             await older.async_load()
-            assert not older.capability_list_read and older.ranges == {}
+            assert not older.capability_list_read and "ac_temperature_range" not in older.ranges
             assert not older.includes("cover:sunroof")          # its equipment flags still apply meanwhile
             await older.async_read_capability_list_once(c.client, "VIN")
             assert older.capability_list_read and older.ranges["blowing_modes"] == (1, 2, 3, 4)
+    asyncio.run(run())
+
+
+def a_car_with_its_own_spans():
+    """Unlike the UT: 16–30 °C, 10–30 minute runs, fresh air only, no remote preconditioning start,
+    and a fridge that refrigerates (from 2 °C) and freezes."""
+    data = json.loads(json.dumps(UT_LIST))
+    groups = remote(data)
+    groups["airConditionCapabilities"][0].update(
+        minTemperature=16, maxTemperature=30, minAirConditionCurrentDuration=600,
+        maxAirConditionCurrentDuration=1800, supportCyclingModes=[0, 2])
+    groups["batteryPretreatmentCapabilities"][0]["supportBatteryPretreatmentModes"] = [0, 3]
+    groups["refrigeratorCapabilities"][0].update(controlCapability=1, workingMode=[1, 3, 4],
+                                                 minRefrigerationTemperature=2)
+    return data
+
+
+def settings_validator(form, name):
+    return next(value for key, value in form["data_schema"].schema.items() if key == name)
+
+
+def test_the_ut_list_keeps_its_temperature_run_time_and_switches(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, options={"ac_minutes": 15}) as (hass, entry, c):
+            c.client.get_control_capabilities = AsyncMock(return_value=UT_LIST)
+            await c.capabilities.async_read_capability_list(c.client, "VIN")
+            climate = GacClimate(c)
+            assert (climate.min_temp, climate.max_temp) == (18, 32) and climate._cabin.run_minutes == 15
+            assert c.capabilities.includes("switch:recirculation")
+            assert c.capabilities.includes("switch:precondition_battery")
+            assert fridge.options(c) == ("off", "refrigerate", "heat", "freeze")   # its fridge group is off
+            assert fridge.temperature_range(c, "refrigerate") == (0.0, 20.0)
+    asyncio.run(run())
+
+
+def test_another_cars_spans_and_codes_shape_its_controls(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, options={"ac_minutes": 45}) as (hass, entry, c):
+            c.client.get_control_capabilities = AsyncMock(return_value=a_car_with_its_own_spans())
+            await c.capabilities.async_read_capability_list(c.client, "VIN")
+            climate = GacClimate(c)
+            assert (climate.min_temp, climate.max_temp) == (18, 30)   # 16–17 are beyond what is sent
+            assert climate._presets == {"heating": 30, "cooling": 18}
+            assert climate._cabin.run_minutes == 30
+            for call in (climate.async_set_temperature(temperature=31), climate._cabin.async_set_temperature(31)):
+                with pytest.raises(ServiceValidationError, match="between 18 and 30"):
+                    await call
+            c.client.command.assert_not_awaited()
+            for key in ("switch:recirculation", "switch:precondition_battery"):
+                assert not c.capabilities.includes(key)
+                assert c.capabilities.explanation(key) == "Hidden: the car's capability list does not offer it remotely."
+            flow = setup_flow(hass, entry, c)
+            minutes = settings_validator(await flow.async_step_settings(), "ac_minutes")
+            assert minutes(10) == 10 and minutes("30") == 30
+            for value in (5, 31):
+                with pytest.raises(vol.Invalid):
+                    minutes(value)
+
+            controller = fridge.FridgeController(hass, entry, c)
+            entry.runtime_data.fridge = controller
+            assert fridge.options(c) == controller.options == ("off", "refrigerate", "freeze")
+            assert GacFridgeModeSelect(c).options == ["off", "refrigerate", "freeze"]
+            controller.temps["refrigerate"] = 1.0                   # kept from before: below this car's 2 °C
+            assert controller._checked("refrigerate", controller._kept("refrigerate")) == (1, 2.0)
+            for mode, value in (("refrigerate", 1), ("heat", 40)):
+                with pytest.raises(ServiceValidationError):
+                    controller._checked(mode, value)
+            with pytest.raises(ServiceValidationError):
+                await controller.async_set_option("heat")
+            number = GacFridgeTemperature(c)
+            assert number._all == (-15.0, 20.0)
+            entry.runtime_data.coordinator = c
+            summary = equipment_summary(entry)
+            assert "- Climate (Off, On, Fan only; 18–30 °C; fan 1–7; 4 airflow choices; Heating and Cooling presets)" in summary
+            assert "- Fridge mode (Off, Refrigerate, Freeze)" in summary
+            assert "- Fridge temperature (2–20 or −15 to −1 °C by mode)" in summary
     asyncio.run(run())

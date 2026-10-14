@@ -21,9 +21,7 @@ from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 
-MIN_TEMP_C, MAX_TEMP_C = 18.0, 32.0
 PRESET_HEATING, PRESET_COOLING = "heating", "cooling"
-APP_PRESETS = {PRESET_HEATING: MAX_TEMP_C, PRESET_COOLING: MIN_TEMP_C}
 # Outlet codes calibrated on an Aion UT's console; 1–4 also worked remotely there. Each is
 # offered where the car's capability list includes it, and console reports can show the rest.
 AIRFLOW_NAMES = {1: "cabin", 2: "cabin_feet", 3: "feet", 4: "feet_windscreen", 5: "windscreen", 7: "all"}
@@ -36,9 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_enti
 class GacClimate(GacEntity, ClimateEntity):
     _attr_translation_key = "climate"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_preset_modes = list(APP_PRESETS)
-    _attr_min_temp = MIN_TEMP_C
-    _attr_max_temp = MAX_TEMP_C
+    _attr_preset_modes = [PRESET_HEATING, PRESET_COOLING]
     _attr_target_temperature_step = 1.0
     # The console can report half degrees; the app's remote control uses whole degrees.
     _attr_precision = PRECISION_HALVES
@@ -50,6 +46,10 @@ class GacClimate(GacEntity, ClimateEntity):
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT_COOL, HVACMode.FAN_ONLY]
         self._cabin = cabin.controller(coordinator)
         # The car's remote choices; a refreshed capability list reloads the entry.
+        low, high = self._cabin.temperature_range or cabin.DEFAULT_TEMPERATURE_RANGE
+        self._attr_min_temp, self._attr_max_temp = float(low), float(high)
+        # GAC 2.0.32 uses automatic A/C at the maximum/minimum setpoint for these buttons.
+        self._presets = {PRESET_HEATING: float(high), PRESET_COOLING: float(low)}
         self._attr_fan_modes = ["off", *(str(speed) for speed in self._cabin.fan_speeds)]
         self._airflow = {AIRFLOW_NAMES[code]: code for code in self._cabin.blowing_modes if code in AIRFLOW_NAMES}
         self._attr_swing_modes = list(self._airflow)
@@ -85,7 +85,7 @@ class GacClimate(GacEntity, ClimateEntity):
     @property
     def preset_mode(self) -> str | None:
         if self._cabin.on is True and self._cabin.compressor is not False:
-            return next((preset for preset, target in APP_PRESETS.items() if self._cabin.target == target), None)
+            return next((preset for preset, target in self._presets.items() if self._cabin.target == target), None)
         return None
 
     @property
@@ -162,10 +162,9 @@ class GacClimate(GacEntity, ClimateEntity):
         await self._cabin.async_set_blowing_mode(self._airflow[swing_mode])
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        if preset_mode not in APP_PRESETS:
+        if preset_mode not in self._presets:
             raise ServiceValidationError(f"Unsupported preset {preset_mode}; choose heating or cooling")
-        # GAC 2.0.32 uses automatic A/C at the maximum/minimum setpoint for these buttons.
-        await self._cabin.async_set_temperature(APP_PRESETS[preset_mode], on=True, automatic=True)
+        await self._cabin.async_set_temperature(self._presets[preset_mode], on=True, automatic=True)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         mode = kwargs.get(ATTR_HVAC_MODE)
@@ -179,6 +178,7 @@ class GacClimate(GacEntity, ClimateEntity):
             value = float(temp)
         except (TypeError, ValueError, OverflowError):
             raise ServiceValidationError(f"temperature must be a number, got {temp!r}") from None
-        if isinstance(temp, bool) or not math.isfinite(value) or not MIN_TEMP_C <= value <= MAX_TEMP_C:
-            raise ServiceValidationError(f"temperature must be between {MIN_TEMP_C:g} and {MAX_TEMP_C:g} °C")
+        low, high = self._attr_min_temp, self._attr_max_temp
+        if isinstance(temp, bool) or not math.isfinite(value) or not low <= value <= high:
+            raise ServiceValidationError(f"temperature must be between {low:g} and {high:g} °C")
         await self._cabin.async_set_temperature(value, on=on, compressor=self._compressor_for_mode(mode))

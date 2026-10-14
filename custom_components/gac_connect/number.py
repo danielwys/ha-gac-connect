@@ -12,15 +12,9 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from ._vendor.gac_connect.commands import FRIDGE_TEMP_RANGE
-
 from . import GacConfigEntry, fridge
 from .coordinator import GacCoordinator
 from .entity import GacEntity
-
-# the widest span across modes, shown only while the fridge's state is unknown
-_ALL_LO = min(lo for lo, _ in FRIDGE_TEMP_RANGE.values())
-_ALL_HI = max(hi for _, hi in FRIDGE_TEMP_RANGE.values())
 
 
 async def async_setup_entry(
@@ -39,6 +33,10 @@ class GacFridgeTemperature(GacEntity, NumberEntity):
 
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "fridge_temperature")
+        # the widest span across the car's modes, shown only while the fridge's state is unknown
+        modes = fridge.running_modes(coordinator) or fridge.RUNNING_MODES
+        spans = [fridge.temperature_range(coordinator, mode) for mode in modes]
+        self._all = (min(lo for lo, _ in spans), max(hi for _, hi in spans))
 
     @property
     def _fridge(self) -> fridge.FridgeController:
@@ -51,12 +49,12 @@ class GacFridgeTemperature(GacEntity, NumberEntity):
     @property
     def native_min_value(self) -> float:
         mode = self._fridge.temp_mode
-        return FRIDGE_TEMP_RANGE[mode][0] if mode else _ALL_LO
+        return fridge.temperature_range(self.coordinator, mode)[0] if mode else self._all[0]
 
     @property
     def native_max_value(self) -> float:
         mode = self._fridge.temp_mode
-        return FRIDGE_TEMP_RANGE[mode][1] if mode else _ALL_HI
+        return fridge.temperature_range(self.coordinator, mode)[1] if mode else self._all[1]
 
     @property
     def native_value(self) -> float | None:

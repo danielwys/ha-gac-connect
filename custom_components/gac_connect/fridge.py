@@ -29,6 +29,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
+from .capabilities import remote_choices
 from .const import CONF_ENABLE_FRIDGE, CONF_VIN, DEFAULT_ENABLE_FRIDGE, DOMAIN, SIGNAL_COMMAND_RESULT
 from .entity_filter import add_configured_entities
 from .command_tracking import async_send
@@ -36,7 +37,6 @@ from .command_tracking import async_send
 _LOGGER = logging.getLogger(__name__)
 
 RUNNING_MODES: tuple[str, ...] = tuple(FRIDGE_MODES)          # refrigerate, heat, freeze
-OPTIONS: tuple[str, ...] = ("off", *RUNNING_MODES)
 RESULT_EVENTS: tuple[str, ...] = ("control_refrigerator",)
 REQUEST_SECONDS = 180      # a requested state overrides the car's report at most this long
 STORE_VERSION = 1
@@ -66,11 +66,20 @@ def remove_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
             registry.async_remove(entity_id)
 
 
-def _in_range(mode: Any, t: Any) -> bool:
-    if mode not in FRIDGE_TEMP_RANGE or isinstance(t, bool) or not isinstance(t, (int, float)):
-        return False
-    lo, hi = FRIDGE_TEMP_RANGE[mode]
-    return math.isfinite(t) and lo <= t <= hi
+def running_modes(coordinator) -> tuple[str, ...]:
+    """The running modes the car's capability list offers; all of them until it is read."""
+    codes = remote_choices(coordinator, "fridge_modes", tuple(FRIDGE_MODES.values()))
+    return tuple(mode for mode in RUNNING_MODES if FRIDGE_MODES[mode] in codes)
+
+
+def options(coordinator) -> tuple[str, ...]:
+    return ("off", *running_modes(coordinator))
+
+
+def temperature_range(coordinator, mode: str) -> tuple[float, float]:
+    """A running mode's span from the car's capability list, else this integration's."""
+    span = remote_choices(coordinator, f"fridge_{mode}_temperature_range", ())
+    return (float(span[0]), float(span[1])) if len(span) == 2 else FRIDGE_TEMP_RANGE[mode]
 
 
 @dataclass
@@ -107,8 +116,10 @@ class FridgeController:
         data = await self._store.async_load() or {}
         if data.get("mode") in FRIDGE_MODES:
             self.mode = data["mode"]
+        if self.mode not in (modes := running_modes(self.coordinator)) and modes:
+            self.mode = modes[0]                              # one this car offers
         for m, t in (data.get("temps") or {}).items():
-            if _in_range(m, t):
+            if self._in_range(m, t):
                 self.temps[m] = float(t)
         self.sync()
         entry.async_on_unload(async_dispatcher_connect(
@@ -132,7 +143,22 @@ class FridgeController:
         for cb in list(self._listeners):
             cb()
 
+    def _in_range(self, mode: Any, t: Any) -> bool:
+        if mode not in FRIDGE_TEMP_RANGE or isinstance(t, bool) or not isinstance(t, (int, float)):
+            return False
+        lo, hi = temperature_range(self.coordinator, mode)
+        return math.isfinite(t) and lo <= t <= hi
+
+    def _kept(self, mode: str) -> float:
+        """The temperature kept for a mode's next start, within the car's span."""
+        lo, hi = temperature_range(self.coordinator, mode)
+        return min(max(self.temps.get(mode, FRIDGE_DEFAULT_TEMP[mode]), lo), hi)
+
     # ---- what the entities show -------------------------------------------
+    @property
+    def options(self) -> tuple[str, ...]:
+        return options(self.coordinator)
+
     @property
     def pending_option(self) -> str | None:
         return self._req.option if self._req is not None else None
@@ -170,14 +196,14 @@ class FridgeController:
         if mode is None:
             return None
         if self.option not in RUNNING_MODES:      # off: the value kept for the next start
-            return self.temps.get(mode, FRIDGE_DEFAULT_TEMP[mode])
+            return self._kept(mode)
         if self.pending_option == mode and self.pending_temp is not None:
             return self.pending_temp
         data = self.coordinator.data
         t = getattr(data, "fridge_temp_c", None) if data is not None else None
-        if self.reported_option == mode and _in_range(mode, t):
+        if self.reported_option == mode and self._in_range(mode, t):
             return float(t)
-        return self.temps.get(mode, FRIDGE_DEFAULT_TEMP[mode])
+        return self._kept(mode)
 
     # ---- learning from reports ---------------------------------------------
     @callback
@@ -197,7 +223,7 @@ class FridgeController:
         if mode in FRIDGE_MODES and self.pending_option is None:
             changed = mode != self.mode
             self.mode = mode
-            if _in_range(mode, t) and self.temps.get(mode) != float(t):
+            if self._in_range(mode, t) and self.temps.get(mode) != float(t):
                 self.temps[mode], changed = float(t), True
             if changed:
                 self._save()
@@ -274,19 +300,19 @@ class FridgeController:
 
     # ---- requests --------------------------------------------------------------
     async def async_set_option(self, option: str) -> None:
-        if option not in OPTIONS:
+        if option not in self.options:
             raise ServiceValidationError(f"Unknown fridge mode {option!r}")
         async with self.lock:
             if option == "off":
                 await self._request("off", None)
             else:
-                _, t = self._checked(option, self.temps.get(option))
+                _, t = self._checked(option, self._kept(option))
                 await self._request(option, t)
 
     async def async_turn_on(self) -> None:
         async with self.lock:
             mode = self.mode
-            _, t = self._checked(mode, self.temps.get(mode))
+            _, t = self._checked(mode, self._kept(mode))
             await self._request(mode, t)
 
     async def async_turn_off(self) -> None:
@@ -308,12 +334,17 @@ class FridgeController:
                 self._save()
                 self._notify()
 
-    @staticmethod
-    def _checked(mode: str, temperature: float | None) -> tuple[int, float]:
+    def _checked(self, mode: str, temperature: float | None) -> tuple[int, float]:
+        if mode not in running_modes(self.coordinator):
+            raise ServiceValidationError(f"The car's capability list does not offer fridge mode {mode!r}")
         try:
-            return validate_fridge(mode, temperature)
+            code, t = validate_fridge(mode, temperature)
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
+        lo, hi = temperature_range(self.coordinator, mode)
+        if not lo <= t <= hi:
+            raise ServiceValidationError(f"{mode} temperature must be between {lo:g} and {hi:g} °C")
+        return code, t
 
     async def _request(self, option: str, temp: float | None) -> None:
         """Show ``option`` at once and send it; restore the previous request if sending fails. Lock held."""

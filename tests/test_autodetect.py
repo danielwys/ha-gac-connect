@@ -215,7 +215,7 @@ def test_evidence_survives_reload_but_does_not_leak_between_vehicles(tmp_path):
             stored = json.loads((tmp_path / ".storage" / store_key(entry.entry_id)).read_text())["data"]
             # Entry IDs and hashes can coincidentally contain digits from readings.
             # Assert the saved data's shape and values, not arbitrary substrings.
-            assert set(stored) == {"vehicle_key", "evidence", "capability_list_read", "ranges"}
+            assert set(stored) == {"vehicle_key", "evidence", "capability_list_read", "ranges", "ranges_version"}
             assert stored["capability_list_read"] is False and stored["ranges"] == {}
             assert len(stored["vehicle_key"]) == 64 and all(c in "0123456789abcdef" for c in stored["vehicle_key"])
             assert stored["evidence"] == {

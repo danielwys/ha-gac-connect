@@ -1,7 +1,10 @@
 """Which entities are shown and why, without telemetry or identifiers."""
 from collections import Counter
+from functools import partial
 
-from .cabin import DEFAULT_BLOWING_MODES, DEFAULT_FAN_SPEEDS
+from . import fridge
+from .cabin import DEFAULT_BLOWING_MODES, DEFAULT_FAN_SPEEDS, DEFAULT_TEMPERATURE_RANGE
+from .capabilities import remote_choices
 from .climate import AIRFLOW_NAMES
 from .const import CONF_ENABLE_ENTITIES, CONF_OMIT_ENTITIES
 from .entity_filter import ENTITY_CHOICES
@@ -9,7 +12,7 @@ from .select import DEFAULT_SEAT_LEVELS, SEAT_LEVEL_NAMES
 
 # What each entity reports or does, in a few words.
 DETAILS: dict[str, str] = {
-    "sensor:charge_schedule": "unrestricted or scheduled",
+    "sensor:charge_schedule": "scheduled or whenever plugged in",
     "sensor:soc": "%", "sensor:range": "km", "sensor:odometer": "km",
     "sensor:cabin_temp": "°C", "sensor:outside_temp": "°C", "sensor:aux_voltage": "V",
     "sensor:ac_fan_strength": "0–10", "sensor:gps_coordinates": "latitude, longitude",
@@ -28,14 +31,12 @@ DETAILS: dict[str, str] = {
     **{f"binary_sensor:seat_{i}_ventilation": "running/off" for i in range(1, 5)},
     "button:vehicle_power_off": "switches the car off", "button:charge_now": "charge when plugged in",
     "button:horn": "sounds the horn",
-    "switch:charge_switch": "on charges whenever plugged in", "switch:climate_power": "A/C on/off",
+    "switch:charge_switch": "on follows the schedule, off charges whenever plugged in", "switch:climate_power": "A/C on/off",
     "switch:steering_heat": "on/off", "switch:lights": "flash on/off", "switch:ventilation": "on/off",
     "switch:recirculation": "on recirculates, off fresh air; while the A/C runs",
     "switch:precondition_battery": "on/off", "switch:fridge": "on/off",
     "cover:windows": "open/close", "cover:sunroof": "open/close", "cover:tailgate": "open/close",
     "lock:doors": "lock; unlock if allowed",
-    "select:fridge_mode": "Off, Refrigerate, Heat, Freeze",
-    "number:fridge_temperature": "0–20, 35–50 or −15 to −1 °C by mode",
     "device_tracker:location": "home/away and map",
 }
 # Controls first, then readings.
@@ -43,20 +44,32 @@ ORDER = ("climate", "switch", "select", "number", "cover", "lock", "button", "de
 ENTITIES = {f"{domain}:{key}": label for domain in ORDER for key, label in ENTITY_CHOICES[domain].items()}
 
 
-def _remote_details(ranges: dict) -> dict[str, str]:
+def _span(low: float, high: float) -> str:
+    return f"{low:g}–{high:g}" if low >= 0 else f"{low:g} to {high:g}".replace("-", "−")
+
+
+def _remote_details(coordinator) -> dict[str, str]:
     """Details that follow the car's remote choices, as the entities offer them."""
-    speeds = ranges.get("fan_speeds", DEFAULT_FAN_SPEEDS)
-    outlets = [code for code in ranges.get("blowing_modes", DEFAULT_BLOWING_MODES) if code in AIRFLOW_NAMES]
-    climate = ["Off, On, Fan only", "18–32 °C"]
+    choices = partial(remote_choices, coordinator)
+    speeds = choices("fan_speeds", DEFAULT_FAN_SPEEDS)
+    outlets = [code for code in choices("blowing_modes", DEFAULT_BLOWING_MODES) if code in AIRFLOW_NAMES]
+    temperatures = choices("ac_temperature_range", DEFAULT_TEMPERATURE_RANGE) or DEFAULT_TEMPERATURE_RANGE
+    climate = ["Off, On, Fan only", f"{_span(*temperatures)} °C"]
     if speeds:
         climate.append(f"fan {speeds[0]}–{speeds[-1]}" if len(speeds) > 1 else f"fan {speeds[0]}")
     if outlets:
         climate.append(f"{len(outlets)} airflow choice{'s' if len(outlets) > 1 else ''}")
     details = {"climate:climate": "; ".join([*climate, "Heating and Cooling presets"])}
     for seat in (1, 2):
-        levels = ranges.get(f"seat_{seat}_ventilation_levels", DEFAULT_SEAT_LEVELS)
+        levels = choices(f"seat_{seat}_ventilation_levels", DEFAULT_SEAT_LEVELS)
         names = [SEAT_LEVEL_NAMES[level].title() for level in levels if level in SEAT_LEVEL_NAMES]
         details[f"select:seat_{seat}_ventilation"] = ", ".join(["Off", *names])
+    modes = fridge.running_modes(coordinator)
+    details["select:fridge_mode"] = ", ".join(["Off", *(mode.title() for mode in modes)])
+    spans = [_span(*fridge.temperature_range(coordinator, mode)) for mode in modes]
+    if spans:
+        joined = spans[0] if len(spans) == 1 else f"{', '.join(spans[:-1])} or {spans[-1]}"
+        details["number:fridge_temperature"] = f"{joined} °C" + (" by mode" if len(spans) > 1 else "")
     return details
 
 
@@ -66,7 +79,7 @@ def equipment_summary(entry) -> str:
     if manager is None:
         return "The vehicle is not loaded. Reconnect it to see its equipment."
     decide = manager.decision
-    details = {**DETAILS, **_remote_details(manager.ranges)}
+    details = {**DETAILS, **_remote_details(runtime.coordinator)}
     omitted = set(entry.options.get(CONF_OMIT_ENTITIES, ()))
     always = set(entry.options.get(CONF_ENABLE_ENTITIES, ()))
     choices: list[str] = []

@@ -9,6 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
 from ._vendor.gac_connect import GacError
+from ._vendor.gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
 from .api import Capabilities, Support, doors_locked, equipment_from_capabilities, ranges_from_capabilities
 from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled
@@ -55,6 +56,15 @@ ENTITY_FEATURES = {
     "device_tracker:location": "location",
 }
 FRIDGE_ENTITIES = frozenset(key for key in ENTITY_FEATURES if "fridge" in key)
+# Entities that send these codes; hidden when the car's capability list leaves one out.
+CODES_SENT = {
+    "switch:recirculation": ("cycling_modes", (CYCLING_RECIRCULATE, CYCLING_FRESH_AIR)),
+    "switch:precondition_battery": ("battery_precondition_modes", (0, 1)),   # cancel, start
+}
+
+
+# Raised when what is read from the capability list changes, so a list saved before is read once more.
+RANGES_VERSION = 3
 
 
 def store_key(entry_id: str) -> str:
@@ -93,14 +103,15 @@ class CapabilityManager:
             return
         if isinstance(data, dict) and data.get("vehicle_key") == self._vehicle_key:
             self.detector.restore(data.get("evidence"))
-            # A list saved before ranges were kept is read once more at this start.
-            self.capability_list_read = data.get("capability_list_read") is True and "ranges" in data
+            self.capability_list_read = (data.get("capability_list_read") is True
+                                         and data.get("ranges_version") == RANGES_VERSION)
             self.ranges = _restore_ranges(data.get("ranges"))
 
     def _snapshot(self) -> dict:
         return {"vehicle_key": self._vehicle_key, "evidence": self.detector.export_state(),
                 "capability_list_read": self.capability_list_read,
-                "ranges": {key: list(values) for key, values in self.ranges.items()}}
+                "ranges": {key: list(values) for key, values in self.ranges.items()},
+                "ranges_version": RANGES_VERSION}
 
     async def async_read_capability_list_once(self, client, vin: str) -> None:
         """Read the list at the first start; reports decide meanwhile if it cannot be read."""
@@ -159,7 +170,13 @@ class CapabilityManager:
         if user_choices and entity_key in self.entry.options.get(CONF_ENABLE_ENTITIES, ()):
             return True
         feature = ENTITY_FEATURES.get(entity_key)
-        return feature is not None and self.detector.feature(feature).state is Support.SUPPORTED
+        return (feature is not None and self.detector.feature(feature).state is Support.SUPPORTED
+                and self._codes_offered(entity_key))
+
+    def _codes_offered(self, entity_key: str) -> bool:
+        """False when the car's capability list leaves out a code the entity sends."""
+        name, codes = CODES_SENT.get(entity_key, (None, ()))
+        return name not in self.ranges or set(codes) <= set(self.ranges[name])
 
     def confirm_command(self, command: str) -> bool:
         """Called only after the shared tracker correlates a successful result."""
@@ -203,6 +220,8 @@ class CapabilityManager:
         if user_choices and entity_key in options.get(CONF_ENABLE_ENTITIES, ()):
             return True, "your Always show choice"
         evidence = self.detector.feature(ENTITY_FEATURES.get(entity_key, ""))
+        if evidence.state is Support.SUPPORTED and not self._codes_offered(entity_key):
+            return False, "the car's capability list does not offer it remotely"
         shown = self.includes(entity_key, user_choices=user_choices)
         if evidence.source == "vehicle_equipment":
             return shown, ("the car's capability list offers it" if shown

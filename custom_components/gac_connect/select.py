@@ -75,7 +75,7 @@ class GacFridgeModeSelect(GacEntity, SelectEntity):
 
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "fridge_mode")
-        self._attr_options = list(fridge.OPTIONS)
+        self._attr_options = list(fridge.options(coordinator))
 
     @property
     def _fridge(self) -> fridge.FridgeController:
