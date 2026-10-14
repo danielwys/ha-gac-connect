@@ -20,7 +20,6 @@ from ._vendor.gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
 from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
 
 from . import GacConfigEntry, cabin, fridge
-from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .requested import REQUEST_SECONDS, GacRequestedEntity
@@ -38,6 +37,8 @@ class GacSwitch(SwitchEntityDescription):
     # can only be matched by session id, so a refusal may not clear the state
     events: tuple[str, ...] = ()
     attributes: Callable[[VehicleStatus], dict[str, Any]] | None = None
+    # Without a reported state, how long a request shows before the switch returns to unknown.
+    hold_seconds: float = REQUEST_SECONDS
 
 
 PRECONDITION_MODES = {0: "Off", 1: "Immediately", 2: "Once", 3: "Repeating"}
@@ -69,6 +70,8 @@ SWITCHES: tuple[GacSwitch, ...] = (
         on_cmd="ventilate-on",
         off_cmd="ventilate-off",
         events=("control_ventilate_mode",),
+        # The app: windows drop 2–3 cm and fresh-air circulation runs; the mode lasts 5 minutes.
+        hold_seconds=5 * 60,
     ),
     GacSwitch(
         key="precondition_battery",
@@ -146,14 +149,7 @@ class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
         return state(self.status) if state is not None else None
 
     def _hold_seconds(self) -> float:
-        if self.entity_description.state is not None:
-            return REQUEST_SECONDS
-        # Without telemetry, assume the run lasts the configured cabin run time, then show unknown.
-        try:
-            minutes = int(self.coordinator.config_entry.options.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES))
-        except (TypeError, ValueError):
-            minutes = DEFAULT_AC_MINUTES
-        return 60 * min(max(minutes, 5), 60)
+        return self.entity_description.hold_seconds
 
     @property
     def is_on(self) -> bool | None:

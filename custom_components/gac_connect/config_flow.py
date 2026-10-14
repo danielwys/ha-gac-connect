@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 import aiohttp
 import voluptuous as vol
-from ._vendor.gac_connect.commands import CLIMATE_MINUTES_RANGE
 from ._vendor.gac_connect.const import LISTED_REGIONS
 from ._vendor.gac_connect.errors import CommandError, GacError, LoginError, RateLimitedError
 
@@ -42,7 +41,6 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from .capabilities import remote_choices
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .location import location_enabled, tracking_choices
@@ -50,7 +48,6 @@ from .session_store import ConfigEntryStore
 from .entity_filter import OMIT_OPTIONS
 from .const import (
     CONF_ALLOW_PLAINTEXT_PUSH,
-    CONF_AC_MINUTES,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
     CONF_TRACK_MOVING,
@@ -66,7 +63,6 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_SESSION,
     CONF_VIN,
-    DEFAULT_AC_MINUTES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
@@ -474,9 +470,6 @@ class GacOptionsFlow(OptionsFlow):
         ]
         enable_options = dict(OMIT_OPTIONS)
         selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
-        # The run times the car's capability list allows, once read.
-        shortest, longest = remote_choices(self._loaded_coordinator(), "ac_minutes_range",
-                                           CLIMATE_MINUTES_RANGE) or CLIMATE_MINUTES_RANGE
         fields = {
             vol.Optional(CONF_ENABLE_ENTITIES,
                          default=selected_enables): cv.multi_select(enable_options),
@@ -496,8 +489,6 @@ class GacOptionsFlow(OptionsFlow):
             vol.Optional(CONF_PICTURE, description={"suggested_value": opts.get(CONF_PICTURE, "")}): str,
             vol.Optional(CONF_QUIET_START, default=opts.get(CONF_QUIET_START, "")): str,
             vol.Optional(CONF_QUIET_END, default=opts.get(CONF_QUIET_END, "")): str,
-            vol.Optional(CONF_AC_MINUTES, default=opts.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)):
-                vol.All(vol.Coerce(int), vol.Range(min=shortest, max=longest)),
         }
         schema = vol.Schema(fields)
         return self.async_show_form(step_id="settings", data_schema=schema, errors=errors)

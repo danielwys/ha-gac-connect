@@ -76,8 +76,7 @@
           "omit_entities": "Omit unsupported entities",
           "picture": "Car picture on the map (optional)",
           "quiet_start": "Quiet hours start (HH:MM, optional)",
-          "quiet_end": "Quiet hours end (HH:MM, optional)",
-          "ac_minutes": "A/C run time (minutes)"
+          "quiet_end": "Quiet hours end (HH:MM, optional)"
         },
         "data_description": {
           "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking and shutdown need their Allow settings.",
@@ -461,6 +460,9 @@
       }
     },
     "number": {
+      "ac_minutes": {
+        "name": "Pre-conditioning run time"
+      },
       "fridge_temperature": {
         "name": "Fridge temperature"
       }

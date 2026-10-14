@@ -54,6 +54,7 @@ ENTITY_FEATURES = {
     "button:horn": "horn",
     "button:vehicle_power_off": "vehicle_power_control",
     "button:charge_now": "charge_control", "select:fridge_mode": "fridge", "number:fridge_temperature": "fridge",
+    "number:ac_minutes": "climate",
     "device_tracker:location": "location",
 }
 FRIDGE_ENTITIES = frozenset(key for key in ENTITY_FEATURES if "fridge" in key)

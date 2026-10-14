@@ -190,14 +190,16 @@ def test_older_status_does_not_remove_climate_or_crash_the_charging_panel(tmp_pa
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("minutes,expected", [(None, 1800), (10, 600), ("bad", 1800), (99, 3600)])
-def test_ventilation_without_telemetry_returns_to_unknown_after_the_run_time(monkeypatch, minutes, expected):
+@pytest.mark.parametrize("minutes", [None, 10, 60])
+def test_ventilation_without_telemetry_returns_to_unknown_after_its_five_minutes(monkeypatch, minutes):
+    # The app: ventilation mode lasts 5 minutes, whatever the A/C run time.
     from unittest.mock import AsyncMock, Mock
 
     from custom_components.gac_connect.const import CONF_AC_MINUTES
     from custom_components.gac_connect.switch import SWITCHES, GacCommandSwitch
     from test_regressions import ACCEPTED, coord
 
+    expected = 300
     timers = []
     monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later",
                         lambda hass, delay, action: timers.append((delay, action)) or Mock())

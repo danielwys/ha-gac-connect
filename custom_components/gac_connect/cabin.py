@@ -62,6 +62,7 @@ class CabinController:
         self._awaiting_accept = False
         self._held: list[PushResult] = []
         self._seen = None
+        self._run_minutes: int | None = None     # set by the Pre-conditioning run time entity
 
     def async_setup(self, entry) -> None:
         entry.async_on_unload(
@@ -94,14 +95,29 @@ class CabinController:
 
     @property
     def run_minutes(self) -> int:
-        """The configured run time, kept within the car's range."""
-        minutes = self.coordinator.config_entry.options.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)
+        """How long a remote start runs, within the car's range.
+
+        The car ends a remote run by itself; once it is switched on, its own
+        climate control takes over. Until the run time entity has set it, a run time
+        saved in the settings by an earlier version applies, else the default.
+        """
+        minutes = self._run_minutes
+        if minutes is None:
+            minutes = self.coordinator.config_entry.options.get(CONF_AC_MINUTES, DEFAULT_AC_MINUTES)
         try:
             _, duration = validate_climate(DEFAULT_TARGET_C, minutes)
-        except ValueError as err:
-            raise ServiceValidationError(str(err)) from err
+        except ValueError:
+            duration = DEFAULT_AC_MINUTES
         span = self.minutes_range
         return min(max(duration, span[0]), span[1]) if span else duration
+
+    @callback
+    def set_run_minutes(self, minutes: int) -> None:
+        low, high = self.minutes_range or DEFAULT_MINUTES_RANGE
+        if type(minutes) is not int or not low <= minutes <= high:
+            raise ServiceValidationError(f"The run time must be a whole number of minutes from {low} to {high}")
+        self._run_minutes = minutes
+        self._notify()
 
     def _remote_temperature(self, target: float) -> float:
         """Match the app's whole-degree commands without rounding vehicle reports."""

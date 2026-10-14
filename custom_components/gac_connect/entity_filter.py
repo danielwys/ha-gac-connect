@@ -56,7 +56,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "seat_2_ventilation": "Front passenger seat ventilation",
         "fridge_mode": "Fridge mode",
     },
-    "number": {"fridge_temperature": "Fridge temperature"},
+    "number": {"ac_minutes": "Pre-conditioning run time", "fridge_temperature": "Fridge temperature"},
     "device_tracker": {"location": "Location"},
 }
 

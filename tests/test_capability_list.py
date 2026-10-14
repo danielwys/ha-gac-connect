@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-import voluptuous as vol
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
@@ -15,7 +14,7 @@ from custom_components.gac_connect.capabilities import CapabilityManager
 from custom_components.gac_connect.climate import GacClimate
 from custom_components.gac_connect.config_flow import GacOptionsFlow
 from custom_components.gac_connect.equipment import equipment_summary
-from custom_components.gac_connect.number import GacFridgeTemperature
+from custom_components.gac_connect.number import GacFridgeTemperature, GacRunTime
 from custom_components.gac_connect.select import GacFridgeModeSelect, GacSeatVentilationSelect
 from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
 from test_autodetect import vehicle
@@ -240,10 +239,6 @@ def a_car_with_its_own_spans():
     return data
 
 
-def settings_validator(form, name):
-    return next(value for key, value in form["data_schema"].schema.items() if key == name)
-
-
 def test_the_ut_list_keeps_its_temperature_run_time_and_switches(tmp_path):
     async def run():
         async with vehicle(tmp_path, options={"ac_minutes": 15}) as (hass, entry, c):
@@ -275,11 +270,14 @@ def test_another_cars_spans_and_codes_shape_its_controls(tmp_path):
                 assert not c.capabilities.includes(key)
                 assert c.capabilities.explanation(key) == "Hidden: the car's capability list does not offer it remotely."
             flow = setup_flow(hass, entry, c)
-            minutes = settings_validator(await flow.async_step_settings(), "ac_minutes")
-            assert minutes(10) == 10 and minutes("30") == 30
-            for value in (5, 31):
-                with pytest.raises(vol.Invalid):
-                    minutes(value)
+            run_time = GacRunTime(c)
+            assert (run_time.native_min_value, run_time.native_max_value) == (10, 30)
+            await run_time.async_set_native_value(12)
+            assert climate._cabin.run_minutes == 12
+            for value in (5, 31, 12.5):
+                with pytest.raises(ServiceValidationError):
+                    await run_time.async_set_native_value(value)
+            assert "ac_minutes" not in (await flow.async_step_settings())["data_schema"].schema
 
             controller = fridge.FridgeController(hass, entry, c)
             entry.runtime_data.fridge = controller
@@ -330,4 +328,24 @@ def test_the_ut_shows_hood_and_brake_fluid(tmp_path):
             c.capabilities.observe(decode_status({"hatchAccessors": UT_HATCHES["closed"]}))
             assert c.capabilities.includes("binary_sensor:hood_open")
             assert c.capabilities.explanation("binary_sensor:hood_open") == "Shown: seen in the car's reports."
+    asyncio.run(run())
+
+
+def test_the_run_time_is_restored_and_sent_with_each_remote_start(tmp_path):
+    from types import SimpleNamespace
+
+    from custom_components.gac_connect import cabin
+
+    async def run():
+        async with vehicle(tmp_path, options={"ac_minutes": 15}) as (hass, entry, c):
+            run_time = GacRunTime(c)
+            assert run_time.native_value == 15                    # an earlier version's setting seeds it
+            run_time.hass, run_time.async_write_ha_state = hass, Mock()
+            run_time.async_get_last_number_data = AsyncMock(return_value=SimpleNamespace(native_value=20.0))
+            await run_time.async_added_to_hass()
+            assert run_time.native_value == 20 and run_time.available
+            c.data = decode_status({"airConditionAccessors": [{"enableAirCompressor": 0, "windStrength": 0}]})
+            c.client.climate_manual_on = AsyncMock(return_value={"code": 13001, "data": {"sessionId": "s1"}})
+            await cabin.controller(c).async_set_power(True)
+            assert c.client.climate_manual_on.await_args.kwargs["minutes"] == 20
     asyncio.run(run())

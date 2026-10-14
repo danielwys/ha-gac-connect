@@ -3,7 +3,7 @@ from collections import Counter
 from functools import partial
 
 from . import fridge
-from .cabin import DEFAULT_BLOWING_MODES, DEFAULT_FAN_SPEEDS, DEFAULT_TEMPERATURE_RANGE
+from .cabin import DEFAULT_BLOWING_MODES, DEFAULT_FAN_SPEEDS, DEFAULT_MINUTES_RANGE, DEFAULT_TEMPERATURE_RANGE
 from .capabilities import remote_choices
 from .climate import AIRFLOW_NAMES
 from .const import CONF_ENABLE_ENTITIES, CONF_OMIT_ENTITIES
@@ -61,6 +61,8 @@ def _remote_details(coordinator) -> dict[str, str]:
     if outlets:
         climate.append(f"{len(outlets)} airflow choice{'s' if len(outlets) > 1 else ''}")
     details = {"climate:climate": "; ".join([*climate, "Heating and Cooling presets"])}
+    low, high = choices("ac_minutes_range", DEFAULT_MINUTES_RANGE) or DEFAULT_MINUTES_RANGE
+    details["number:ac_minutes"] = f"{low}–{high} minutes per remote start"
     for seat in (1, 2):
         levels = choices(f"seat_{seat}_ventilation_levels", DEFAULT_SEAT_LEVELS)
         names = [SEAT_LEVEL_NAMES[level].title() for level in levels if level in SEAT_LEVEL_NAMES]
