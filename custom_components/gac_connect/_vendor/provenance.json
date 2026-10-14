@@ -2,7 +2,7 @@
   "format": 1,
   "source": "https://github.com/leecaochang/gac-connect",
   "upstream": "https://github.com/wattferry/gac-connect",
-  "commit": "f589154e79d68689bb87031622fb5dfb4a656971",
+  "commit": "8337d8b0d75565f503841260a66fee5aeb9b0f9c",
   "version": "0.4.0b11",
   "requires_python": ">=3.11",
   "dependencies": [
@@ -14,13 +14,13 @@
     "cli.py"
   ],
   "sha256": {
-    "__init__.py": "ca47049c782ae0d7b8e3076eb6af580032cade86ae686e7f454d9ff5aa6dc3e2",
+    "__init__.py": "85d1a81cc846ba644db8f48abe578354031bf2e4107aadfc255593b23ba02b4b",
     "gac_connect/LICENSE": "57bc988e8f2b38d66b35f0bea5247f28978cd1bb83b91308a4d4a23b0b707108",
     "gac_connect/__init__.py": "54084cf2da4d85f188c4a8b7d25b647707f4e5378e6c9f4d6b2a731c9639a216",
     "gac_connect/_material.pem": "fd0f684059f51cc9df4ac60f54618ee7b7f3ae1dc0e7896d903b6729731a5e38",
     "gac_connect/_material_uk.pem": "5841e40ade597509d837fa6bf779aaf1a6b088213d802bb2e4a895fc8f67f95c",
     "gac_connect/auth.py": "c88ac6746d668f0e320ef4f4bd7eabbd24bbc73818e4f0bfe6132b3e6bb8827a",
-    "gac_connect/capabilities.py": "5762370cb4d94c29a14e596389cf334e17ae89ca9cfe237522916e85f40c61ae",
+    "gac_connect/capabilities.py": "2c10cfdb0d8b0dea3412bce9dda118eb54545a5c55bf429f502538340abcaac6",
     "gac_connect/client.py": "b5a02bcc286cbdce48975ef56602efdbd4308ab1171182665657ce762bbfdc68",
     "gac_connect/commands.py": "c03c0f089ca0148abbfcc448909c26462eecfa1be9363e2b635c34a8ff6f2c8c",
     "gac_connect/const.py": "600947443dc82802b270ff3e9ef8aa0f56fb41fdad96973071f5c15ed3400852",
@@ -28,7 +28,7 @@
     "gac_connect/errors.py": "00708069a53cf5a843303b2a2ed8081eb8593c1a65c7402d30fae5864f48831f",
     "gac_connect/keys.py": "9a40c026b3dd4f1865d7a53e774f21578747fb7597da44490fca27e274c58ec8",
     "gac_connect/limits.py": "08b43fb32b5bfa902952265bea6bf975976b0af0c9e675c3b6e58aba7f1b3aa3",
-    "gac_connect/models.py": "02a21cd8f7c90888ef1c82838513d14ff5e221b8618adb84da483a66ff40e656",
+    "gac_connect/models.py": "9df51194b0dad94cbb17dce74a82302fa89e72e5ffa45ee46dc41bac1d2c2fd3",
     "gac_connect/phone.py": "dc21e22b67ad4e7e027476594227aca7b91ba43c50fea527030c6d77e3dc7eec",
     "gac_connect/push.py": "a1e03682d1ac4ef691b629cb8152aeae78967c9011d8dd5be392cb0154e9afea",
     "gac_connect/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

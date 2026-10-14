@@ -300,3 +300,34 @@ def test_another_cars_spans_and_codes_shape_its_controls(tmp_path):
             assert "- Fridge mode (Off, Refrigerate, Freeze)" in summary
             assert "- Fridge temperature (2–20 or −15 to −1 °C by mode)" in summary
     asyncio.run(run())
+
+
+UT_HATCHES = {   # as an Aion UT reported them (2026-10-14)
+    "closed": [{"hatch": 1, "openModeFlag": 1, "openMode": 0}, {"hatch": 3, "openModeFlag": 0, "openMode": 0}],
+    "boot": [{"hatch": 1, "openModeFlag": 1, "openMode": 0}, {"hatch": 3, "openModeFlag": 1, "openMode": 1}],
+    "bonnet": [{"hatch": 1, "openModeFlag": 1, "openMode": 1}, {"hatch": 3, "openModeFlag": 0, "openMode": 0}],
+}
+
+
+@pytest.mark.parametrize("case,boot,hood", [("closed", False, False), ("boot", True, False), ("bonnet", False, True)])
+def test_the_boot_and_hood_sensors_follow_their_own_hatch(case, boot, hood):
+    from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
+    from test_regressions import coord
+
+    c = coord(decode_status({"hatchAccessors": UT_HATCHES[case], "brakeAccessors": [{"alarms": []}]}))
+    sensor = {d.key: GacBinaryEntity(c, d) for d in BINARY_SENSORS}
+    assert (sensor["hatch_open"].is_on, sensor["hood_open"].is_on) == (boot, hood)
+    assert sensor["brake_fluid"].is_on is False
+
+
+def test_the_ut_shows_hood_and_brake_fluid(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.client.get_control_capabilities = AsyncMock(return_value=UT_LIST)
+            await c.capabilities.async_read_capability_list(c.client, "VIN")
+            assert c.capabilities.includes("binary_sensor:brake_fluid")     # its brake group lists alarms
+            assert not c.capabilities.includes("binary_sensor:hood_open")   # not until the car reports it
+            c.capabilities.observe(decode_status({"hatchAccessors": UT_HATCHES["closed"]}))
+            assert c.capabilities.includes("binary_sensor:hood_open")
+            assert c.capabilities.explanation("binary_sensor:hood_open") == "Shown: seen in the car's reports."
+    asyncio.run(run())

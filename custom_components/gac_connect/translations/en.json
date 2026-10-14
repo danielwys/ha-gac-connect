@@ -310,6 +310,12 @@
       "hatch_open": {
         "name": "Boot"
       },
+      "hood_open": {
+        "name": "Hood"
+      },
+      "brake_fluid": {
+        "name": "Brake fluid"
+      },
       "online": {
         "name": "Online"
       },

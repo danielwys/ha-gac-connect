@@ -31,7 +31,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "vehicle_power": "Vehicle power",
         "plugged": "Plugged in", "charging": "Charging", "locked": "Lock state",
         "door_open": "Door state", "window_open": "Window state",
-        "hatch_open": "Boot state", "online": "Online", "charger_locked": "Charger lock",
+        "hatch_open": "Boot state", "hood_open": "Hood state", "brake_fluid": "Brake fluid", "online": "Online", "charger_locked": "Charger lock",
         "ac_auto": "A/C auto mode", "ac_compressor": "A/C compressor", "anti_theft": "Anti-theft enabled",
         **{f"seat_{i}_ventilation": f"{name} seat ventilation state" for i, name in
            enumerate(("Driver", "Front passenger", "Rear left", "Rear right"), start=1)},

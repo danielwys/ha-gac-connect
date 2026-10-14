@@ -39,6 +39,7 @@ ENTITY_FEATURES = {
     "binary_sensor:plugged": "plugged_in", "binary_sensor:charging": "charging",
     "binary_sensor:locked": "locked", "binary_sensor:door_open": "door_open",
     "binary_sensor:window_open": "window_open", "binary_sensor:hatch_open": "hatch_open",
+    "binary_sensor:hood_open": "hood_open", "binary_sensor:brake_fluid": "brake_fluid_low",
     "binary_sensor:online": "online", "binary_sensor:charger_locked": "charger_locked",
     "binary_sensor:vehicle_power": "power_on",
     "binary_sensor:ac_auto": "ac_auto_on", "binary_sensor:ac_compressor": "ac_compressor_on",

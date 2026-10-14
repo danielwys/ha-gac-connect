@@ -1,4 +1,4 @@
 """Generated library provenance. Update with tools/vendor_library.py; do not edit."""
 LIBRARY_VERSION = '0.4.0b11'
-LIBRARY_COMMIT = 'f589154e79d68689bb87031622fb5dfb4a656971'
+LIBRARY_COMMIT = '8337d8b0d75565f503841260a66fee5aeb9b0f9c'
 LIBRARY_SOURCE = 'https://github.com/leecaochang/gac-connect'
