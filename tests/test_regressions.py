@@ -929,3 +929,38 @@ def test_malformed_first_accessor_does_not_shift_other_readings():
 def test_decoded_lock_state_preserves_unknown_doors():
     status = decode_status({"doorAccessors": [{"door": 1, "lock": "0"}, {"door": 2, "lock": -1}]})
     assert status.locked is None
+
+
+def test_the_position_read_keeps_speed_and_heading_and_masks_the_location():
+    c = coord(None)
+    c.client.get_position = AsyncMock(return_value={
+        "latitude": 13.75, "longitude": 100.5, "velocity": 42.0, "headingDegree": 270, "dateTime": 1792031935000,
+        "address": {"city": "Private", "street": "Private"}, "positionMode": 0, "lat": None,
+        "gpsLatitude": 13.75, "speedKmh": 42})
+    handler = service_registry(c)["get_position"][0]
+    result = asyncio.run(handler(SimpleNamespace(data={})))
+    assert result == {"position": {
+        "latitude": "**masked**", "longitude": "**masked**", "velocity": 42.0, "headingDegree": 270,
+        "dateTime": 1792031935000, "address": {"city": "**masked**", "street": "**masked**"}, "positionMode": 0,
+        "lat": None, "gpsLatitude": "**masked**", "speedKmh": 42}}
+    c.client.get_position.assert_awaited_once_with(c.vin)
+
+
+def test_the_alert_read_decodes_each_alert_and_the_plan_read_passes_through():
+    c = coord(None)
+    content = '{"identifier": {"vin": "TESTVIN"}, "alarmStatus": [{"alarmSource": 210, "alarms": [{"alarmObject": 0, "alarmReason": 6}]}]}'
+    c.client.get_alarms = AsyncMock(return_value={"pageNo": 1, "list": [
+        {"alarmId": "1", "createTime": "x", "alarmContent": content}, {"alarmId": "2", "alarmContent": "not json"}]})
+    c.client.get_departure_plans = AsyncMock(return_value=[{"customFeatureId": "7", "configName": "Work"}])
+    from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
+    c.client.get_standby_config = AsyncMock(side_effect=[{"active": 0}, ResponseError("standby setting was not accepted")])
+    registry = service_registry(c)
+    alerts = asyncio.run(registry["get_alerts"][0](SimpleNamespace(data={"page": 2})))
+    assert alerts["alerts"]["list"][0]["alarmContent"]["alarmStatus"][0]["alarmSource"] == 210
+    assert alerts["alerts"]["list"][0]["alarmContent"]["identifier"]["vin"] == "**masked**"
+    assert alerts["alerts"]["list"][1]["alarmContent"] == "not json"
+    c.client.get_alarms.assert_awaited_once_with(c.vin, page=2)
+    plans = asyncio.run(registry["get_departure_plans"][0](SimpleNamespace(data={})))
+    assert plans == {"plans": [{"customFeatureId": "7", "configName": "Work"}], "standby": {"active": 0},
+                     "default_plan": {"error": "standby setting was not accepted"}}
+

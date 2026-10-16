@@ -1,8 +1,11 @@
 """Present reported charging information without inventing clock conversions."""
+from datetime import datetime
+
 from homeassistant.util import dt as dt_util
 
 from ._vendor.gac_connect.errors import result_reason
 from ._vendor.gac_connect.models import ChargingMode
+from .api import window_operation
 
 DAYS = {"mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",
         "fri": "Friday", "sat": "Saturday", "sun": "Sunday"}
@@ -20,6 +23,30 @@ def reported_days(mask: int | None, mode=None) -> str:
 
 
 SCHEDULE_TYPES = {ChargingMode.FREE: "Immediately", ChargingMode.SCHEDULED: "Once", ChargingMode.LOOP: "Repeating"}
+
+
+def _day(struct) -> str | None:
+    """A calendar field as "Thu 15 Oct", or None unless it is a real date."""
+    try:
+        date = datetime(struct["year"], struct["month"], struct["day"])
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    return f"{date:%a} {date.day} {date:%b}"
+
+
+def reported_window_text(status) -> str:
+    """The reported window, with its dates for a one-time window; "Not set" for the car's placeholder."""
+    start, stop = (getattr(status, key, None) for key in ("charge_window_start", "charge_window_stop"))
+    if start is None and stop is None and getattr(status, "charging_mode", None) is not None:
+        return "Not set"
+    days = (None, None)
+    raw = getattr(status, "raw", None)
+    charging = raw.get("chargingAccessors") if isinstance(raw, dict) else None
+    if status.charging_mode is ChargingMode.SCHEDULED and isinstance(charging, list) and charging \
+            and isinstance(charging[0], dict):
+        days = tuple(_day(charging[0].get(key)) for key in ("startTime", "stopTime"))
+    return " → ".join(f"{clock or 'Not reported'}" + (f" ({day})" if day and clock else "")
+                      for clock, day in zip((start, stop), days, strict=True))
 
 
 def schedule_mode(status) -> str:
@@ -53,7 +80,18 @@ _REQUEST_STATES = {
 }
 
 
-def _requested(record) -> str:
+def _request_day(record, zone) -> str | None:
+    """The day a one-time request was dated for, rebuilt as it was sent."""
+    expected = record.expected
+    try:
+        operation = window_operation(expected["charge_window_start"], expected.get("charge_window_stop"), zone,
+                                     until_soc=bool(expected.get("charge_end_type")), now=record.requested_at)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return _day(operation.get("startTime"))
+
+
+def _requested(record, zone=None) -> str:
     """What a charging request asked for, from the fields it waits to see reported."""
     expected = record.expected
     if record.command == "charge-now":
@@ -64,6 +102,8 @@ def _requested(record) -> str:
         return "a charging schedule"
     stop = expected.get("charge_window_stop") or "the target charge level"
     days = reported_days(expected.get("charge_weekly"), ChargingMode.SCHEDULED)
+    if expected.get("charge_weekly") == 0 and zone is not None and (day := _request_day(record, zone)):
+        days += f" on {day}"
     return f"{expected['charge_window_start']} → {stop}, {days}"
 
 
@@ -81,7 +121,8 @@ def _request_summary(coordinator) -> tuple[str, bool]:
         progress = _REQUEST_STATES.get(record.state, record.state)
     sent = dt_util.as_local(record.requested_at).strftime("%H:%M")
     waiting = record.state in ("sending", "pending", "awaiting_report")
-    return f"**Last request ({sent}):** {_requested(record)} — {progress}\n\n", waiting
+    zone = dt_util.get_time_zone(str(getattr(coordinator.client, "timezone", "") or ""))
+    return f"**Last request ({sent}):** {_requested(record, zone)} — {progress}\n\n", waiting
 
 
 def schedule_summary(coordinator) -> str:
@@ -104,8 +145,7 @@ def schedule_summary(coordinator) -> str:
     stale = ("The car has not reported the request yet, so the values below are from before it. "
              "Choose Refresh vehicle report in a minute or two.\n\n" if waiting else "")
     return (f"{request}{stale}**Reported mode:** {mode}\n\n"
-            f"**Reported window:** {fields['reported_start'] or 'Not reported'} → "
-            f"{fields['reported_stop'] or 'Not reported'}\n\n"
+            f"**Reported window:** {reported_window_text(data) if data else 'Not reported → Not reported'}\n\n"
             f"**Reported days:** {fields['reported_days']}\n\n"
             f"**Stopping rule:** {fields['stopping_rule']}\n\n"
             f"**Report age:** {age_text} · {refresh}\n\n"

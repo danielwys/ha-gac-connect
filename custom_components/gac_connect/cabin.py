@@ -335,7 +335,7 @@ class CabinController:
             if self.on is not True:
                 raise ServiceValidationError(
                     "Recirculation can be changed only while the cabin A/C is running. "
-                    "Turn on Pre-conditioning first."
+                    "Turn on A/C first."
                 )
             await self._command(True, cycling_mode=mode)
 

@@ -51,6 +51,10 @@ COMMAND_REFRESH_DELAYS = (5.0, 15.0, 30.0)
 RESULT_REFRESH_GAP = 10.0
 RECOVERY_DELAYS = (60.0, 120.0, 300.0)
 QUIET_RECOVERY_ATTEMPTS = 2
+# A network blip (DNS, timeout, lost connection) keeps the last real report for this long
+# after the first failed read, logged at debug only; then the entities become unavailable.
+NETWORK_GRACE_SECONDS = 300.0
+TRANSIENT_FAILURES = frozenset({"dns", "timeout", "connection"})
 
 
 def _failure_reason(error: Exception) -> str:
@@ -144,6 +148,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self.last_refresh_error = None
         self.last_refresh_error_at = None
         self._refresh_failures = 0
+        self._failing_since: float | None = None
         self._recovery_retry_at = None
         self._quiet_recovery_remaining = 0
         self._refresh_outcome = "waiting"
@@ -216,6 +221,13 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         if result.ok is None:
             _LOGGER.debug("ignoring unrecognised push message (code=%s event=%s, %s)",
                           result.code, result.event, _payload_shape(payload))
+            return
+        await self.async_handle_command_result(result)
+
+    async def async_handle_command_result(self, result: PushResult) -> None:
+        """Act on the car's answer to a command, from the push feed or a poll."""
+        if result.ok is None:
+            _LOGGER.debug("ignoring unrecognised command result (code=%s event=%s)", result.code, result.event)
             return
         if result.vin != self.vin:
             return   # another vehicle on the account, or no vehicle named: not ours to act on
@@ -335,6 +347,12 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self._force_refresh = True
         await self.async_refresh()
 
+    def _network_grace(self) -> bool:
+        """Whether a network blip may still be shown with the last real report."""
+        return (self.last_refresh_error in TRANSIENT_FAILURES and self._fetched_status is not None
+                and self.data is not None and self._failing_since is not None
+                and monotonic() - self._failing_since < NETWORK_GRACE_SECONDS)
+
     async def _async_update_data(self) -> VehicleStatus:
         generation = self._fetch_generation
         async with self._fetch_lock:
@@ -354,6 +372,8 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 if self._refresh_outcome == "auth_required":
                     raise ConfigEntryAuthFailed("GAC sign-in required")
                 if self._refresh_outcome == "error":
+                    if self._network_grace():
+                        return self.data
                     if self._quiet_recovery_remaining == 0:
                         self.retry_not_before = None
                     raise UpdateFailed("GAC refresh failed; waiting for an explicit refresh or quiet hours to end")
@@ -373,6 +393,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                 self._refresh_outcome = "ok"
                 self.retry_not_before = None
                 self._refresh_failures = 0
+                self._failing_since = None
                 self._recovery_retry_at = None
                 self._quiet_recovery_remaining = 0
                 self._fetched_status = status
@@ -410,6 +431,12 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
                     self._quiet_recovery_remaining = QUIET_RECOVERY_ATTEMPTS
                 self.retry_not_before = (self.last_refresh_error_at + timedelta(seconds=delay)
                                          if not quiet or self._quiet_recovery_remaining > 0 else None)
+                if self._failing_since is None:
+                    self._failing_since = monotonic()
+                if self._network_grace():
+                    _LOGGER.debug("status refresh failed (%s); keeping the last report and retrying in %ds",
+                                  self.last_refresh_error, delay)
+                    return self.data
                 raise UpdateFailed(f"{err} ({self.last_refresh_error})") from err
             except GacError as err:
                 self._refresh_outcome = "error"

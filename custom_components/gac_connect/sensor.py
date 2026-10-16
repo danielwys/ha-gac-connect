@@ -34,7 +34,11 @@ except ImportError:  # HA 2025.2 predates UnitOfDensity
 else:
     PM25_UNIT = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
 
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
 from . import GacConfigEntry, fridge
+from ._vendor.gac_connect.alerts import ALERT_KEYS
+from .account_alerts import SIGNAL_ACCOUNT_ALERTS_UPDATED, alert_attributes
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .command_tracking import STATES as COMMAND_STATES
@@ -101,6 +105,9 @@ SENSORS: tuple[GacSensor, ...] = (
     GacSensor(key="aux_voltage", translation_key="aux_voltage", device_class=SensorDeviceClass.VOLTAGE,
               native_unit_of_measurement=UnitOfElectricPotential.VOLT,
               state_class=SensorStateClass.MEASUREMENT, value=lambda s: s.aux_voltage),
+    GacSensor(key="battery_temp", translation_key="battery_temp", device_class=SensorDeviceClass.TEMPERATURE,
+              native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+              state_class=SensorStateClass.MEASUREMENT, value=lambda s: getattr(s, "battery_temp_c", None)),
     GacSensor(key="charge_time", translation_key="charge_time", device_class=SensorDeviceClass.DURATION,
               native_unit_of_measurement=UnitOfTime.MINUTES,
               value=lambda s: s.estimated_charge_minutes),
@@ -174,6 +181,9 @@ async def async_setup_entry(
     )
     fridge.async_add_when_fitted(
         entry, coordinator, add_entities, lambda: [GacSensorEntity(coordinator, d) for d in FRIDGE_SENSORS], platform="sensor")
+    alerts = getattr(entry.runtime_data, "alerts", None)
+    if alerts is not None and alerts.enabled:
+        add_entities([GacLastAlertSensor(coordinator, alerts)])
 
 
 class GacSensorEntity(GacEntity, SensorEntity):
@@ -203,6 +213,48 @@ class GacSensorEntity(GacEntity, SensorEntity):
             latitude, longitude = self._position
             return {"latitude": latitude, "longitude": longitude}
         return None
+
+
+LAST_ALERT_STATES = ("no_alerts", "not_read_yet", "read_failed", "signed_out")
+
+
+class GacLastAlertSensor(GacEntity, SensorEntity):
+    """The newest alert in GAC's alert list; Signed out once the account session has ended."""
+
+    _attr_translation_key = "last_gac_alert"
+    _attr_icon = "mdi:car-info"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [*ALERT_KEYS, *LAST_ALERT_STATES]
+
+    def __init__(self, coordinator, alerts) -> None:
+        super().__init__(coordinator, "last_gac_alert")
+        self._alerts = alerts
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_ACCOUNT_ALERTS_UPDATED.format(vin=self.coordinator.vin), self.async_write_ha_state))
+
+    @property
+    def available(self) -> bool:
+        return True       # its states say why there is no alert
+
+    @property
+    def native_value(self) -> str | None:
+        state, latest = self._alerts.state, self._alerts.latest
+        if state == "signed_out":
+            return "signed_out"          # alerts have stopped, whatever the last one was
+        if latest is not None:
+            return latest.key
+        return {"ok": "no_alerts", "error": "read_failed"}.get(state, "not_read_yet")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        latest = self._alerts.latest
+        last_read = self._alerts.last_read
+        return {"account_state": self._alerts.state, "last_read": last_read.isoformat() if last_read else None,
+                "last_error": self._alerts.last_error,
+                **(alert_attributes(latest) if latest is not None else {})}
 
 
 class GacActivitySensor(GacEntity, SensorEntity):

@@ -101,6 +101,7 @@ def test_live_platform_discovery_adds_only_observed_entities_once_without_comman
                 await module.async_setup_entry(hass, entry, lambda entities, p=platform: added.extend(
                     (p, entity.unique_id) for entity in entities))
             health = {("sensor", f"VIN_{key}") for key in ("data_freshness", "last_refresh", "polling_status", "last_command")}
+            health.add(("event", "VIN_car_alert"))
             assert set(added) == health | {("button", "VIN_refresh")}
 
             coordinator.client.get_status.return_value = decode_status({

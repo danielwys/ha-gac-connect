@@ -18,7 +18,7 @@ def test_aion_ut_entries_lose_only_the_preset_omissions(tmp_path, stored_profile
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options=options, minor_version=1)
             assert await async_migrate_entry(hass, entry)
-            assert entry.minor_version == 5 and "profile" not in entry.options
+            assert entry.minor_version == 6 and "profile" not in entry.options
             assert entry.options["omit_entities"] == ["sensor:pm25"]      # the preset's fridge Off is not the owner's
             assert "enable_fridge" not in entry.options
             assert entry.options["enable_tracker"] is False and entry.options["experimental_pinless_unlock"] is True
@@ -61,7 +61,7 @@ def test_the_charge_switch_entity_id_follows_its_new_meaning(tmp_path, object_id
             hass.config_entries.async_update_entry(entry, minor_version=2)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_charge_switch") == expected
-            assert entry.minor_version == 5
+            assert entry.minor_version == 6
     asyncio.run(run())
 
 
@@ -81,7 +81,26 @@ def test_the_smart_battery_temp_entity_id_follows_its_new_name(tmp_path, object_
             hass.config_entries.async_update_entry(entry, minor_version=4)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_precondition_battery") == expected
-            assert entry.minor_version == 5
+            assert entry.minor_version == 6
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("object_id,expected", [
+    ("aion_ut_pre_conditioning", "switch.aion_ut_a_c"),
+    ("cabin_cooling", "switch.cabin_cooling"),                       # a custom ID stays
+])
+def test_the_a_c_entity_id_follows_its_new_name(tmp_path, object_id, expected):
+    from homeassistant.helpers import entity_registry as er
+
+    async def run():
+        async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
+            registry = er.async_get(hass)
+            registry.async_get_or_create("switch", "gac_connect", "VIN_climate_power",
+                                         suggested_object_id=object_id, config_entry=entry)
+            hass.config_entries.async_update_entry(entry, minor_version=5)
+            assert await async_migrate_entry(hass, entry)
+            assert registry.async_get_entity_id("switch", "gac_connect", "VIN_climate_power") == expected
+            assert entry.minor_version == 6
     asyncio.run(run())
 
 def test_the_charge_switch_rename_never_takes_an_existing_id(tmp_path):

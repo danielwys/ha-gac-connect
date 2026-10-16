@@ -21,6 +21,7 @@ from ._vendor.gac_connect.errors import CommandError, GacError, LoginError, Rate
 
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
+    SOURCE_RECONFIGURE,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
@@ -47,6 +48,7 @@ from .location import location_enabled, tracking_choices
 from .session_store import ConfigEntryStore
 from .entity_filter import OMIT_OPTIONS
 from .const import (
+    CONF_ALLOW_ACCOUNT_ALERTS,
     CONF_ALLOW_CHARGER_UNLOCK,
     CONF_ALLOW_PLAINTEXT_PUSH,
     CONF_ENABLE_ENTITIES,
@@ -97,8 +99,8 @@ def _thai_local_mobile(mobile: str) -> str:
 
 class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 5   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed;
-                        # 1.5: Smart battery temp entity ID
+    MINOR_VERSION = 6   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed;
+                        # 1.5: Smart battery temp entity ID; 1.6: A/C entity ID
 
     def __init__(self) -> None:
         self._client: GacClient | None = None
@@ -231,16 +233,17 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="no_vehicles")
         by_vin = {v.vin: v for v in vehicles}
 
-        if self.source == SOURCE_REAUTH:
+        if self.source in (SOURCE_REAUTH, SOURCE_RECONFIGURE):
             # Signing in again: keep the same entry and vehicle, store the new session.
-            entry = self._get_reauth_entry()
+            entry = self._get_reauth_entry() if self.source == SOURCE_REAUTH else self._get_reconfigure_entry()
             if entry.data[CONF_VIN] not in by_vin:
                 return self.async_abort(reason="wrong_vehicle")
             try:
                 await ConfigEntryStore(self.hass, entry).save(self._client.session)
             except (GacError, aiohttp.ClientError, TimeoutError):
                 return self.async_abort(reason="cannot_connect")
-            return self.async_update_reload_and_abort(entry, data_updates={CONF_MOBILE: self._mobile})
+            return self.async_update_reload_and_abort(entry, data_updates={CONF_MOBILE: self._mobile},
+                                                      reason="reauth_successful")
 
         if len(vehicles) == 1:
             user_input = {CONF_VIN: vehicles[0].vin}
@@ -292,6 +295,14 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         self._region = entry_data[CONF_REGION]
         self._mobile = entry_data.get(CONF_MOBILE)
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Sign in again on request: account features (the alert list) need a current account session,
+        which ends when the GAC app signs in elsewhere, while the vehicle session keeps working."""
+        entry = self._get_reconfigure_entry()
+        self._region = entry.data[CONF_REGION]
+        self._mobile = entry.data.get(CONF_MOBILE)
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -490,6 +501,8 @@ class GacOptionsFlow(OptionsFlow):
                          default=opts.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)): bool,
             vol.Optional(CONF_ALLOW_CHARGER_UNLOCK,
                          default=opts.get(CONF_ALLOW_CHARGER_UNLOCK, False)): bool,
+            vol.Optional(CONF_ALLOW_ACCOUNT_ALERTS,
+                         default=opts.get(CONF_ALLOW_ACCOUNT_ALERTS, False)): bool,
             vol.Optional(CONF_ALLOW_VEHICLE_SHUTDOWN,
                          default=opts.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)): bool,
             vol.Optional(CONF_OMIT_ENTITIES,

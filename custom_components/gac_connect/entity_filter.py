@@ -15,7 +15,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
     "sensor": {
         "charge_schedule": "Charging schedule",
         "soc": "Battery", "range": "Range", "odometer": "Odometer",
-        "cabin_temp": "Cabin temperature", "aux_voltage": "12V battery",
+        "cabin_temp": "Cabin temperature", "aux_voltage": "12V battery", "battery_temp": "Battery temperature",
         "outside_temp": "Outside temperature", "ac_fan_strength": "Cabin fan strength",
         "gps_coordinates": "GPS coordinates",
         "charge_time": "Estimated charge time", "charge_current": "Charge current",
@@ -31,7 +31,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "vehicle_power": "Vehicle power",
         "plugged": "Plugged in", "charging": "Charging", "locked": "Lock state",
         "door_open": "Door state", "window_open": "Window state",
-        "hatch_open": "Boot state", "hood_open": "Hood state", "brake_fluid": "Brake fluid", "online": "Online", "charger_locked": "Charger lock",
+        "hatch_open": "Boot state", "hood_open": "Hood state", "headlights": "Headlights", "brake_fluid": "Brake fluid", "online": "Online", "charger_locked": "Charger lock",
         "ac_auto": "A/C auto mode", "ac_compressor": "A/C compressor", "anti_theft": "Anti-theft enabled",
         **{f"seat_{i}_ventilation": f"{name} seat ventilation state" for i, name in
            enumerate(("Driver", "Front passenger", "Rear left", "Rear right"), start=1)},
@@ -43,10 +43,10 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "horn": "Sound horn",
     },
     "switch": {
-        "charge_switch": "Scheduled charging", "climate_power": "Pre-conditioning",
+        "charge_switch": "Scheduled charging", "climate_power": "A/C",
         "steering_heat": "Steering wheel heat", "lights": "Flash lights",
         "ventilation": "Ventilation", "recirculation": "Recirculation",
-        "precondition_battery": "Smart battery temp",
+        "precondition_battery": "Smart battery temp", "sterilisation": "Sterilisation",
         "fridge": "Fridge",
     },
     "cover": {"windows": "Windows", "sunroof": "Sunroof", "tailgate": "Boot"},

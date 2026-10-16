@@ -101,7 +101,7 @@ assert api.GacClient is library.GacClient
 assert isinstance(api.decode_status({}), VehicleStatus)
 assert api.decode_status({'powerAccessors': [{'powerMode': 2}]}).power_on is True
 assert api.decode_status({'powerAccessors': [{'powerMode': 0}]}).power_on is False
-assert api.decode_status({'powerAccessors': [{'powerMode': 1}]}).power_on is None
+assert api.decode_status({'powerAccessors': [{'powerMode': 1}]}).power_on is True
 assert CATALOG['vehicle-power-off'].path.endswith('/power/off')
 assert build_body(CATALOG['vehicle-power-off'], 'VIN') == {'vin': 'VIN'}
 assert files(library).joinpath("py.typed").is_file()

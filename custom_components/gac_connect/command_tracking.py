@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import deque
 from dataclasses import dataclass, field
 from inspect import iscoroutine
@@ -24,10 +25,14 @@ from .const import (
 )
 from .seats import ventilation_state
 
+_LOGGER = logging.getLogger(__name__)
+
 REQUEST_SECONDS = 180
 # How long an accepted command waits for the car's answer so a refusal can fail the action.
 # An Aion UT refused a remote A/C start about four seconds after the request.
 RESULT_WAIT_SECONDS = 10
+# Without the push feed, the gateway is asked for the car's answer after 2, 5 and 10 s.
+POLL_DELAYS = (2, 3, 5)
 ACTIVE = {"sending", "pending", "awaiting_report"}
 STATES = ["idle", "sending", "pending", "awaiting_report", "confirmed", "reported_success",
           "rejected", "failed", "timed_out", "cancelled", "superseded"]
@@ -38,6 +43,8 @@ TARGETS = {
     "charge-resume": {"charge_scheduled": True},
     "battery-precondition": {"battery_precondition_on": True},
     "battery-precondition-off": {"battery_precondition_on": False},
+    "antivirus-on": {"sterilisation_on": True},
+    "antivirus-off": {"sterilisation_on": False},
     **{f"{command}-{direction}": {field: value}
        for command, field in (("window", "window_open"), ("sunroof", "sunroof_open"), ("tailgate", "hatch_open"))
        for direction, value in (("open", True), ("close", False))},
@@ -202,14 +209,32 @@ class CommandTracker:
         pending and resolves from later reports as before.
         """
         push = getattr(self.coordinator, "push", None)
-        if not record.result_received and record.session_id and getattr(push, "connected", None) is True:
-            try:
-                async with asyncio.timeout(RESULT_WAIT_SECONDS):
-                    await record.answered.wait()
-            except TimeoutError:
-                return
+        if not record.result_received and record.session_id:
+            if getattr(push, "connected", None) is True:
+                try:
+                    async with asyncio.timeout(RESULT_WAIT_SECONDS):
+                        await record.answered.wait()
+                except TimeoutError:
+                    return
+            elif callable(getattr(self.coordinator.client, "poll_command_result", None)):
+                await self._poll_answer(record)
         if record.failure_reason == "vehicle_rejected":
             raise HomeAssistantError(refusal_message(record))
+
+    async def _poll_answer(self, record: CommandRecord) -> None:
+        """Without the push feed, ask the gateway for the car's answer, as the app does."""
+        for delay in POLL_DELAYS:
+            await asyncio.sleep(delay)
+            if record.answered.is_set() or self._closed:
+                return
+            try:
+                result = await self.coordinator.client.poll_command_result(self.coordinator.vin, record.session_id)
+            except Exception as err:  # noqa: BLE001 — best effort: the command was already accepted
+                _LOGGER.debug("command result poll failed: %s", err)
+                return
+            if result is not None:
+                await self.coordinator.async_handle_command_result(result)
+                return
 
     def result(self, result) -> bool:
         if self._closed or result.vin != self.coordinator.vin or not result.session_id or result.ok is None:

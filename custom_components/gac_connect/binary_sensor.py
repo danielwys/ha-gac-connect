@@ -46,6 +46,8 @@ BINARY_SENSORS: tuple[GacBinary, ...] = (
               value=lambda s: s.hatch_open),
     GacBinary(key="hood_open", translation_key="hood_open", device_class=BinarySensorDeviceClass.OPENING,
               value=lambda s: getattr(s, "hood_open", None)),
+    GacBinary(key="headlights", translation_key="headlights", device_class=BinarySensorDeviceClass.LIGHT,
+              value=lambda s: getattr(s, "headlights_on", None)),
     # The app's Brake fluid check: on (a problem) while the car reports a brake alarm.
     GacBinary(key="brake_fluid", translation_key="brake_fluid", device_class=BinarySensorDeviceClass.PROBLEM,
               value=lambda s: getattr(s, "brake_fluid_low", None)),

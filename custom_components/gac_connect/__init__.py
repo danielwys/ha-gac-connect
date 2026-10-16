@@ -16,6 +16,7 @@ from ._vendor.gac_connect.errors import GacError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
+from .account_alerts import AccountAlerts, store_key as account_alerts_store_key
 from .cabin import controller as cabin_controller
 from .capabilities import FRIDGE_ENTITIES, store_key as capabilities_store_key
 from .const import (
@@ -37,6 +38,7 @@ class GacRuntime:
     coordinator: GacCoordinator
     options: dict = field(default_factory=dict)  # snapshot: reload only when these change
     fridge: FridgeController | None = None
+    alerts: AccountAlerts | None = None
 
 
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
@@ -63,6 +65,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     1.5: Battery preconditioning took the app's name, Smart battery temp, and its default
     entity ID follows. A custom ID is left alone.
+
+    1.6: Pre-conditioning became A/C, as it shows the A/C however it was started; its
+    default entity ID follows. A custom ID is left alone.
     """
     if entry.version == 1 and entry.minor_version < 2:
         options = dict(entry.options)
@@ -83,6 +88,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.version == 1 and entry.minor_version < 5:
         _rename_default_id(hass, entry, "precondition_battery", "_battery_preconditioning", "_smart_battery_temp")
         hass.config_entries.async_update_entry(entry, minor_version=5)
+    if entry.version == 1 and entry.minor_version < 6:
+        _rename_default_id(hass, entry, "climate_power", "_pre_conditioning", "_a_c")
+        hass.config_entries.async_update_entry(entry, minor_version=6)
     return True
 
 
@@ -116,6 +124,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     cabin_controller(coordinator).async_setup(entry)
     entry.runtime_data.fridge = FridgeController(hass, entry, coordinator)
     await entry.runtime_data.fridge.async_setup(entry)
+    entry.runtime_data.alerts = AccountAlerts(hass, entry, coordinator)
+    await entry.runtime_data.alerts.async_setup()
     coordinator.start_push()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload_on_update))
@@ -155,6 +165,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None
     async_setup_cleanup(hass).async_remove_entry(entry)
     await Store(hass, 1, store_key(entry.entry_id)).async_remove()
     await Store(hass, 1, capabilities_store_key(entry.entry_id)).async_remove()
+    await Store(hass, 1, account_alerts_store_key(entry.entry_id)).async_remove()
     await ConfigEntryStore(hass, entry).remove()
 
 

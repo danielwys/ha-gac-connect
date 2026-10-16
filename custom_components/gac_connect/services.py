@@ -1,6 +1,11 @@
-"""Services: charge_now, set_charge_window, send_command, get_control_capabilities."""
+"""Services: charge_now, set_charge_window, send_command, get_control_capabilities, get_position,
+get_alerts, get_departure_plans."""
 
 from __future__ import annotations
+
+import json
+import re
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -22,6 +27,42 @@ ATTR_WEEKLY = "weekly"
 ATTR_UNTIL_SOC = "until_soc"
 ATTR_COMMAND = "command"
 ATTR_PARAMS = "params"
+ATTR_PAGE = "page"
+
+# Words in a field name that can place or identify the car or a person; their values are masked in the
+# reads below. GAC's alert replies carry the full VIN as "din".
+_LOCATING = frozenset({"lat", "latitude", "lon", "lng", "long", "longitude", "gps", "coordinate", "coordinates",
+                       "address", "addr", "street", "city", "district", "province", "location", "place", "poi",
+                       "vin", "din"})
+
+
+def _locating(key: object) -> bool:
+    return any(word.lower() in _LOCATING for word in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])", str(key)))
+
+
+def _decoded_alerts(page: Any) -> Any:
+    """The alert page with each item's ``alarmContent`` JSON string decoded, for reading."""
+    items = page.get("list") if isinstance(page, dict) else None
+    if not isinstance(items, list):
+        return page
+    decoded = []
+    for item in items:
+        if isinstance(item, dict) and isinstance(item.get("alarmContent"), str):
+            try:
+                item = {**item, "alarmContent": json.loads(item["alarmContent"])}
+            except ValueError:
+                pass
+        decoded.append(item)
+    return {**page, "list": decoded}
+
+
+def _masked(value: Any, hide: bool = False) -> Any:
+    """The position report with every locating value masked and the field names kept."""
+    if isinstance(value, dict):
+        return {key: _masked(item, hide or _locating(key)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_masked(item, hide) for item in value]
+    return "**masked**" if hide and value is not None else value
 
 
 def _coordinators(hass: HomeAssistant) -> dict[str, object]:
@@ -90,6 +131,35 @@ def async_register_services(hass: HomeAssistant) -> None:
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
+    async def get_position(call: ServiceCall) -> dict:
+        coordinator, vin = _resolve(hass, call)
+        try:
+            return {"position": _masked(await coordinator.client.get_position(vin))}
+        except GacError as err:
+            raise HomeAssistantError(str(err)) from err
+
+    async def get_alerts(call: ServiceCall) -> dict:
+        coordinator, vin = _resolve(hass, call)
+        try:
+            page = await coordinator.client.get_alarms(vin, page=call.data.get(ATTR_PAGE, 1))
+        except GacError as err:
+            raise HomeAssistantError(str(err)) from err
+        return {"alerts": _masked(_decoded_alerts(page))}
+
+    async def get_departure_plans(call: ServiceCall) -> dict:
+        """Both generations the app uses: the plan list, and the older single standby setting."""
+        coordinator, vin = _resolve(hass, call)
+        reads = {"plans": coordinator.client.get_departure_plans(vin),
+                 "standby": coordinator.client.get_standby_config(vin),
+                 "default_plan": coordinator.client.get_standby_config(vin, default=True)}
+        result: dict[str, Any] = {}
+        for key, read in reads.items():
+            try:
+                result[key] = _masked(await read)
+            except GacError as err:
+                result[key] = {"error": str(err)}
+        return result
+
     base = vol.Schema({vol.Optional(ATTR_VIN): cv.string})
     hass.services.async_register(
         DOMAIN, "charge_now", charge_now, base.extend({vol.Optional(ATTR_UNTIL_SOC): cv.boolean})
@@ -117,3 +187,11 @@ def async_register_services(hass: HomeAssistant) -> None:
         DOMAIN, "get_control_capabilities", get_control_capabilities, base,
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(DOMAIN, "get_position", get_position, base, supports_response=SupportsResponse.ONLY)
+    hass.services.async_register(
+        DOMAIN, "get_alerts", get_alerts,
+        base.extend({vol.Optional(ATTR_PAGE): vol.All(vol.Coerce(int), vol.Range(min=1, max=100))}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(DOMAIN, "get_departure_plans", get_departure_plans, base,
+                                 supports_response=SupportsResponse.ONLY)

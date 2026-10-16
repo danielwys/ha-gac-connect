@@ -32,7 +32,7 @@ async def async_setup_entry(
 
 
 class GacRunTime(GacEntity, RestoreNumber):
-    """How long a remote A/C start (Pre-conditioning, Climate) runs before the car ends it.
+    """How long a remote A/C start (A/C, Climate) runs before the car ends it.
 
     The car applies it only to a remote start; once it is switched on, its own climate
     control takes over. Kept in Home Assistant across restarts.

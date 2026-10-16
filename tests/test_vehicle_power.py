@@ -21,7 +21,7 @@ POWER = next(d for d in BINARY_SENSORS if d.key == 'vehicle_power')
 SHUTDOWN = next(d for d in BUTTONS if d.key == 'vehicle_power_off')
 
 
-@pytest.mark.parametrize('mode,expected', [(2, True), (0, False), (1, None), (-1, None), (None, None)])
+@pytest.mark.parametrize('mode,expected', [(2, True), (0, False), (1, True), (-1, None), (None, None)])
 def test_power_sensor_shows_only_the_reported_power_mode_in_sensors(mode, expected):
     c = coord(decode_status({'powerAccessors': [{'powerMode': mode}]}, online=True))
     sensor = GacBinaryEntity(c, POWER)

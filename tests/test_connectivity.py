@@ -16,7 +16,7 @@ from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect._vendor.gac_connect.errors import (
     AuthExpiredError, RateLimitedError, ResponseError,
 )
-from custom_components.gac_connect.coordinator import _failure_reason
+from custom_components.gac_connect.coordinator import NETWORK_GRACE_SECONDS, _failure_reason
 from custom_components.gac_connect.button import GacRefreshButton
 from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics
 from custom_components.gac_connect.sensor import ACTIVITY_SENSORS, GacActivitySensor, GacSensorEntity, SENSORS
@@ -88,20 +88,52 @@ def test_recovery_does_not_lengthen_a_short_poll_interval(tmp_path):
 def test_quiet_hours_cannot_make_a_failed_fetch_look_recovered(tmp_path):
     async def run():
         async with vehicle(tmp_path) as (_, _, c):
+            clock = Clock()
             c.client.get_status.return_value = replace(decode_status({}), soc=50)
-            with patch.object(c, "_in_quiet_hours", return_value=False):
-                await c.async_refresh()
-                success = c.last_refresh_success
-                c.client.get_status.side_effect = network_error(TimeoutError())
-                await c.async_refresh()
-            with patch.object(c, "_in_quiet_hours", return_value=True):
-                for _ in range(3):
+            with patch("custom_components.gac_connect.coordinator.monotonic", clock.monotonic):
+                with patch.object(c, "_in_quiet_hours", return_value=False):
                     await c.async_refresh()
-                    assert not c.last_update_success
-                    assert c.polling_state == "error"
-                    assert c.last_refresh_success == success
-                assert c.client.get_status.await_count == 2
-                assert c.data.soc == 50
+                    success = c.last_refresh_success
+                    c.client.get_status.side_effect = network_error(TimeoutError())
+                    await c.async_refresh()
+                    assert c.last_update_success and c.polling_state == "error"   # a network blip, for now
+                clock.now = NETWORK_GRACE_SECONDS + 1
+                with patch.object(c, "_in_quiet_hours", return_value=True):
+                    for _ in range(3):
+                        await c.async_refresh()
+                        assert not c.last_update_success
+                        assert c.polling_state == "error"
+                        assert c.last_refresh_success == success
+                    assert c.client.get_status.await_count == 2
+                    assert c.data.soc == 50
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("cause,graced", [(socket.gaierror(-3, "x"), True), (TimeoutError(), True),
+                                          (aiohttp.ClientSSLError(None, OSError()), False)])
+def test_a_network_blip_keeps_the_last_report_quietly_for_a_few_minutes(tmp_path, caplog, cause, graced):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            clock = Clock()
+            c.client.get_status.return_value = replace(decode_status({}), soc=50)
+            with patch("custom_components.gac_connect.coordinator.monotonic", clock.monotonic), \
+                    patch.object(c, "_in_quiet_hours", return_value=False):
+                await c.async_refresh()
+                c.client.get_status.side_effect = network_error(cause)
+                caplog.clear()
+                for now in (0, 60, 180, NETWORK_GRACE_SECONDS - 1):
+                    clock.now = now
+                    await c.async_refresh()
+                    assert c.last_update_success is graced and c.polling_state == "error"
+                    assert (c.data.soc == 50) and c.retry_not_before is not None
+                assert not [r for r in caplog.records if r.levelname == "ERROR"] or not graced
+                clock.now = NETWORK_GRACE_SECONDS
+                await c.async_refresh()
+                assert not c.last_update_success          # still failing: unavailable, as before
+                assert [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
+                c.client.get_status.side_effect = None
+                await c.async_refresh()
+                assert c.last_update_success and c.polling_state == "ok" and c._failing_since is None
     asyncio.run(run())
 
 

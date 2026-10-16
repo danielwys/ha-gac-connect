@@ -355,3 +355,12 @@ def test_settings_offer_both_choices_and_keep_the_single_setting_in_step(tmp_pat
             await flow.async_step_settings({'track_parked': False, 'track_moving': False})
             assert entry.options['enable_tracker'] is False
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("mode,on", [(1, True), (0, False)])
+def test_the_sterilisation_switch_follows_the_reported_mode(mode, on):
+    sw = GacCommandSwitch(coord(decode_status({"airConditionAccessors": [{"airConditionAntivirusMode": mode}]})),
+                          next(d for d in SWITCHES if d.key == "sterilisation"))
+    assert sw.is_on is on
+    assert (sw.entity_description.on_cmd, sw.entity_description.off_cmd) == ("antivirus-on", "antivirus-off")
+

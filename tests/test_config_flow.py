@@ -89,3 +89,28 @@ def test_every_launched_market_and_the_uk_can_be_chosen_by_name(tmp_path):
         with pytest.raises(Exception):
             selector("ZZ")
     asyncio.run(run())
+
+
+def test_reconfigure_signs_in_again_and_keeps_the_entry(tmp_path):
+    from homeassistant.config_entries import SOURCE_RECONFIGURE
+    from test_autodetect import vehicle
+
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, _):
+            hass.config_entries.async_update_entry(entry, data={**entry.data, "mobile": "0812345678"})
+            flow = GacConfigFlow()
+            flow.hass = hass
+            flow.context = {"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+            form = await flow.async_step_reconfigure()
+            assert form["type"] == "form" and form["step_id"] == "reauth_confirm"
+            assert (flow._region, flow._mobile) == ("AU", "0812345678")
+            # After the puzzle and the SMS code: the same entry gets the new session.
+            flow._client = SimpleNamespace(list_vehicles=AsyncMock(return_value=[SimpleNamespace(vin="VIN")]),
+                                           session=SimpleNamespace())
+            with patch("custom_components.gac_connect.config_flow.ConfigEntryStore") as store, \
+                    patch.object(flow, "async_update_reload_and_abort", Mock(return_value={"type": "abort"})) as done:
+                store.return_value.save = AsyncMock()
+                assert (await flow.async_step_vehicle())["type"] == "abort"
+            store.return_value.save.assert_awaited_once_with(flow._client.session)
+            assert done.call_args.args[0] is entry and done.call_args.kwargs["reason"] == "reauth_successful"
+    asyncio.run(run())

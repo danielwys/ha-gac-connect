@@ -1,5 +1,5 @@
-"""Switches: pre-conditioning, recirculation, the charge gate, battery preconditioning, steering-wheel
-heat, ventilation, flash lights.
+"""Switches: A/C, recirculation, the charge gate, Smart battery temp, sterilisation,
+steering-wheel heat, ventilation, flash lights.
 
 Scheduled charging: on returns to the schedule the car last reported (once or
 repeating), resent unchanged; off charges whenever plugged in. Neither is a
@@ -87,6 +87,16 @@ SWITCHES: tuple[GacSwitch, ...] = (
             "reported_status": getattr(s, "battery_precondition_status", None),
         },
     ),
+    GacSwitch(
+        key="sterilisation",
+        translation_key="sterilisation",
+        icon="mdi:virus-off-outline",
+        on_cmd="antivirus-on",
+        off_cmd="antivirus-off",
+        # Hot-air sterilisation runs 30 minutes, then the car reports it off.
+        state=lambda s: getattr(s, "sterilisation_on", None),
+        events=("control_air_cleaning_system",),
+    ),
 )
 
 
@@ -172,7 +182,9 @@ class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
 
 
 class GacClimateSwitch(GacEntity, SwitchEntity):
-    """Plain on/off for cabin pre-conditioning; the climate entity sets the temperature."""
+    """The cabin A/C, on whenever it runs (the car does not report who started it).
+
+    Turning it on starts a remote run; the climate entity sets the temperature."""
 
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "climate_power")

@@ -30,6 +30,7 @@ CONF_EXPERIMENTAL_PINLESS_UNLOCK: Final = "experimental_pinless_unlock"
 CONF_ALLOW_PLAINTEXT_PUSH: Final = "allow_plaintext_push"
 CONF_ALLOW_VEHICLE_SHUTDOWN: Final = "allow_vehicle_shutdown"
 CONF_ALLOW_CHARGER_UNLOCK: Final = "allow_charger_unlock"
+CONF_ALLOW_ACCOUNT_ALERTS: Final = "allow_account_alerts"
 VEHICLE_SHUTDOWN_COMMANDS: Final = frozenset({"vehicle-power-off", "power-off", "powerkeep-stop"})
 
 DEFAULT_SCAN_INTERVAL: Final = 300     # seconds
@@ -42,5 +43,5 @@ EVENT_COMMAND_RESULT: Final = "gac_connect_command_result"
 
 PLATFORMS: Final = [
     "sensor", "binary_sensor", "button", "switch", "device_tracker",
-    "climate", "lock", "cover", "select", "number",
+    "climate", "lock", "cover", "select", "number", "event",
 ]

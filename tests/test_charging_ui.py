@@ -1,5 +1,6 @@
 """Exercise the schedule view and editor against the bundled command builder."""
 import asyncio
+import re
 from datetime import datetime
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
@@ -258,8 +259,8 @@ def test_after_sending_the_page_shows_the_request_and_says_the_report_predates_i
             client._reservation.side_effect = CommandError('rejected', code=13002)
             page = await flow.async_step_charge_window({'start': '23:09', 'until_soc': True, 'days': []})
             text = (await flow.async_step_charging())['description_placeholders']['schedule']
-            assert ('23:09 → the target charge level, One time — refused: not supported by this vehicle '
-                    '(code 13002)') in text
+            assert re.search(r'23:09 → the target charge level, One time on \w{3} \d{1,2} \w{3} — refused: '
+                             r'not supported by this vehicle \(code 13002\)', text)
             assert 'values below are from before it' not in text
     asyncio.run(run())
 
@@ -280,3 +281,40 @@ def test_after_an_accepted_window_the_page_reads_the_car_again(tmp_path):
             assert "23:09 → 00:10, Friday, Saturday — confirmed by the car's report" in text
             assert '**Reported window:** 23:09 → 00:10' in text and 'from before it' not in text
     asyncio.run(run())
+
+
+UT_ONCE = {'chargingMode': 1, 'chargingEndType': 1, 'weeklyReservation': 0,
+           'dailyReservationStartTime': 1791963060000, 'dailyReservationStopTime': 1792006260000,
+           'startTime': {'year': 2026, 'month': 10, 'day': 14, 'hour': 15, 'minute': 31, 'second': 0, 'millisecond': 0},
+           'stopTime': {'year': 2026, 'month': 10, 'day': 15, 'hour': 3, 'minute': 31, 'second': 0, 'millisecond': 0}}
+NOT_SET = {'chargingMode': 1, 'chargingEndType': 0, 'weeklyReservation': 0,
+           'dailyReservationStartTime': 0, 'dailyReservationStopTime': 0,
+           'startTime': {'year': 2000, 'month': 0, 'day': 0, 'hour': 0, 'minute': 0, 'second': 0},
+           'stopTime': {'year': 2000, 'month': 0, 'day': 0, 'hour': 0, 'minute': 1, 'second': 0}}
+
+
+@pytest.mark.parametrize('charging,text', [
+    (UT_ONCE, '15:31 (Wed 14 Oct) → 03:31 (Thu 15 Oct)'),          # set from the console on an Aion UT
+    (NOT_SET, 'Not set'),                                            # the app: "Charging time is not set"
+    ({'chargingMode': 2, 'weeklyReservation': 48, 'dailyReservationStartTime': 83340000,
+      'dailyReservationStopTime': 87000000}, '23:09 → 00:10'),
+])
+def test_the_reported_window_names_one_time_dates_and_the_not_set_placeholder(charging, text):
+    from custom_components.gac_connect.charging import reported_window_text
+    assert reported_window_text(decode_status({'chargingAccessors': [charging]})) == text
+
+
+@pytest.mark.parametrize('start,stop,until_soc,day', [
+    ('15:00', '03:00', False, 'Wed 14 Oct'),      # open at 15:24: charges at once
+    ('15:00', None, True, 'Thu 15 Oct'),          # no stop time sent: the next 15:00
+    ('22:00', '06:00', False, 'Wed 14 Oct'),
+])
+def test_a_one_time_request_says_which_day_it_was_sent_for(start, stop, until_soc, day):
+    from custom_components.gac_connect.charging import _requested, window_target
+    from custom_components.gac_connect.command_tracking import CommandRecord
+
+    zone = ZoneInfo('Asia/Bangkok')
+    record = CommandRecord('charge-window', 0, None, window_target(start, stop, 0, until_soc),
+                           requested_at=datetime(2026, 10, 14, 15, 24, tzinfo=zone))
+    assert _requested(record, zone).endswith(f', One time on {day}')
+    assert _requested(record).endswith(', One time')

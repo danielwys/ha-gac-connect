@@ -187,6 +187,43 @@ def test_a_gateway_refusal_reads_like_one_from_the_car(tmp_path):
             assert c.commands.attributes()['failure_reason'] == 'gateway_rejected'
     asyncio.run(run())
 
+
+@pytest.mark.parametrize("answers,refused", [
+    ([None, refusal()], True),          # still executing (13001), then refused
+    ([None, None, None], False),        # no answer in 10 s: the action succeeds, the report decides
+    ([GacError("down")], False),        # a failed poll stops polling; nothing is replayed
+])
+def test_without_push_the_car_answer_is_polled(tmp_path, answers, refused):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.push.connected = False
+            c.client.poll_command_result = AsyncMock(side_effect=answers)
+            command = AsyncMock(return_value=ACCEPTED)
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", (0, 0, 0)):
+                if refused:
+                    with pytest.raises(HomeAssistantError, match=f"{CONDITIONS} \\(code 13005\\)"):
+                        await async_send(c, "aircon-manual-on", command())
+                    assert c.commands.state == "rejected" and c.last_result.code == "13005"
+                else:
+                    await async_send(c, "aircon-manual-on", command())
+                    assert c.commands.state == "pending"
+            c.client.poll_command_result.assert_awaited_with("VIN", "s1")
+            assert c.client.poll_command_result.await_count == len(answers)
+            command.assert_awaited_once()
+    asyncio.run(run())
+
+
+def test_with_push_connected_nothing_is_polled(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.push.connected = True
+            c.client.poll_command_result = AsyncMock()
+            asyncio.get_running_loop().call_later(0.01, c.commands.result, refusal())
+            with pytest.raises(HomeAssistantError):
+                await async_send(c, "aircon-manual-on", AsyncMock(return_value=ACCEPTED)())
+            c.client.poll_command_result.assert_not_awaited()
+    asyncio.run(run())
+
 def test_early_refusal_fails_the_action_without_a_push_wait(tmp_path):
     async def run():
         async with vehicle(tmp_path) as (_, _, c):

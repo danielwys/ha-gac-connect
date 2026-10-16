@@ -23,7 +23,8 @@ UT_LIST = json.loads((Path(__file__).parent / "fixtures" / "ut_capabilities.json
 SHOWN = ["switch:steering_heat", "cover:sunroof", "switch:fridge", "sensor:pm25", "sensor:tyre_1_pressure",
          "binary_sensor:seat_3_ventilation", "button:horn", "switch:ventilation", "select:seat_1_ventilation",
          "switch:precondition_battery", "cover:tailgate", "cover:windows", "lock:doors", "climate:climate",
-         "sensor:soc", "binary_sensor:seat_1_ventilation"]
+         "sensor:soc", "binary_sensor:seat_1_ventilation", "sensor:battery_temp", "binary_sensor:headlights",
+         "switch:sterilisation"]
 
 
 def shown(manager):
@@ -46,7 +47,9 @@ def test_an_aion_ut_list_shows_its_controls_and_hides_what_it_lacks(tmp_path):
                 "button:horn": True, "switch:ventilation": True, "select:seat_1_ventilation": True,
                 "switch:precondition_battery": True, "cover:tailgate": True, "cover:windows": True,
                 "lock:doors": True, "climate:climate": True, "sensor:soc": True,
-                "binary_sensor:seat_1_ventilation": True,
+                "binary_sensor:seat_1_ventilation": True, "sensor:battery_temp": True,
+                "binary_sensor:headlights": False,      # not in the list; shown once seen on
+                "switch:sterilisation": True,
             }
             assert manager.explanation("cover:sunroof") == "Hidden: the car's capability list does not offer it remotely."
             assert manager.explanation("button:horn") == "Shown: the car's capability list offers it."
@@ -348,4 +351,24 @@ def test_the_run_time_is_restored_and_sent_with_each_remote_start(tmp_path):
             c.client.climate_manual_on = AsyncMock(return_value={"code": 13001, "data": {"sessionId": "s1"}})
             await cabin.controller(c).async_set_power(True)
             assert c.client.climate_manual_on.await_args.kwargs["minutes"] == 20
+    asyncio.run(run())
+
+
+def test_the_headlights_sensor_reads_light_2_and_shows_once_seen_on(tmp_path):
+    from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
+    from test_regressions import coord
+
+    def report(code):
+        return decode_status({"lightAccessors": [{"light": 1, "open": -1}, {"light": 2, "open": code}]})
+
+    headlights = next(d for d in BINARY_SENSORS if d.key == "headlights")
+    assert GacBinaryEntity(coord(report(1)), headlights).is_on is True
+    assert GacBinaryEntity(coord(report(-1)), headlights).is_on is False
+
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.capabilities.observe(report(-1))
+            assert not c.capabilities.includes("binary_sensor:headlights")
+            c.capabilities.observe(report(1))
+            assert c.capabilities.includes("binary_sensor:headlights")
     asyncio.run(run())

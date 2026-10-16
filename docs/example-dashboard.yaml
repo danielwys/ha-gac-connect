@@ -225,11 +225,11 @@ views:
             heading: Controls
             icon: mdi:car-cog
           - type: tile
-            entity: switch.my_car_pre_conditioning
+            entity: switch.my_car_a_c
             name: A/C
           - type: thermostat
             entity: climate.my_car_climate
-            name: Pre-conditioning
+            name: Climate
             features:
               - type: climate-hvac-modes
                 hvac_modes: [off, heat_cool]
