@@ -242,8 +242,12 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 await ConfigEntryStore(self.hass, entry).save(self._client.session)
             except (GacError, aiohttp.ClientError, TimeoutError):
                 return self.async_abort(reason="cannot_connect")
-            return self.async_update_reload_and_abort(entry, data_updates={CONF_MOBILE: self._mobile},
-                                                      reason="reauth_successful")
+            # Reload here rather than with async_update_reload_and_abort: HA stops that from
+            # reloading an entry that has an update listener (2026.12), and ours deliberately
+            # ignores data-only updates such as this one.
+            self.hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_MOBILE: self._mobile})
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            return self.async_abort(reason="reauth_successful")
 
         if len(vehicles) == 1:
             user_input = {CONF_VIN: vehicles[0].vin}

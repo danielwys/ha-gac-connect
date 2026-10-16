@@ -42,8 +42,11 @@ class GacCarAlertEvent(GacEntity, EventEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        # Write each event as it fires: alerts raised by the same report (left unlocked and
+        # a window left open, say) would otherwise leave only the last one recorded.
         for event_type, attributes in self._watcher.observe(self.coordinator.data, monotonic()):
             self._trigger_event(event_type, attributes)
+            self.async_write_ha_state()
         super()._handle_coordinator_update()
 
 

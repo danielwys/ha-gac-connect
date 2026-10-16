@@ -231,8 +231,10 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             return
         if result.vin != self.vin:
             return   # another vehicle on the account, or no vehicle named: not ours to act on
-        _LOGGER.debug("command result: event=%s ok=%s code=%s reason=%s",
-                      result.event, result.ok, result.code, result.reason)
+        details = tuple(getattr(result, "details", ()) or ())
+        _LOGGER.debug("command result: event=%s ok=%s code=%s reason=%s%s",
+                      result.event, result.ok, result.code, result.reason,
+                      f" car reported={'; '.join(details)}" if details else "")
         self.last_result = result
         self.commands.result(result)
         registry = dr.async_get(self.hass)
@@ -242,7 +244,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             device = registry.async_get_device(identifiers={(DOMAIN, self.vin)})
         self.hass.bus.async_fire(EVENT_COMMAND_RESULT, {
             "device_id": device.id if device else None,
-            "ok": result.ok, "code": result.code, "reason": result.reason,
+            "ok": result.ok, "code": result.code, "reason": result.reason, "details": list(details),
             "event": result.event, "session_id": result.session_id,
         })
         async_dispatcher_send(self.hass, SIGNAL_COMMAND_RESULT.format(vin=self.vin), result)

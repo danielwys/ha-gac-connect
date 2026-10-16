@@ -188,6 +188,25 @@ def test_a_gateway_refusal_reads_like_one_from_the_car(tmp_path):
     asyncio.run(run())
 
 
+def test_a_polled_lock_refusal_names_what_the_car_reported(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, _, c):
+            c.push.connected = False
+            refused = replace(refusal("control_door"), details=("Driver door ajar",))
+            c.client.poll_command_result = AsyncMock(return_value=refused)
+            events = []
+            hass.bus.async_listen("gac_connect_command_result", events.append)
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", (0,)):
+                with pytest.raises(HomeAssistantError) as err:
+                    await async_send(c, "lock", AsyncMock(return_value=ACCEPTED)())
+            assert str(err.value) == (f"The car refused the request: {CONDITIONS} (code 13005). The car reported: "
+                                      "Driver door ajar. The GAC app lists these conditions: the car is not moving; "
+                                      "all doors are closed; the bonnet and boot are closed.")
+            await hass.async_block_till_done()
+            assert events[0].data["details"] == ["Driver door ajar"]
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("answers,refused", [
     ([None, refusal()], True),          # still executing (13001), then refused
     ([None, None, None], False),        # no answer in 10 s: the action succeeds, the report decides

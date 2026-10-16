@@ -372,3 +372,29 @@ def test_the_headlights_sensor_reads_light_2_and_shows_once_seen_on(tmp_path):
             c.capabilities.observe(report(1))
             assert c.capabilities.includes("binary_sensor:headlights")
     asyncio.run(run())
+
+
+def test_each_door_window_and_light_has_its_own_sensor(tmp_path):
+    from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
+    from test_regressions import coord
+
+    # Aion UT 2026-10-16: driver's (front right) door and window 2 open; high beams on.
+    report = decode_status({
+        "doorAccessors": [{"door": n, "lock": 1, "openMode": int(n == 2)} for n in (1, 2, 3, 4)],
+        "windowAccessors": [{"window": n, "openMode": int(n == 2)} for n in (1, 2, 3, 4)],
+        "lightAccessors": [{"light": n, "open": 1 if n in (2, 3) else -1} for n in (1, 2, 3, 4, 5, 6, 7, 8, 10)],
+    })
+    sensors = {d.key: GacBinaryEntity(coord(report), d) for d in BINARY_SENSORS}
+    assert [k for k in ("front_left_door", "front_right_door", "rear_left_door", "rear_right_door")
+            if sensors[k].is_on] == ["front_right_door"]
+    assert sensors["front_right_window"].is_on is True and sensors["rear_left_window"].is_on is False
+    assert (sensors["high_beam"].is_on, sensors["rear_fog_light"].is_on, sensors["turn_signal"].is_on) == (
+        True, False, False)
+
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.capabilities.observe(report)
+            assert c.capabilities.includes("binary_sensor:rear_left_window")
+            assert c.capabilities.includes("binary_sensor:high_beam")
+            assert not c.capabilities.includes("binary_sensor:rear_fog_light")     # never seen on
+    asyncio.run(run())

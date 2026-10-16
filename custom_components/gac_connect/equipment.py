@@ -26,6 +26,9 @@ DETAILS: dict[str, str] = {
     "binary_sensor:charging": "charging/not charging", "binary_sensor:locked": "locked/unlocked",
     "binary_sensor:door_open": "open/closed", "binary_sensor:window_open": "open/closed",
     "binary_sensor:hatch_open": "open/closed", "binary_sensor:hood_open": "open/closed", "binary_sensor:headlights": "on/off",
+    **{f"binary_sensor:{position}_{kind}": "open/closed"
+       for position in ("front_left", "front_right", "rear_left", "rear_right") for kind in ("door", "window")},
+    **{f"binary_sensor:{key}": "on/off" for key in ("high_beam", "rear_fog_light", "turn_signal")},
     "binary_sensor:brake_fluid": "normal/low", "binary_sensor:online": "connected/disconnected",
     "binary_sensor:charger_locked": "locked/unlocked", "binary_sensor:ac_auto": "on/off",
     "binary_sensor:ac_compressor": "on/off", "binary_sensor:anti_theft": "armed/disarmed",

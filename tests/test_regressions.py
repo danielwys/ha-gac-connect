@@ -322,7 +322,7 @@ def test_unknown_charge_mode_remains_unknown():
 def test_repeating_schedules_show_as_scheduled(mode, expected):
     from custom_components.gac_connect.charging import schedule_attributes, schedule_mode
 
-    status = VehicleStatus(charging_mode=mode)
+    status = VehicleStatus(charging_mode=mode, charge_window_start="23:00", charge_window_stop="05:00")
     assert GacChargeSwitch(coord(status)).is_on is expected        # Scheduled charging
     assert schedule_mode(status) == {False: "unrestricted", True: "scheduled", None: "not_reported"}[expected]
     assert schedule_attributes(status)["reported_schedule_type"] == {

@@ -50,8 +50,14 @@ def reported_window_text(status) -> str:
 
 
 def schedule_mode(status) -> str:
+    """Once a one-time window has passed, the car stays in once mode with no times (the app's
+    "Charging time is not set") and waits (chargingStatus 27): it will not charge until a
+    window is set or Charge now is pressed (Aion UT, 2026-10-16). That is "not_set"."""
     if status is None:
         return "not_reported"
+    if (status.charging_mode is ChargingMode.SCHEDULED and status.charge_window_start is None
+            and status.charge_window_stop is None):
+        return "not_set"
     return {ChargingMode.FREE: "unrestricted", ChargingMode.SCHEDULED: "scheduled",
             ChargingMode.LOOP: "scheduled"}.get(status.charging_mode, "not_reported")
 
@@ -117,6 +123,8 @@ def _request_summary(coordinator) -> tuple[str, bool]:
         reason = record.refusal_reason or result_reason(record.response_code)
         code = f" (code {record.response_code})" if record.response_code else ""
         progress = f"refused: {reason}{code}" if reason else f"failed{code}"
+        if record.refusal_details:
+            progress += f"; the car reported: {'; '.join(record.refusal_details)}"
     else:
         progress = _REQUEST_STATES.get(record.state, record.state)
     sent = dt_util.as_local(record.requested_at).strftime("%H:%M")
@@ -129,6 +137,7 @@ def schedule_summary(coordinator) -> str:
     request, waiting = _request_summary(coordinator)
     data = coordinator.data
     mode = {"unrestricted": "Whenever plugged in", "scheduled": "Scheduled charging",
+            "not_set": "Not set: the car will not charge until you set a window or choose Charge now",
             "not_reported": "Not reported"}[schedule_mode(data)]
     if schedule_mode(data) == "scheduled":
         mode += f" ({schedule_attributes(data)['reported_schedule_type'].lower()})"

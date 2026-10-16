@@ -23,6 +23,11 @@ from .lock_state import doors_unlocked
 from .seats import reported_seat, ventilation_state
 
 
+POSITIONS = ("front_left", "front_right", "rear_left", "rear_right")
+# Turn indicators covers the hazard lights too: the car reports them the same way.
+LIGHT_SENSORS = {"high_beam": "high_beam_on", "rear_fog_light": "rear_fog_on", "turn_signal": "turn_signal_on"}
+
+
 @dataclass(frozen=True, kw_only=True)
 class GacBinary(BinarySensorEntityDescription):
     value: Callable[[VehicleStatus], bool | None]
@@ -42,12 +47,21 @@ BINARY_SENSORS: tuple[GacBinary, ...] = (
               value=lambda s: s.door_open),
     GacBinary(key="window_open", translation_key="window_open", device_class=BinarySensorDeviceClass.WINDOW,
               value=lambda s: s.window_open),
+    # Each door and window by position, shown once the car reports it.
+    *(GacBinary(key=f"{position}_{kind}", translation_key=f"{position}_{kind}", device_class=device_class,
+                value=lambda s, field=f"{position}_{kind}_open": getattr(s, field, None))
+      for kind, device_class in (("door", BinarySensorDeviceClass.DOOR), ("window", BinarySensorDeviceClass.WINDOW))
+      for position in POSITIONS),
     GacBinary(key="hatch_open", translation_key="hatch_open", device_class=BinarySensorDeviceClass.OPENING,
               value=lambda s: s.hatch_open),
     GacBinary(key="hood_open", translation_key="hood_open", device_class=BinarySensorDeviceClass.OPENING,
               value=lambda s: getattr(s, "hood_open", None)),
     GacBinary(key="headlights", translation_key="headlights", device_class=BinarySensorDeviceClass.LIGHT,
               value=lambda s: getattr(s, "headlights_on", None)),
+    # Shown once the car has reported each on: an off light reads the same as a missing one.
+    *(GacBinary(key=key, translation_key=key, device_class=BinarySensorDeviceClass.LIGHT,
+                value=lambda s, field=field: getattr(s, field, None))
+      for key, field in LIGHT_SENSORS.items()),
     # The app's Brake fluid check: on (a problem) while the car reports a brake alarm.
     GacBinary(key="brake_fluid", translation_key="brake_fluid", device_class=BinarySensorDeviceClass.PROBLEM,
               value=lambda s: getattr(s, "brake_fluid_low", None)),

@@ -41,6 +41,10 @@ ENTITY_FEATURES = {
     "binary_sensor:locked": "locked", "binary_sensor:door_open": "door_open",
     "binary_sensor:window_open": "window_open", "binary_sensor:hatch_open": "hatch_open",
     "binary_sensor:hood_open": "hood_open", "binary_sensor:headlights": "headlights_on", "binary_sensor:brake_fluid": "brake_fluid_low",
+    **{f"binary_sensor:{position}_{kind}": f"{position}_{kind}_open"
+       for position in ("front_left", "front_right", "rear_left", "rear_right") for kind in ("door", "window")},
+    "binary_sensor:high_beam": "high_beam_on", "binary_sensor:rear_fog_light": "rear_fog_on",
+    "binary_sensor:turn_signal": "turn_signal_on",
     "binary_sensor:online": "online", "binary_sensor:charger_locked": "charger_locked",
     "binary_sensor:vehicle_power": "power_on",
     "binary_sensor:ac_auto": "ac_auto_on", "binary_sensor:ac_compressor": "ac_compressor_on",

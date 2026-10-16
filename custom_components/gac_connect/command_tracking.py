@@ -70,19 +70,21 @@ class CommandRecord:
     failure_reason: str | None = None
     response_code: str | None = None
     refusal_reason: str | None = None
+    refusal_details: tuple[str, ...] = ()      # what the car named as the cause
     answered: asyncio.Event = field(default_factory=asyncio.Event, repr=False, compare=False)
 
 
-def refusal_text(command: str, code: object, reason: str | None) -> str:
+def refusal_text(command: str, code: object, reason: str | None, details: tuple[str, ...] = ()) -> str:
     """One wording for a refusal, whether the gateway answered it or the car pushed it."""
     detail = f"{reason} (code {code})" if reason else f"result code {code}"
+    reported = f" The car reported: {'; '.join(details)}." if details else ""
     hint = refusal_hint(code, command)
-    return f"The car refused the request: {detail}." + (f" {hint}" if hint else "")
+    return f"The car refused the request: {detail}.{reported}" + (f" {hint}" if hint else "")
 
 
 def refusal_message(record: CommandRecord) -> str:
     """Explain a refusal reported by the car."""
-    return refusal_text(record.command, record.response_code, record.refusal_reason)
+    return refusal_text(record.command, record.response_code, record.refusal_reason, record.refusal_details)
 
 
 class CommandTracker:
@@ -248,6 +250,7 @@ class CommandTracker:
             if not result.ok:
                 record.failure_reason, record.response_code = "vehicle_rejected", result.code
                 record.refusal_reason = result.reason
+                record.refusal_details = tuple(getattr(result, "details", ()) or ())
             record.answered.set()
             if record.state in {"pending", "awaiting_report"}:
                 record.state = ("awaiting_report" if record.expected else "reported_success") if result.ok else "rejected"

@@ -318,3 +318,19 @@ def test_a_one_time_request_says_which_day_it_was_sent_for(start, stop, until_so
                            requested_at=datetime(2026, 10, 14, 15, 24, tzinfo=zone))
     assert _requested(record, zone).endswith(f', One time on {day}')
     assert _requested(record).endswith(', One time')
+
+
+def test_a_used_one_time_window_reads_not_set_and_explains_it_will_not_charge(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            # Aion UT 2026-10-16 after a one-time window ended: once mode, both times 0, waiting (27).
+            c.data = decode_status({'chargingAccessors': [{'chargingMode': 1, 'chargingEndType': 0, 'weeklyReservation': 0,
+                'dailyReservationStartTime': 0, 'dailyReservationStopTime': 0, 'chargingStatus': 27,
+                'startTime': {'year': 0, 'month': 0, 'day': 0, 'hour': 0, 'minute': 0},
+                'stopTime': {'year': 0, 'month': 0, 'day': 0, 'hour': 0, 'minute': 0}}],
+                'chargerAccessors': [{'plug': 1, 'lock': 0}]})
+            assert schedule_mode(c.data) == 'not_set' and c.data.charging is False
+            flow, _ = setup_flow(hass, entry, c)
+            page = await flow.async_step_charging()
+            assert "will not charge until you set a window or choose Charge now" in page['description_placeholders']['schedule']
+    asyncio.run(run())

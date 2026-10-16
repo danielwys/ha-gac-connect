@@ -31,6 +31,10 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "vehicle_power": "Vehicle power",
         "plugged": "Plugged in", "charging": "Charging", "locked": "Lock state",
         "door_open": "Door state", "window_open": "Window state",
+        **{f"{position}_{kind}": f"{label} {kind}" for position, label in (
+            ("front_left", "Front left"), ("front_right", "Front right"), ("rear_left", "Rear left"),
+            ("rear_right", "Rear right")) for kind in ("door", "window")},
+        "high_beam": "High beams", "rear_fog_light": "Rear fog light", "turn_signal": "Turn indicators",
         "hatch_open": "Boot state", "hood_open": "Hood state", "headlights": "Headlights", "brake_fluid": "Brake fluid", "online": "Online", "charger_locked": "Charger lock",
         "ac_auto": "A/C auto mode", "ac_compressor": "A/C compressor", "anti_theft": "Anti-theft enabled",
         **{f"seat_{i}_ventilation": f"{name} seat ventilation state" for i, name in

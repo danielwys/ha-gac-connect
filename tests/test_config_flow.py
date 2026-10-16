@@ -107,10 +107,16 @@ def test_reconfigure_signs_in_again_and_keeps_the_entry(tmp_path):
             # After the puzzle and the SMS code: the same entry gets the new session.
             flow._client = SimpleNamespace(list_vehicles=AsyncMock(return_value=[SimpleNamespace(vin="VIN")]),
                                            session=SimpleNamespace())
+            flow._mobile = "0899999999"
+            hass.config_entries.async_schedule_reload = Mock()
+            entry.async_on_unload(entry.add_update_listener(AsyncMock()))    # as async_setup_entry adds
             with patch("custom_components.gac_connect.config_flow.ConfigEntryStore") as store, \
-                    patch.object(flow, "async_update_reload_and_abort", Mock(return_value={"type": "abort"})) as done:
+                    patch("homeassistant.config_entries.report_usage") as deprecated:
                 store.return_value.save = AsyncMock()
-                assert (await flow.async_step_vehicle())["type"] == "abort"
+                done = await flow.async_step_vehicle()
+            assert (done["type"], done["reason"]) == ("abort", "reauth_successful")
             store.return_value.save.assert_awaited_once_with(flow._client.session)
-            assert done.call_args.args[0] is entry and done.call_args.kwargs["reason"] == "reauth_successful"
+            assert entry.data["mobile"] == "0899999999"
+            hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+            deprecated.assert_not_called()     # HA 2026.12 drops reload_and_abort with an update listener
     asyncio.run(run())

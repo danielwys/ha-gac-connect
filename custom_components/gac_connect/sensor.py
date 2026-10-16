@@ -80,7 +80,7 @@ def gps_coordinates(latitude: float | None, longitude: float | None) -> str | No
 
 SENSORS: tuple[GacSensor, ...] = (
     GacSensor(key="charge_schedule", translation_key="charge_schedule", device_class=SensorDeviceClass.ENUM,
-              options=["unrestricted", "scheduled", "not_reported"], icon="mdi:calendar-clock",
+              options=["unrestricted", "scheduled", "not_set", "not_reported"], icon="mdi:calendar-clock",
               value=schedule_mode),
     GacSensor(key="soc", translation_key="soc", device_class=SensorDeviceClass.BATTERY,
               native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,

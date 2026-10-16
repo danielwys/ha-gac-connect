@@ -329,6 +329,7 @@
         "state": {
           "unrestricted": "Whenever plugged in",
           "scheduled": "Scheduled charging",
+          "not_set": "Not set, won't charge",
           "not_reported": "Mode not reported"
         }
       },
@@ -361,6 +362,30 @@
       "window_open": {
         "name": "Window"
       },
+      "front_left_door": {
+        "name": "Front left door"
+      },
+      "front_right_door": {
+        "name": "Front right door"
+      },
+      "rear_left_door": {
+        "name": "Rear left door"
+      },
+      "rear_right_door": {
+        "name": "Rear right door"
+      },
+      "front_left_window": {
+        "name": "Front left window"
+      },
+      "front_right_window": {
+        "name": "Front right window"
+      },
+      "rear_left_window": {
+        "name": "Rear left window"
+      },
+      "rear_right_window": {
+        "name": "Rear right window"
+      },
       "hatch_open": {
         "name": "Boot"
       },
@@ -368,7 +393,32 @@
         "name": "Hood"
       },
       "headlights": {
-        "name": "Headlights"
+        "name": "Headlights",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "high_beam": {
+        "name": "High beams",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "rear_fog_light": {
+        "name": "Rear fog light",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "turn_signal": {
+        "name": "Turn indicators",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
       },
       "brake_fluid": {
         "name": "Brake fluid"
@@ -539,7 +589,7 @@
         "state_attributes": {
           "event_type": {
             "state": {
-              "charging_finished": "Charging finished",
+              "charging_stopped": "Charging stopped",
               "left_unlocked": "Left unlocked",
               "left_open": "Door, boot or bonnet left open",
               "window_left_open": "Window left open",

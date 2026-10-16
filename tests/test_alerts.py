@@ -36,13 +36,13 @@ def report(*, power=0, lock=0, door=0, window=0, charging=None, plug=None, steri
     return decode_status(raw)
 
 
-def test_finished_charging_fires_once_when_the_report_changes():
+def test_stopped_charging_fires_once_when_the_report_changes():
     watcher = CarAlertWatcher(None)
     assert watcher.observe(report(charging=2, plug=1), 0) == []        # the first report is the baseline
     fired = watcher.observe(report(charging=0, plug=1), 10)
-    assert [name for name, _ in fired] == ["charging_finished"]
+    assert [name for name, _ in fired] == ["charging_stopped"]
     assert watcher.observe(report(charging=0, plug=1), 20) == []
-    # Unplugging mid-charge is not "finished".
+    # Unplugging mid-charge is not reported: the cable is out.
     watcher.observe(report(charging=2, plug=1), 30)
     assert watcher.observe(report(charging=0, plug=0), 40) == []
 
@@ -72,7 +72,20 @@ def test_open_door_and_window_name_what_is_open():
     watcher = CarAlertWatcher(None)
     watcher.observe(report(power=0, door=1, window=1), 0)
     fired = dict(watcher.observe(report(power=0, door=1, window=1), HOLD_SECONDS))
-    assert fired == {"left_open": {"open": ["door"]}, "window_left_open": {}}
+    assert fired == {"left_open": {"open": ["door"]}, "window_left_open": {"open": []}}
+
+
+def test_numbered_doors_and_windows_are_named():
+    def numbered(**open_):
+        return decode_status({
+            "powerAccessors": [{"powerMode": 0}],
+            "doorAccessors": [{"door": n, "lock": 0, "openMode": int(open_.get(f"door{n}", 0))} for n in (1, 2, 3, 4)],
+            "windowAccessors": [{"window": n, "openMode": int(open_.get(f"window{n}", 0))} for n in (1, 2, 3, 4)],
+        })
+    watcher = CarAlertWatcher(None)
+    watcher.observe(numbered(door2=1, window4=1), 0)
+    fired = dict(watcher.observe(numbered(door2=1, window4=1), HOLD_SECONDS))
+    assert fired == {"left_open": {"open": ["front_right_door"]}, "window_left_open": {"open": ["rear_right"]}}
 
 
 def test_sterilisation_finishing_fires():
@@ -205,3 +218,23 @@ def test_every_alert_state_and_event_type_has_a_name():
     assert set(entity["event"]["car_alert"]["state_attributes"]["event_type"]["state"]) == set(CAR_ALERT_TYPES)
     settings = STRINGS["options"]["step"]["settings"]
     assert CONF_ALLOW_ACCOUNT_ALERTS in settings["data"] and CONF_ALLOW_ACCOUNT_ALERTS in settings["data_description"]
+
+
+def test_alerts_from_one_report_are_each_recorded(tmp_path):
+    from unittest.mock import patch
+    from custom_components.gac_connect.event import GacCarAlertEvent
+
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            entity = GacCarAlertEvent(c)
+            entity.hass = hass
+            c.data = report(power=0, lock=1, window=1)
+            entity._watcher.observe(c.data, 0)
+            written = []
+            with patch.object(GacCarAlertEvent, "async_write_ha_state",
+                              lambda self: written.append(self.state_attributes["event_type"])), \
+                    patch("custom_components.gac_connect.event.monotonic", return_value=HOLD_SECONDS):
+                c.data = report(power=0, lock=1, window=1)
+                entity._handle_coordinator_update()
+            assert written[:2] == ["left_unlocked", "window_left_open"]
+    asyncio.run(run())
