@@ -82,3 +82,30 @@ def test_an_unused_push_channel_says_why():
         coordinator=SimpleNamespace(data=status, push=push)))
     section = asyncio.run(async_get_config_entry_diagnostics(None, entry))["push"]
     assert section["connected"] is False and "command results are polled" in section["not_used"]
+
+
+
+def test_diagnostics_never_carry_the_cars_free_form_refusal_labels(tmp_path):
+    from dataclasses import replace
+    from unittest.mock import AsyncMock
+
+    from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+    from custom_components.gac_connect.api import decode_status
+    from custom_components.gac_connect.command_tracking import async_send
+    from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics
+    from test_autodetect import vehicle
+    from test_regressions import ACCEPTED
+
+    secret = "VIN LSJZ1234567890 mobile 0812345678 token abc"
+
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            c.data = replace(decode_status({}), updated_ms=100)
+            await async_send(c, "lock", AsyncMock(return_value=ACCEPTED)())
+            c.commands.result(PushResult(False, "13005", None, {}, session_id="s1", vin="VIN", details=(secret,)))
+            assert c.commands.attributes()["reported_causes"] == [secret[:80]]       # shown on the sensor
+            diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+            text = json.dumps(diagnostics, default=str)
+            assert "LSJZ1234567890" not in text and "0812345678" not in text and "abc" not in text
+            assert diagnostics["commands"]["reported_causes"] == 1
+    asyncio.run(run())

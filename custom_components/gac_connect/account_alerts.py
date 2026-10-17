@@ -69,7 +69,14 @@ class AccountAlerts:
             self._seen = [str(item) for item in stored["seen"]][-SEEN_LIMIT:]
         self._unsub.append(async_call_later(self.hass, FIRST_READ_SECONDS, self._scheduled))
         self._unsub.append(async_track_time_interval(self.hass, self._scheduled, READ_INTERVAL))
-        self.entry.async_on_unload(self.async_close)
+        # A coroutine: Home Assistant runs it and waits for it on every way an entry goes away
+        # (unload, reload, and clean-up after a failed set-up), so a removal that follows
+        # always deletes the final file.
+        self.entry.async_on_unload(self._async_unloaded)
+
+    async def _async_unloaded(self) -> None:
+        self.async_close()
+        await self.async_drain()
 
     async def async_drain(self) -> None:
         """Wait for a history write already under way, so an entry removal deletes the final file."""

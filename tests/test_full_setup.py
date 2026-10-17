@@ -55,6 +55,15 @@ def entry():
     return ConfigEntry(**{k: v for k, v in params.items() if k in inspect.signature(ConfigEntry).parameters})
 
 
+async def stop(hass):
+    """Shut the instance down for real. It was never started, and a plain stop returns at
+    once then, so force it; final writes run and the state must reach STOPPED."""
+    from homeassistant.core import CoreState
+
+    await hass.async_stop(force=True)
+    assert hass.state is CoreState.stopped
+
+
 def offline(client):
     """Only the network side is replaced: the client and its HTTP session."""
     from contextlib import ExitStack
@@ -117,7 +126,7 @@ def test_the_whole_entry_lifecycle(tmp_path):
             await hass.config_entries.async_remove(car.entry_id)
             await hass.async_block_till_done()
         assert [path.name for path in owned if path.exists()] == []
-        await hass.async_stop()     # graceful: a forced stop abandons pending storage writes, which crashes Python 3.14 at exit
+        await stop(hass)
     asyncio.run(run())
 
 
@@ -140,7 +149,7 @@ def test_saved_request_limits_are_restored_once_and_a_corrupt_record_pauses(tmp_
             assert (DEFAULT_LIMITER._blocked_until > time.monotonic()) is paused
             assert DEFAULT_LIMITER.state_path is None and DEFAULT_LIMITER.on_change is not None
             DEFAULT_LIMITER._blocked_until = 0.0
-            await hass.async_stop()     # graceful: a forced stop abandons pending storage writes, which crashes Python 3.14 at exit
+            await stop(hass)
     asyncio.run(run())
 
 
@@ -168,5 +177,5 @@ def test_turning_moving_tracking_off_hides_the_position_at_once(tmp_path):
             tracker = hass.states.get(tracker.entity_id)
             assert tracker.attributes.get("latitude") is None
             assert await hass.config_entries.async_unload(car.entry_id)
-        await hass.async_stop()     # graceful: a forced stop abandons pending storage writes, which crashes Python 3.14 at exit
+        await stop(hass)
     asyncio.run(run())

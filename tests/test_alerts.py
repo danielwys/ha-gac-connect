@@ -308,3 +308,30 @@ def test_a_history_write_under_way_finishes_before_removal_deletes_it(tmp_path):
             events.append("removal may delete it now")
             assert events == ["written", "removal may delete it now"]
     asyncio.run(run())
+
+
+
+def test_every_way_an_entry_goes_away_waits_for_the_history_write(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, options={CONF_ALLOW_ACCOUNT_ALERTS: True}) as (hass, entry, c):
+            alerts, _ = alerts_for(hass, entry, c, [OLD], [NEW, OLD])
+            await alerts.async_setup()
+            await alerts.async_read()
+            writing, release, events = asyncio.Event(), asyncio.Event(), []
+
+            async def slow_save(data):
+                writing.set()
+                await release.wait()
+                events.append("written")
+            alerts._store.async_save = slow_save
+            alerts._scheduled()
+            await writing.wait()
+            # The clean-up Home Assistant runs after an unload and after a failed set-up alike.
+            cleanup = asyncio.create_task(entry._async_process_on_unload(hass))
+            await asyncio.sleep(0.01)
+            assert not cleanup.done()
+            release.set()
+            await cleanup
+            events.append("cleaned up")
+            assert events == ["written", "cleaned up"]
+    asyncio.run(run())

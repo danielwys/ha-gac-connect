@@ -172,9 +172,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await entry.runtime_data.coordinator.capabilities.async_close()
-        if (alerts := getattr(entry.runtime_data, "alerts", None)) is not None:
-            alerts.async_close()
-            await alerts.async_drain()     # a removal that follows deletes the final file
     return unloaded
 
 

@@ -317,8 +317,32 @@ class ChargingRequests:
 
     def __init__(self) -> None:
         self.lock = asyncio.Lock()
-        self.generation = 0
-        self.latest: str | None = None      # the command of the latest choice
+        self._counter = 0
+        self._choices: dict[int, str] = {}   # choices still standing (waiting or sent): number -> command
+
+    def choose(self, command: str) -> int:
+        self._counter += 1
+        self._choices[self._counter] = command
+        return self._counter
+
+    def withdraw(self, number: int) -> None:
+        """A choice cancelled before it was sent no longer counts; the latest standing one does."""
+        self._choices.pop(number, None)
+
+    def sent(self, number: int) -> None:
+        """Once a choice is sent, the older ones are settled."""
+        for older in [n for n in self._choices if n < number]:
+            del self._choices[older]
+
+    @property
+    def generation(self) -> int:
+        """The number of the latest standing choice (0 before any)."""
+        return max(self._choices, default=0)
+
+    @property
+    def latest(self) -> str | None:
+        """The command of the latest standing choice."""
+        return self._choices.get(self.generation)
 
 
 _GENERATION: ContextVar[int | None] = ContextVar("gac_connect_charging_generation", default=None)
@@ -341,7 +365,8 @@ async def async_send(coordinator, command: str, request, *, expected=None, still
 
     Charging requests are serialized (see ChargingRequests). ``still_wanted`` marks an
     automatic follow-up: it is checked once the request's turn comes, and if it says no,
-    nothing is sent and None is returned.
+    nothing is sent and None is returned. A follow-up passes ``request`` as a function, so
+    the request is only built then, from what is wanted by that time.
     """
     refusal = None
     if (command in VEHICLE_SHUTDOWN_COMMANDS
@@ -360,20 +385,31 @@ async def async_send(coordinator, command: str, request, *, expected=None, still
     if command not in CHARGE_COMMANDS:
         return await _dispatch(coordinator, command, request, expected)
     charging = charging_requests(coordinator)
-    if still_wanted is None:
-        charging.generation += 1         # a new choice: older automatic follow-ups yield to it
-        charging.latest = command
-    mine = charging.generation
-    async with charging.lock:
-        if still_wanted is not None and not still_wanted():
+    choice = still_wanted is None        # a new choice: older automatic follow-ups yield to it
+    mine = charging.choose(command) if choice else charging.generation
+    dispatched = False
+    try:
+        async with charging.lock:
+            if not choice and not still_wanted():
+                if iscoroutine(request):
+                    request.close()
+                return None
+            if callable(request) and not iscoroutine(request):
+                request = request()      # built now, from what is wanted when its turn comes
+            if choice:
+                charging.sent(mine)
+            token = _GENERATION.set(mine)
+            dispatched = True
+            try:
+                return await _dispatch(coordinator, command, request, expected)
+            finally:
+                _GENERATION.reset(token)
+    finally:
+        if not dispatched:
+            if choice:
+                charging.withdraw(mine)  # cancelled while waiting its turn: it was never sent
             if iscoroutine(request):
                 request.close()
-            return None
-        token = _GENERATION.set(mine)
-        try:
-            return await _dispatch(coordinator, command, request, expected)
-        finally:
-            _GENERATION.reset(token)
 
 
 async def _dispatch(coordinator, command: str, request, expected):

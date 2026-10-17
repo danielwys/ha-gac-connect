@@ -102,10 +102,21 @@ async def async_get_config_entry_diagnostics(
         "polling": polling,
         "status_updated_ms": status.updated_ms if status else None,
         "status_online": status.online if status else None,
-        "commands": coordinator.commands.attributes() if getattr(coordinator, "commands", None) else None,
+        "commands": _commands(coordinator),
         "push": _push(coordinator, entry),
         "account_alerts": alerts.diagnostics() if (alerts := getattr(getattr(entry, "runtime_data", None), "alerts",
                                                                       None)) is not None else None,
         "status_raw": async_redact_data(raw, TO_REDACT),
         "capabilities": coordinator.capabilities.diagnostics() if getattr(coordinator, "capabilities", None) else None,
     }
+
+
+def _commands(coordinator) -> dict | None:
+    """The command ledger, without the car's free-form refusal labels: they are text from the
+    service that this export cannot vouch for, so only how many there were is shared."""
+    tracker = getattr(coordinator, "commands", None)
+    if tracker is None:
+        return None
+    ledger = dict(tracker.attributes())
+    ledger["reported_causes"] = len(ledger.get("reported_causes") or ())
+    return ledger

@@ -113,7 +113,8 @@ class ChargeNow:
                 _LOGGER.info("Charge now: the car did not report charging; switching the schedule off anyway")
             try:
                 sent = await async_send(coordinator, "charge-now",
-                                        coordinator.client.charge_now(coordinator.vin, until_soc=self._until_soc),
+                                        lambda: coordinator.client.charge_now(coordinator.vin,
+                                                                              until_soc=self._until_soc),
                                         still_wanted=self._still_wanted)
             except (GacError, HomeAssistantError) as err:
                 _LOGGER.warning("Charge now could not switch the schedule off after starting the charge: %s", err)

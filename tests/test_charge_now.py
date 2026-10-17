@@ -2,6 +2,8 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.charge_now import ChargeNow, charge_now_request
 from custom_components.gac_connect.command_tracking import async_send
@@ -255,3 +257,70 @@ def test_charge_now_again_with_another_stopping_rule_is_the_one_followed(tmp_pat
             assert c.client.restart_charging.await_count == 1
             c.client.charge_now.assert_awaited_once_with("VIN", until_soc=True)
     asyncio.run(run())
+
+
+def test_charge_now_again_queued_behind_a_slow_request_still_sets_the_stopping_rule(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            helper = prepared(entry, c, report(4, 0))
+            entry.async_on_unload(c.async_add_listener(lambda: helper.observe(c.data)))
+            gate = asyncio.Event()
+
+            async def slow_window(*args, **kwargs):
+                await gate.wait()
+                return ACCEPTED
+            c.client.set_charge_window = AsyncMock(side_effect=slow_window)
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", ()), \
+                    patch("custom_components.gac_connect.charge_now.RESTART_READS", (0.05, 5)):
+                await async_send(c, "charge-now", charge_now_request(c, until_soc=False))
+                held = asyncio.create_task(_window(c))                       # in transport
+                await asyncio.sleep(0.01)
+                again = asyncio.create_task(async_send(c, "charge-now", charge_now_request(c, until_soc=True)))
+                c.async_set_updated_data(report(2, 1))                       # the follow-up queues too
+                await asyncio.sleep(0.01)
+                gate.set()
+                await asyncio.gather(held, again)
+                await asyncio.wait_for(helper._task, 1)
+            c.client.charge_now.assert_awaited_once_with("VIN", until_soc=True)
+    asyncio.run(run())
+
+
+def test_a_repeat_cancelled_before_its_turn_does_not_stop_the_switch_off(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            helper = prepared(entry, c, report(4, 0))
+            entry.async_on_unload(c.async_add_listener(lambda: helper.observe(c.data)))
+            gate = asyncio.Event()
+
+            async def slow_restart(vin):
+                await gate.wait()
+                return ACCEPTED
+            c.client.restart_charging.side_effect = slow_restart
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", ()), \
+                    patch("custom_components.gac_connect.charge_now.RESTART_READS", (0.05, 5)):
+                first = asyncio.create_task(async_send(c, "charge-now", charge_now_request(c)))
+                await asyncio.sleep(0.01)
+                repeat = asyncio.create_task(async_send(c, "charge-now", charge_now_request(c)))
+                await asyncio.sleep(0.01)
+                repeat.cancel()                                              # never sent
+                gate.set()
+                await first
+                with pytest.raises(asyncio.CancelledError):
+                    await repeat
+                c.async_set_updated_data(report(2, 1))
+                await asyncio.wait_for(helper._task, 1)
+            c.client.charge_now.assert_awaited_once()                        # the switch-off still went out
+    asyncio.run(run())
+
+
+def test_the_latest_standing_choice_wins_when_a_middle_one_is_cancelled():
+    from custom_components.gac_connect.command_tracking import ChargingRequests
+
+    queue = ChargingRequests()
+    one, two, three = queue.choose("charge-now"), queue.choose("charge-window"), queue.choose("charge-resume")
+    queue.withdraw(two)
+    assert (queue.generation, queue.latest) == (three, "charge-resume")
+    queue.withdraw(three)
+    assert (queue.generation, queue.latest) == (one, "charge-now")
+    queue.sent(one)
+    assert queue.generation == one
