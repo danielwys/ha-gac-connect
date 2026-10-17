@@ -49,6 +49,7 @@ def test_migration_runs_once(tmp_path):
 @pytest.mark.parametrize("object_id,expected", [
     ("aion_ut_unrestricted_charging", "switch.aion_ut_scheduled_charging"),
     ("my_charge_gate", "switch.my_charge_gate"),                     # a custom ID stays
+    ("garage_unrestricted_charging", "switch.garage_unrestricted_charging"),   # even one ending the same way
 ])
 def test_the_charge_switch_entity_id_follows_its_new_meaning(tmp_path, object_id, expected):
     from homeassistant.helpers import entity_registry as er
@@ -56,8 +57,8 @@ def test_the_charge_switch_entity_id_follows_its_new_meaning(tmp_path, object_id
     async def run():
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             registry = er.async_get(hass)
-            registry.async_get_or_create("switch", "gac_connect", "VIN_charge_switch",
-                                         suggested_object_id=object_id, config_entry=entry)
+            registry.async_get_or_create("switch", "gac_connect", "VIN_charge_switch", suggested_object_id=object_id,
+                                         config_entry=entry, device_id=_car(hass, entry))
             hass.config_entries.async_update_entry(entry, minor_version=2)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_charge_switch") == expected
@@ -76,8 +77,8 @@ def test_the_smart_battery_temp_entity_id_follows_its_new_name(tmp_path, object_
     async def run():
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             registry = er.async_get(hass)
-            registry.async_get_or_create("switch", "gac_connect", "VIN_precondition_battery",
-                                         suggested_object_id=object_id, config_entry=entry)
+            registry.async_get_or_create("switch", "gac_connect", "VIN_precondition_battery", suggested_object_id=object_id,
+                                         config_entry=entry, device_id=_car(hass, entry))
             hass.config_entries.async_update_entry(entry, minor_version=4)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_precondition_battery") == expected
@@ -88,6 +89,7 @@ def test_the_smart_battery_temp_entity_id_follows_its_new_name(tmp_path, object_
 @pytest.mark.parametrize("object_id,expected", [
     ("aion_ut_pre_conditioning", "switch.aion_ut_a_c"),
     ("cabin_cooling", "switch.cabin_cooling"),                       # a custom ID stays
+    ("my_custom_garage_pre_conditioning", "switch.my_custom_garage_pre_conditioning"),
 ])
 def test_the_a_c_entity_id_follows_its_new_name(tmp_path, object_id, expected):
     from homeassistant.helpers import entity_registry as er
@@ -95,8 +97,8 @@ def test_the_a_c_entity_id_follows_its_new_name(tmp_path, object_id, expected):
     async def run():
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             registry = er.async_get(hass)
-            registry.async_get_or_create("switch", "gac_connect", "VIN_climate_power",
-                                         suggested_object_id=object_id, config_entry=entry)
+            registry.async_get_or_create("switch", "gac_connect", "VIN_climate_power", suggested_object_id=object_id,
+                                         config_entry=entry, device_id=_car(hass, entry))
             hass.config_entries.async_update_entry(entry, minor_version=5)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_climate_power") == expected
@@ -117,3 +119,10 @@ def test_the_charge_switch_rename_never_takes_an_existing_id(tmp_path):
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_charge_switch") == \
                 "switch.aion_ut_unrestricted_charging"
     asyncio.run(run())
+
+
+def _car(hass, entry):
+    from homeassistant.helpers import device_registry as dr
+
+    return dr.async_get(hass).async_get_or_create(config_entry_id=entry.entry_id, identifiers={("gac_connect", "VIN")},
+                                                  name="AION UT").id

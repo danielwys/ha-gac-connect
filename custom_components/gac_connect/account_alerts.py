@@ -6,6 +6,7 @@ again (Reconfigure). Alerts already listed when reading starts are remembered, n
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -56,6 +57,8 @@ class AccountAlerts:
         self._seen: list[str] | None = None        # None until the first read or the stored list
         self._store = Store(hass, 1, store_key(entry.entry_id))
         self._unsub: list[Callable[[], None]] = []
+        self._task: asyncio.Task | None = None      # the read in progress, cancelled on unload
+        self._closed = False
 
     async def async_setup(self) -> None:
         if not self.enabled:
@@ -69,19 +72,28 @@ class AccountAlerts:
 
     @callback
     def async_close(self) -> None:
+        """Stop reading: no timers, and a read in progress publishes and saves nothing more."""
+        self._closed = True
         for unsub in self._unsub:
             unsub()
         self._unsub.clear()
+        if self._task is not None and not self._task.done() and self._task is not asyncio.current_task():
+            self._task.cancel()
 
-    async def _scheduled(self, _now=None) -> None:
-        await self.async_read()
+    @callback
+    def _scheduled(self, _now=None) -> None:
+        if self._closed or (self._task is not None and not self._task.done()):
+            return
+        self._task = self.entry.async_create_background_task(
+            self.hass, self.async_read(), f"{DOMAIN} alert read {self.entry.entry_id}")
 
     async def async_read(self) -> None:
-        if not self.enabled or self.state == "signed_out":
+        if not self.enabled or self.state == "signed_out" or self._closed:
             return
         vin = self.coordinator.vin
         try:
             page = await self.coordinator.client.get_alarms(vin)
+            alerts = parse_alerts(page)       # a malformed page is a failed read, not an empty one
         except AccountSessionEnded as err:
             self.last_read = datetime.now(UTC)
             self.last_error = str(err)[:200]
@@ -97,9 +109,10 @@ class AccountAlerts:
             self.state = "error"
             self._changed()
             return
+        if self._closed:
+            return          # unloaded while the read was out
         self.last_read = datetime.now(UTC)
         self.last_error = None
-        alerts = parse_alerts(page)
         _LOGGER.debug("GAC alert list read: %d alerts", len(alerts))
         if self._seen is None:
             self._seen = []          # first read: what is already listed is history, not news
@@ -112,6 +125,8 @@ class AccountAlerts:
         self._seen.extend(alert.alert_id for alert in reversed(alerts) if alert.alert_id not in known)
         self._seen = self._seen[-SEEN_LIMIT:]
         await self._store.async_save({"seen": self._seen})
+        if self._closed:
+            return
         self.latest = alerts[0] if alerts else self.latest
         self.state = "ok"
         self._changed()

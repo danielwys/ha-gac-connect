@@ -51,11 +51,14 @@ def test_a_live_option_applies_without_a_reload(tmp_path):
         async with vehicle(tmp_path, options={"scan_interval": 300}) as (hass, entry, c):
             entry.runtime_data.options = dict(entry.options)
             hass.config_entries.async_reload = AsyncMock()
+            published = Mock()
+            c.async_add_listener(published)
             hass.config_entries.async_update_entry(entry, options={**entry.options, "scan_interval": 120})
             await _reload_on_update(hass, entry)
             hass.config_entries.async_reload.assert_not_awaited()
             assert c.update_interval == timedelta(seconds=120) and entry.runtime_data.options["scan_interval"] == 120
             assert c._shared_interval() == timedelta(seconds=120)    # kept when the next poll is scheduled
+            published.assert_called()                                 # entities publish the change at once
             hass.config_entries.async_update_entry(entry, options={**entry.options, "allow_account_alerts": True})
             await _reload_on_update(hass, entry)
             hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)

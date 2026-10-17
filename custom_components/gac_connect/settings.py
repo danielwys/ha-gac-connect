@@ -77,8 +77,12 @@ def async_set_options(hass: HomeAssistant, entry, updates: Mapping[str, Any]) ->
 @callback
 def async_options_applied(hass: HomeAssistant, entry) -> None:
     """Tell option entities and the poller about options changed without a reload."""
-    entry.runtime_data.coordinator.async_set_interval(scan_interval(entry.options))
+    coordinator = entry.runtime_data.coordinator
+    coordinator.async_set_interval(scan_interval(entry.options))
     async_dispatcher_send(hass, SIGNAL_OPTIONS.format(entry_id=entry.entry_id))
+    # Entities that read options (the shown position) publish again at once, so a location
+    # tracking choice takes effect now rather than at the next report or freshness tick.
+    coordinator.async_update_listeners()
 
 
 def quiet_hours(options: Mapping[str, Any]) -> tuple[str, str] | None:

@@ -19,11 +19,12 @@ from ._vendor.gac_connect.commands import refusal_hint
 from ._vendor.gac_connect.models import ChargingMode
 from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError
 from .api import doors_locked
+from .charging import CHARGE_COMMANDS
 from .const import (
     CONF_ALLOW_CHARGER_UNLOCK, CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK,
     VEHICLE_SHUTDOWN_COMMANDS,
 )
-from .seats import ventilation_state
+from .seats import ventilation_level, ventilation_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -252,8 +253,10 @@ class CommandTracker:
                 record.refusal_reason = result.reason
                 record.refusal_details = tuple(getattr(result, "details", ()) or ())
             record.answered.set()
-            if record.state in {"pending", "awaiting_report"}:
-                record.state = ("awaiting_report" if record.expected else "reported_success") if result.ok else "rejected"
+            if not result.ok and record.state in {"pending", "awaiting_report", "confirmed"}:
+                record.state = "rejected"      # the car's own refusal outranks a report that matched
+            elif record.state in {"pending", "awaiting_report"}:
+                record.state = "awaiting_report" if record.expected else "reported_success"
             manager = self.coordinator.capabilities
             if result.ok and manager is not None:
                 manager.confirm_command(record.command)
@@ -283,6 +286,8 @@ class CommandTracker:
                     return doors_locked(status, model)
                 if key.startswith("seat_") and key.endswith("_ventilation_on"):
                     return ventilation_state(status, int(key.split("_")[1]))
+                if key.startswith("seat_") and key.endswith("_ventilation_level"):
+                    return ventilation_level(status, int(key.split("_")[1]))
                 if key == "charge_scheduled":   # once and repeating schedules both count
                     mode = getattr(status, "charging_mode", None)
                     return None if mode in (None, ChargingMode.UNKNOWN) else mode.scheduled
@@ -295,8 +300,33 @@ class CommandTracker:
             self._changed()
 
 
-async def async_send(coordinator, command: str, request, *, expected=None):
-    """Send through the shared ledger; every surface (entities, actions) honors the same opt-ins."""
+class ChargingRequests:
+    """Charging requests leave one at a time, in the order they were made.
+
+    Each new charging choice moves the generation on; an automatic follow-up (Charge now
+    switching the schedule off) is sent only if no newer choice has been made by the time
+    it holds the lock, so it can never overwrite one.
+    """
+
+    def __init__(self) -> None:
+        self.lock = asyncio.Lock()
+        self.generation = 0
+
+
+def charging_requests(coordinator) -> ChargingRequests:
+    requests = getattr(coordinator, "charging_requests", None)
+    if requests is None:          # a coordinator stand-in (tests) gets its own on first use
+        requests = coordinator.charging_requests = ChargingRequests()
+    return requests
+
+
+async def async_send(coordinator, command: str, request, *, expected=None, still_wanted=None):
+    """Send through the shared ledger; every surface (entities, actions) honors the same opt-ins.
+
+    Charging requests are serialized (see ChargingRequests). ``still_wanted`` marks an
+    automatic follow-up: it is checked once the request's turn comes, and if it says no,
+    nothing is sent and None is returned.
+    """
     refusal = None
     if (command in VEHICLE_SHUTDOWN_COMMANDS
             and coordinator.config_entry.options.get(CONF_ALLOW_VEHICLE_SHUTDOWN) is not True):
@@ -311,6 +341,20 @@ async def async_send(coordinator, command: str, request, *, expected=None):
         if iscoroutine(request):
             request.close()
         raise ServiceValidationError(refusal)
+    if command not in CHARGE_COMMANDS:
+        return await _dispatch(coordinator, command, request, expected)
+    charging = charging_requests(coordinator)
+    if still_wanted is None:
+        charging.generation += 1         # a new choice: older automatic follow-ups yield to it
+    async with charging.lock:
+        if still_wanted is not None and not still_wanted():
+            if iscoroutine(request):
+                request.close()
+            return None
+        return await _dispatch(coordinator, command, request, expected)
+
+
+async def _dispatch(coordinator, command: str, request, expected):
     if (tracker := getattr(coordinator, "commands", None)) is not None:
         return await tracker.send(command, request, expected=expected)
     response = await request

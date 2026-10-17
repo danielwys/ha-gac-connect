@@ -151,3 +151,28 @@ def test_a_right_slide_resumes_the_flow_once_and_a_wrong_one_shows_a_new_puzzle(
         state = await GacCaptchaView().get(request)
         assert state.status == 200
     asyncio.run(run())
+
+
+def test_a_second_verify_while_the_first_is_checked_leaves_it_cancellable(tmp_path):
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        request, client = pending(hass)
+        started = asyncio.Event()
+
+        async def waiting(*args):
+            started.set()
+            await asyncio.Event().wait()
+        client.request_sms.side_effect = waiting
+        first = asyncio.create_task(GacCaptchaView().post(request))
+        await started.wait()
+        assert (await GacCaptchaView().post(request)).status == 409       # busy
+        assert flow_state(hass)["flow"]["verification_task"] is first      # still tracked
+        flow = GacConfigFlow()
+        flow.hass, flow.flow_id = hass, "flow"
+        flow._http = SimpleNamespace(detach=Mock())
+        flow._captcha_expiry = Mock()
+        flow.async_remove()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        hass.config_entries.flow.async_configure.assert_not_called()
+    asyncio.run(run())

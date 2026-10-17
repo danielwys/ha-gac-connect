@@ -15,7 +15,8 @@ location.
 
 ## Requirements
 
-- Home Assistant 2025.2 or newer.
+- Home Assistant 2025.3 or newer. Tested on 2025.3.0 and 2026.10.2; a current release is
+  recommended, as it carries Home Assistant's latest security fixes.
 - A GAC International app account (or My AION in the United Kingdom) and the mobile
   number it uses.
 
@@ -33,6 +34,9 @@ integration's HACS page.
 **Manually:** copy `custom_components/gac_connect` into your Home Assistant
 `config/custom_components/` folder and restart.
 
+The integration installs one Python package, `aiomqtt`, used only for the optional push
+feed (see **Allow unencrypted push connections**). The `gac-connect` library is bundled.
+
 ## Set up
 
 **Settings → Devices & services → Add integration → GAC Connect.**
@@ -40,47 +44,63 @@ integration's HACS page.
 1. Choose your region and enter your mobile number.
 2. Solve the slide puzzle that opens (drag the piece into the gap, then Verify;
    arrow keys move it one pixel). A miss shows a new puzzle.
-3. Enter the SMS code.
-4. Choose the vehicle, and whether to allow remote unlocking and remote shutdown.
+3. Enter the SMS code. A mistyped code can be entered again; if it has expired,
+   start again for a new one.
+4. Choose the vehicle, and whether to allow remote unlocking, charging connector unlock and remote shutdown.
 
 Regions: Australia, Brazil, Cambodia, Finland, Greece, Hong Kong, Indonesia,
 Israel, Kuwait, Macau, Mexico, New Zealand, Philippines, Poland, Portugal, Russia,
 Saudi Arabia, Singapore, Spain, Thailand, United Arab Emirates, United Kingdom.
 
 Signing in here signs the official app out once. Sign the app back in and both keep
-working.
+working: the car's controls and readings use a vehicle session that survives the app
+signing in. GAC's **account** keeps only one session, though, so the optional GAC
+alerts (see **Allow GAC account alerts**) stop whenever the app signs in after Home
+Assistant. To sign Home Assistant in again: the integration's three-dot menu →
+**Reconfigure**.
 
 ## Which entities appear
 
 Entities are matched to the car. At setup the integration reads the car's
 capability list from GAC's service, and uses the car's reports where the list says
-nothing. **Always show** and **Omit** in the options override either.
+nothing. **Always show** and **Omit** in the options (or the
+`gac_connect.set_entity_visibility` action) override either. Lights appear once the
+car has reported them on.
 
 ## Entities
 
-Controls show the requested state at once and settle on the car's next report. If
-the car refuses a command, the action fails with the car's reason.
+### How commands report back
+
+A control shows the requested state straight away. GAC accepts a command before the car
+acts on it; Home Assistant then waits up to about 10 seconds for the car's own answer
+(from the push feed, or by asking GAC at 2, 5 and 10 seconds without it). A refusal in
+that time fails the action with the car's reason. An answer that comes later, or none,
+leaves the action successful: **Last command** then shows whether the car's next report
+matched (Requested state reported), the car refused it (Vehicle rejected request), or
+neither happened within 3 minutes (Not confirmed in time).
 
 ### Controls
 
 | Entity | Type | Description |
 |---|---|---|
 | Climate | climate | Modes Off, On (heat/cool to target) and Fan only (blower without compressor). Target temperature, fan speeds and airflow choices follow the car's capability list. Fan Off stops the A/C; airflow changes need the car switched on. Presets Heating (Auto at the highest target) and Cooling (Auto at the lowest). Each remote start runs for the Pre-conditioning run time. |
-| Pre-conditioning | switch | Cabin A/C on or off. |
+| A/C | switch | On while the cabin A/C runs, however it was started. Turning it on starts a remote run for the Pre-conditioning run time. |
 | Pre-conditioning run time | number (configuration) | How long a remote A/C start runs before the car ends it, within the car's capability list (default 30 minutes). Once the car is switched on, its own climate control takes over. |
 | Recirculation | switch | On recirculates, off draws fresh air. Changes only while the A/C runs. Shown when the car's capability list offers both. |
-| Scheduled charging | switch | On follows the car's charging schedule. Off charges whenever plugged in. |
-| Battery preconditioning | switch | Starts or cancels battery preconditioning; the car runs it for up to 1.5 hours. |
+| Scheduled charging | switch | On follows the car's charging schedule. Off charges whenever plugged in, as Charge now does. |
+| Smart battery temp | switch | Starts or cancels warming or cooling the battery, as in the app; the car runs it for up to 1.5 hours. |
+| Sterilisation | switch | Runs the A/C's hot-air cabin sterilisation for 30 minutes. The car must be switched off and locked, with the windows closed. |
 | Steering wheel heat | switch | On or off. |
-| Ventilation | switch | Lowers the windows 2–3 cm and runs fresh-air circulation for 5 minutes. |
+| Ventilation | switch | Lowers the windows 2–3 cm and runs fresh-air circulation. On while all four windows report open (so also when started in the app); off closes them. |
 | Flash lights | switch | Flashes the lights. |
 | Driver seat ventilation | select | Off and the levels the car's capability list offers (up to Low, Medium, High). Choosing a level replaces the console's Smart mode. |
 | Front passenger seat ventilation | select | As for the driver seat. |
-| Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. |
+| Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. Locked needs all four doors reported locked. |
 | Windows | cover | Open or close all windows. |
 | Sunroof | cover | Open or close. |
 | Boot | cover | Open or close. |
-| Charge now | button | Charges whenever plugged in. |
+| Charge now | button | Charges whenever plugged in (switches the schedule off). GAC has no start command: once a charge has ended (a one-time window finished, or the connector was unlocked) the car will not start another by itself, so Charge now first sends a one-time window to the charge limit starting at the next minute, then switches the schedule off a minute or two later, once the car reports charging. A charging request made in the meantime takes precedence. A repeating schedule is never replaced this way. |
+| Unlock charging connector | button | Releases the charging connector so the cable can be pulled out, and stops charging. There is no remote lock command; the car locks it again when charging restarts. Only with **Allow remote charging connector unlock**. |
 | Sound horn | button | Sounds the horn. |
 | Refresh | button | Reads the car's status now. |
 | Turn vehicle off | button | Switches the car off. Only with **Allow remote vehicle shutdown**. |
@@ -89,6 +109,19 @@ the car refuses a command, the action fails with the car's reason.
 | Fridge temperature | number | Each mode's range from the car's capability list; otherwise Refrigerate 0–20 °C, Heat 35–50 °C, Freeze −15 to −1 °C. |
 | Location | device_tracker | Home/away and map position. Optional. |
 
+### Settings entities
+
+Every option (see **Options**) and the charging-window editor also appear as entities in
+the device's **Configuration** section, so a dashboard can manage them: the Allow and
+location-tracking switches, Allow unencrypted push connections, Quiet hours with its
+start and end times, Poll interval, and **Refresh vehicle capabilities**.
+
+The charging window is prepared with **Charge window start / stop**, **Charge on Monday …
+Sunday** (no days is one time) and **Stop at charge limit**, then sent with **Send charge
+window**. They start from the window the car reports. A one-time window already open is
+sent starting at the next minute, as the car never starts a start that has passed; one
+that would end before then is refused with that reason.
+
 ### Sensors
 
 | Entity | Description |
@@ -96,7 +129,8 @@ the car refuses a command, the action fails with the car's reason.
 | Battery | State of charge, %. |
 | Range | Remaining range, km. |
 | Odometer | km. |
-| Charging schedule | Scheduled charging or Whenever plugged in; the reported window and days as attributes. |
+| Trip consumption | Average consumption of the drive under way, or else the last one, kWh/100 km, as the car's Trip computer shows it (within a few tenths). |
+| Charging schedule | Scheduled charging, Whenever plugged in, or Not set, won't charge (the car waits after a one-time window); the reported window and days as attributes. |
 | Reported charge window start / stop | Window times as the car reports them. |
 | Charge power, Charge current, Charge voltage | While charging. |
 | Estimated charge time | Minutes of charging remaining. |
@@ -104,16 +138,19 @@ the car refuses a command, the action fails with the car's reason.
 | Outside temperature | °C. |
 | Cabin PM2.5 | µg/m³. |
 | 12V battery | Auxiliary battery voltage. |
+| Battery temperature | Battery temperature as the car reports it (most likely the main battery). |
 | Cabin fan strength | Blower speed as reported (0–10). |
 | Tyre 1–4 pressure, Tyre 1–4 temperature | kPa and °C, where the car reports them. |
 | GPS coordinates | Latitude and longitude. Optional. |
 | Fridge after leaving | Timed or Unlimited. |
 | Fridge time left | Minutes left on a timed setting. |
+| Last GAC alert | The newest alert in GAC's alert list, or Signed out (see **Allow GAC account alerts**). Only with that option. |
 | Last report | When the car last reported. |
 | Data freshness | Recent report, Old report, Report time unknown or Report clock ahead. |
 | Last cloud refresh | When Home Assistant last read the status. |
 | Polling status | Polling normally, Quiet hours, Waiting for request limit, Refresh failed or Sign in again. |
-| Last command | Outcome of the latest command; failure reason and result code as attributes. |
+| Last command | Outcome of the latest command (see **How commands report back**); failure reason, result code and the car's reported causes as attributes. |
+| Entity choices | How many entities have an Always show or Omit choice; the choices and every entity key as attributes (diagnostic). |
 
 ### Binary sensors
 
@@ -125,15 +162,25 @@ the car refuses a command, the action fails with the car's reason.
 | Charging | Charging. |
 | Charger lock | Charging connector unlocked. |
 | Lock | Unlocked. |
-| Door | A door open. |
-| Window | A window open. |
+| Door, Window | A door, or a window, open. |
+| Front left / Front right / Rear left / Rear right door | That door open. |
+| Front left / Front right / Rear left / Rear right window | That window open. |
 | Boot | Boot open. |
 | Hood | Hood (bonnet) open. |
+| Headlights, High beams, Rear fog light, Brake lights | That light on. |
+| Turn indicators | Either indicator, or the hazard lights, on. They flash, so a report can catch them off. |
 | Brake fluid | Problem when the car reports a brake-fluid alarm, as the app's Brake fluid check does. |
 | A/C auto mode | A/C in Auto. |
 | A/C compressor | Compressor selected (off in Fan only). |
 | Anti-theft enabled | Alarm armed. |
 | Driver / Front passenger / Rear left / Rear right seat ventilation state | Seat fan running; level as an attribute. |
+
+### Events
+
+| Entity | Fires |
+|---|---|
+| Car alert | From the car's reports, for everyone: charging stopped (with the cable still in), sterilisation finished, Smart battery temp finished; and, five minutes after the car is switched off, left unlocked, left open (doors, boot, bonnet) and window left open (which windows as an attribute). |
+| GAC alert | Each new alert in GAC's own alert list (charging, battery, security, openings, someone left in the car, lights, fridge and others). Only with **Allow GAC account alerts**; alerts already listed when it starts are history. |
 
 ## Options
 
@@ -143,15 +190,16 @@ the car refuses a command, the action fails with the car's reason.
 
 | Setting | Default | Description |
 |---|---|---|
-| Always show | none | Show entities even if the car does not appear to have them. |
-| Allow unencrypted push connections | off | Receive command results where GAC's push broker is unencrypted. Without it, results arrive at the next poll. |
-| Poll interval | 300 s | Minimum 60 s. Lengthened automatically when several vehicles share the request budget. |
+| Allow unencrypted push connections | off | Receive command results through GAC's push feed where its broker is unencrypted. The broker credentials and topic names then travel without encryption; on GAC's Southeast Asia service they include an account number, but not the VIN or phone number. Without it, the integration asks GAC for each command's result instead (see **How commands report back**). |
+| Poll interval | 300 s | Minimum 60 s. Lengthened automatically when several vehicles share the request budget. Applies at once. |
 | Enable location tracking when parked | off | Show the location while the car is switched off. |
-| Enable location tracking when moving | off | Show the location while the car is switched on. |
+| Enable location tracking when moving | off | Show the location while the car is switched on. A change hides or shows the position at once; positions already recorded stay in Home Assistant's history. |
 | Allow remote unlocking | off | Lets the Doors lock unlock the car. |
+| Allow remote charging connector unlock | off | Shows Unlock charging connector. |
+| Allow GAC account alerts | off | Reads GAC's alert list every 10 minutes for the GAC alert event and Last GAC alert. It needs GAC's account session, which the official app takes over whenever it signs in after Home Assistant: the alerts then show Signed out until you Reconfigure (which signs the app out once). |
 | Allow remote vehicle shutdown | off | Shows Turn vehicle off. |
+| Always show | none | Show entities even if the car does not appear to have them. |
 | Omit unsupported entities | none | Hide entities even if the car has them. |
-| Car picture on the map | the model's bundled picture, if there is one, or initials | Image URL or `/local/…` path. |
 | Quiet hours start / end | none | No polling between these times (HH:MM). |
 
 **Detected equipment** lists which entities are shown and why, starting with your
@@ -167,14 +215,19 @@ charge now or refresh.
 
 | Action | Fields | Description |
 |---|---|---|
-| `gac_connect.charge_now` | `vin`, `until_soc` | Charge whenever plugged in. |
+| `gac_connect.charge_now` | `vin`, `until_soc` | Charge whenever plugged in, as the Charge now button does. |
 | `gac_connect.set_charge_window` | `vin`, `start`, `stop`, `weekly`, `until_soc` | Charge only between `start` and `stop` (HH:MM; a stop before the start runs overnight). `weekly`: Mon=1, Tue=2 … Sun=64; 127 every day; 0 or omitted once. `stop` is not needed with `until_soc`. |
-| `gac_connect.send_command` | `vin`, `command`, `params` | Send a command by name, for example `horn-on` or `aircon-manual-on`, with optional parameters. Unlock and shutdown need their options; PIN commands are refused. |
+| `gac_connect.send_command` | `vin`, `command`, `params` | Send a command by name, for example `horn-on` or `aircon-manual-on`, with optional parameters. Unlock, connector unlock and shutdown need their options; PIN commands are refused. |
 | `gac_connect.get_control_capabilities` | `vin` | Return the car's capability list (numeric fields only). |
+| `gac_connect.get_position` | `vin` | Return the car's separate position report, with location values masked. |
+| `gac_connect.get_alerts` | `vin`, `page` | Return one page of 20 entries from GAC's alert list, newest first. Needs the account session (see **Allow GAC account alerts**). |
+| `gac_connect.get_departure_plans` | `vin` | Return the departure plans saved in the GAC app. |
+| `gac_connect.set_entity_visibility` | `vin`, `entity`, `visibility` | Set an entity (a key such as `binary_sensor:front_left_door`, listed by Entity choices) to `automatic`, `always` or `omit`. Reloads the integration. |
 
 `vin` is needed only with more than one vehicle. `until_soc` stops at the car's
 own target charge level instead of the stop time, like the app's "Charge cutoff SOC".
-No stop time is sent then, and the car keeps its saved one.
+No stop time is sent then, and the car keeps its saved one. The `get_…` actions return
+their result as a response and send nothing to the car.
 
 ## Events
 
@@ -186,26 +239,17 @@ No stop time is sent then, and the car keeps its saved one.
 | `ok` | `true` applied, `false` refused. |
 | `code` | Result code. |
 | `reason` | Meaning of a refusal code. |
+| `details` | What the car reported as the cause, for example `["Driver door ajar"]`; empty if nothing. |
 | `event` | Command type, for example `control_air_condition`. |
 | `session_id` | Identifies the command. |
 
 ## Examples
 
-- [`docs/example-dashboard.yaml`](docs/example-dashboard.yaml): a car dashboard
-  using built-in cards. Its entity IDs start with `my_car`: replace that with
-  your car's entity prefix and paste it into a new dashboard's raw configuration
-  editor.
 - [`docs/example-automations.yaml`](docs/example-automations.yaml): alerts for low
   tyre pressure, low 12 V battery, car left unlocked, and doors, windows, boot or
   hood left open.
 - [`docs/example-trips.yaml`](docs/example-trips.yaml): weekly, monthly and yearly
-  distance and estimated consumption from odometer and battery readings. The
-  service reports no trip history.
-
-![Example car view](docs/images/aion-v.png)
-
-The car renders in `docs/images/` are CC BY 4.0 (see
-[`docs/images/ATTRIBUTION.md`](docs/images/ATTRIBUTION.md)).
+  distance and estimated consumption from odometer and battery readings.
 
 ## Request limits
 
@@ -227,8 +271,13 @@ and restart to reset it.
 - Sign-in needs a person: a slide puzzle and an SMS code.
 - If the car's session ends, it is renewed from the saved account session; if that
   fails, Home Assistant asks you to sign in again.
-- Engine start and stop and charger release need the car's remote-control PIN and
-  are not supported.
+- Engine start and stop need the car's remote-control PIN and are not supported.
+- There is no remote stop-charging command: unlocking the charging connector stops a
+  charge, and Charge now starts another.
+- Battery reserve, the charge port door and the target charge level are not in the
+  car's reports.
+- Only the driver and front passenger seats have level controls; rear seats have
+  readings and `send_command`.
 
 ## Acknowledgements
 
@@ -244,6 +293,20 @@ EV brands into Home Assistant and Python, among them:
 Thanks to their authors for showing what a good community integration looks like.
 
 ## Changes
+
+- **0.5.0** — admin settings as entities (every option and the charging-window editor),
+  and the `set_entity_visibility`, `get_position`, `get_alerts` and `get_departure_plans`
+  actions. Charge now starts a new charge after a one-time window ends or the connector
+  is unlocked. One-time charging windows use the app's format and start on time. New
+  Trip consumption, Brake lights, High beams, Rear fog light, Turn indicators and
+  per-door and per-window sensors; Car alert and GAC alert events; the car's refusal
+  causes in errors and in `gac_connect_command_result`. Ventilation reads the windows;
+  a new poll interval applies at once. A newer charging choice is
+  never overwritten by Charge now's follow-up; a new sign-in is not lost to a refresh
+  in progress; partial reports no longer read as locked; command outcomes need the full
+  target and a fresh report, and the car's refusal wins; undecryptable or refused
+  replies are errors. Sign-in uses the library's puzzle page. The car-picture option,
+  bundled pictures and example dashboard were removed. Requires Home Assistant 2025.3+.
 
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was

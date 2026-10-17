@@ -66,7 +66,8 @@ class GacSeatVentilationSelect(GacRequestedEntity, SelectEntity):
         level = self._levels[option]
         client, vin = self.coordinator.client, self.coordinator.vin
         await self._run(option, lambda: client.set_seat_ventilation_level(vin, self._seat, level),
-                        command=f"seat-{self._seat}-ventilation-{'on' if level else 'off'}")
+                        command=f"seat-{self._seat}-ventilation-{'on' if level else 'off'}",
+                        expected={f"seat_{self._seat}_ventilation_level": level})
 
 
 class GacFridgeModeSelect(GacEntity, SelectEntity):

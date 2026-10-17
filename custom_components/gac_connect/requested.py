@@ -26,6 +26,7 @@ class GacRequestedEntity(GacEntity):
         super().__init__(coordinator, key)
         self._requested: Any = None
         self._requested_until: float = 0.0
+        self._baseline = None       # the report the request was made against
         self._op_lock = asyncio.Lock()  # one command at a time per entity
         # result events that answer this entity's commands; with none listed, results
         # can only be matched by session id, so a refusal may not clear the state
@@ -77,9 +78,18 @@ class GacRequestedEntity(GacEntity):
         else:
             self._arm_expiry()
 
+    def _newer_report(self) -> bool:
+        """A report taken after the request's baseline (an out-of-order older one confirms nothing)."""
+        data, base = self.status, self._baseline
+        if data is None or data is base:
+            return False
+        before = getattr(base, "updated_ms", None)
+        after = getattr(data, "updated_ms", None)
+        return before is None or after is None or after >= before
+
     def _handle_coordinator_update(self) -> None:
         if self._requested is not None and self._reports_value:
-            confirmed = self.status is not None and self._reported() == self._requested
+            confirmed = self._newer_report() and self._reported() == self._requested
             if confirmed or monotonic() > self._requested_until:
                 self._requested = None  # the car's report is authoritative again
                 self._cancel_expiry()
@@ -95,7 +105,7 @@ class GacRequestedEntity(GacEntity):
             self._cancel_expiry()
             self.async_write_ha_state()
 
-    async def _run(self, value: Any, make_request, *, command: str) -> None:
+    async def _run(self, value: Any, make_request, *, command: str, expected=None) -> None:
         """Show the requested value at once; undo it if the request itself fails.
 
         Commands on one entity run one at a time (the request is only created
@@ -105,12 +115,13 @@ class GacRequestedEntity(GacEntity):
             prev = (self._requested, self._requested_until)
             previous_session = self._session_id
             self._requested, self._requested_until = value, monotonic() + self._hold_seconds()
+            self._baseline = self.status
             self._begin_command()
             self._arm_expiry()
             self.async_write_ha_state()
             resp = None
             try:
-                resp = await self._send(make_request(), command=command)
+                resp = await self._send(make_request(), command=command, expected=expected)
             finally:
                 if resp is None:
                     self._requested, self._requested_until = prev

@@ -30,7 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 try:
     from homeassistant.const import UnitOfDensity
-except ImportError:  # HA 2025.2 predates UnitOfDensity
+except ImportError:  # older releases (2025.3 among them) predate UnitOfDensity
     from homeassistant.const import CONCENTRATION_MICROGRAMS_PER_CUBIC_METER as PM25_UNIT
 else:
     PM25_UNIT = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER

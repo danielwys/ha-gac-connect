@@ -41,7 +41,7 @@ from .const import (
 )
 from .api import PushClient
 from .capabilities import CapabilityManager
-from .command_tracking import CommandTracker
+from .command_tracking import ChargingRequests, CommandTracker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -127,6 +127,7 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
         self._stretch_logged: int | None = None
         self.capabilities = CapabilityManager(hass, entry)
         self.commands = CommandTracker(self)
+        self.charging_requests = ChargingRequests()
         # Command results arrive on the service's push feed; each one triggers
         # an immediate status refresh so entities show what the car actually did.
         self.push = PushClient(client.mqtt_info, self._on_command_result, decrypt=client.decrypt_push,

@@ -13,7 +13,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from ._vendor.gac_connect.errors import GacError
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.util import slugify
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .charge_now import ChargeNow
@@ -99,10 +100,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _rename_default_id(hass: HomeAssistant, entry: ConfigEntry, key: str, old: str, new: str) -> None:
-    """Give a switch whose default entity ID ends in ``old`` the ending ``new``, unless that ID is taken."""
+    """Give a switch that still has its default entity ID (the vehicle device's name and the old
+    ending ``old``) the ending ``new``, unless that ID is taken. Any other ID is the owner's
+    choice and is left alone, even one that ends the same way."""
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id("switch", DOMAIN, f"{entry.data[CONF_VIN]}_{key}")
-    if entity_id and entity_id.endswith(old):
+    if not entity_id:
+        return
+    device = dr.async_get(hass).async_get(registry.async_get(entity_id).device_id or "")
+    names = (device.name, device.name_by_user) if device is not None else ()
+    defaults = {f"switch.{slugify(name)}{old}" for name in names if name}
+    if entity_id in defaults:
         renamed = entity_id.removesuffix(old) + new
         if registry.async_get(renamed) is None:
             registry.async_update_entity(entity_id, new_entity_id=renamed)

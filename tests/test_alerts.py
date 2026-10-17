@@ -238,3 +238,47 @@ def test_alerts_from_one_report_are_each_recorded(tmp_path):
                 entity._handle_coordinator_update()
             assert written[:2] == ["left_unlocked", "window_left_open"]
     asyncio.run(run())
+
+
+def test_an_unload_during_a_read_publishes_and_saves_nothing(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, options={CONF_ALLOW_ACCOUNT_ALERTS: True}) as (hass, entry, c):
+            alerts, fired = alerts_for(hass, entry, c, [OLD])
+            await alerts.async_setup()
+            await alerts.async_read()                            # history
+            gate, started = asyncio.Event(), asyncio.Event()
+
+            async def slow(vin, **kwargs):
+                started.set()
+                await gate.wait()
+                return {"list": [NEW, OLD]}
+            c.client.get_alarms = AsyncMock(side_effect=slow)
+            alerts._store.async_save = AsyncMock()
+            alerts._scheduled()
+            await started.wait()
+            alerts.async_close()                                 # the entry unloads mid-read
+            gate.set()
+            await asyncio.sleep(0)
+            assert alerts._task.cancelled() or alerts._task.done()
+            assert fired == [] and not alerts._store.async_save.called
+            alerts._scheduled()                                  # a late timer starts nothing
+            assert alerts._task.done()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("page", [{"list": 42}, {"list": [dict(NEW, alarmContent=json.dumps(
+    {"alarmStatus": [{"alarmSource": 210, "alarms": [{"alarmObject": 0, "alarmReason": 6, "signals": 42}]}]}))]}, 7])
+def test_a_malformed_alert_page_is_a_failed_read(tmp_path, page):
+    async def run():
+        async with vehicle(tmp_path, options={CONF_ALLOW_ACCOUNT_ALERTS: True}) as (hass, entry, c):
+            alerts, _ = alerts_for(hass, entry, c, [OLD], page)
+            await alerts.async_setup()
+            await alerts.async_read()
+            read_at = alerts.last_read
+            await alerts.async_read()
+            if isinstance(page, dict) and isinstance(page["list"], list):
+                assert alerts.state == "ok"                      # a bad signals field is just left out
+            else:
+                assert alerts.state == "error" and alerts.last_read == read_at and alerts.last_error
+            alerts.async_close()
+    asyncio.run(run())

@@ -286,3 +286,57 @@ def test_refused_cabin_start_restores_off_and_explains(tmp_path):
                 await cabin.async_set_power(True)
             assert cabin.on is False and cabin._req is None
     asyncio.run(run())
+
+
+def _seat(level, updated):
+    return decode_status({"seatTemperatureAccessors": [
+        {"seat": 1, "enableWind": 1, "windStrength": level, "temperatureMode": 3 if level else 0}]},
+        updated_ms=updated)
+
+
+def test_a_seat_level_is_confirmed_only_by_that_level(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.data = _seat(0, 100)
+            await async_send(c, "seat-1-ventilation-on", AsyncMock(return_value=ACCEPTED)(),
+                             expected={"seat_1_ventilation_level": 3})
+            c.commands.observe(_seat(1, 101))            # running, but at Low
+            assert c.commands.state == "pending"
+            c.commands.observe(_seat(3, 102))
+            assert c.commands.state == "confirmed"
+    asyncio.run(run())
+
+
+def test_the_cars_refusal_outranks_a_report_that_matched(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.data = replace(decode_status({}), steering_heat_on=False, updated_ms=100)
+            await async_send(c, "steering-on", AsyncMock(return_value=ACCEPTED)())
+            c.commands.observe(replace(c.data, steering_heat_on=True, updated_ms=101))
+            assert c.commands.state == "confirmed"
+            refusal = PushResult(False, "13005", "conditions not met", {}, session_id="s1", vin="VIN")
+            assert c.commands.result(refusal)
+            assert c.commands.state == "rejected"
+    asyncio.run(run())
+
+
+def test_an_older_report_does_not_settle_a_requested_level(tmp_path):
+    from unittest.mock import Mock
+
+    from custom_components.gac_connect.select import GacSeatVentilationSelect
+
+    async def run():
+        async with vehicle(tmp_path) as (hass, _, c):
+            c.data = _seat(0, 2000)
+            c.client.set_seat_ventilation_level = AsyncMock(return_value=ACCEPTED)
+            select = GacSeatVentilationSelect(c, 1)
+            select.hass, select.async_write_ha_state = hass, Mock()
+            with patch("custom_components.gac_connect.requested.async_call_later", lambda *a: Mock()):
+                await select.async_select_option("high")
+                c.data = _seat(3, 1000)                  # matching, but older than the request's report
+                select._handle_coordinator_update()
+                assert select._requested == "high"
+                c.data = _seat(3, 2001)
+                select._handle_coordinator_update()
+                assert select._requested is None and select.current_option == "high"
+    asyncio.run(run())

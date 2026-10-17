@@ -94,9 +94,9 @@ class GacEntity(CoordinatorEntity[GacCoordinator]):
     def status(self):
         return self.coordinator.data
 
-    async def _send(self, coro: Awaitable[Any], *, command: str | None = None) -> Any:
+    async def _send(self, coro: Awaitable[Any], *, command: str | None = None, expected=None) -> Any:
         """Run a vehicle command, surfacing library errors as HA errors."""
         try:
-            return await async_send(self.coordinator, command, coro) if command else await coro
+            return await async_send(self.coordinator, command, coro, expected=expected) if command else await coro
         except GacError as err:
             raise HomeAssistantError(str(err)) from err

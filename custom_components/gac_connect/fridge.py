@@ -69,6 +69,7 @@ class _Request:
     temp: float | None
     deadline: float                      # monotonic time after which the car's report wins
     session_id: str | None = None
+    baseline_ms: int | None = None       # the report's time when asked; older reports confirm nothing
     # preferences to restore if the car refuses: (previous mode, previous temperature of `option`)
     undo: tuple[str, float | None] | None = None
 
@@ -194,7 +195,9 @@ class FridgeController:
         self._seen = data
         mode, t = getattr(data, "fridge_mode", None), getattr(data, "fridge_temp_c", None)
         req = self._req
-        if req is not None and mode == req.option and (
+        reported_ms = getattr(data, "updated_ms", None)
+        fresh = req is None or req.baseline_ms is None or reported_ms is None or reported_ms >= req.baseline_ms
+        if req is not None and fresh and mode == req.option and (
             mode == "off" or req.temp is None or t == req.temp
         ):
             self._clear_pending()
@@ -329,7 +332,8 @@ class FridgeController:
         """Show ``option`` at once and send it; restore the previous request if sending fails. Lock held."""
         client, vin = self.coordinator.client, self.coordinator.vin
         prev = self._req
-        req = _Request(option, temp, deadline=monotonic() + REQUEST_SECONDS)
+        req = _Request(option, temp, deadline=monotonic() + REQUEST_SECONDS,
+                       baseline_ms=getattr(self.coordinator.data, "updated_ms", None))
         self._req = req
         self._arm_expiry()
         self._awaiting_accept, self._held = True, []

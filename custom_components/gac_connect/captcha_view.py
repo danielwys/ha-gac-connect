@@ -85,13 +85,15 @@ class GacCaptchaView(HomeAssistantView):
             return web.json_response({"ok": False}, status=404)
 
         session: PuzzleSession = state["session"]
-        state["verification_task"] = asyncio.current_task()
+        if session.busy:     # another Verify is being checked; it alone owns the cancellable task
+            return web.json_response({"ok": False, "busy": True}, status=409)
+        task = state["verification_task"] = asyncio.current_task()
         try:
             result = await session.submit(x)
         finally:
-            state.pop("verification_task", None)
-        if result.get("busy"):
-            return web.json_response(result, status=409)
-        if result.get("verified"):     # the SMS has just been sent: on to the code
+            if state.get("verification_task") is task:
+                state.pop("verification_task", None)
+        if result.get("verified") and active_flow_state(hass, flow_id) is state:
+            # the SMS has just been sent, and the sign-in is still open: on to the code
             hass.async_create_task(hass.config_entries.flow.async_configure(flow_id=flow_id, user_input={}))
         return web.json_response(result)

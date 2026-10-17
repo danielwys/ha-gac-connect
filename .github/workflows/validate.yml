@@ -14,12 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The oldest supported release (energy-distance sensors need 2025.3) and the latest.
           - python: "3.13"
-            ha: "2025.2.0"
+            ha: "2025.3.0"
           - python: "3.14"
-            ha: "2026.6.2"
-          - python: "3.14"
-            ha: "2026.10.0"
+            ha: "2026.10.2"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,8 +36,15 @@ jobs:
           manifest = json.loads(Path('custom_components/gac_connect/manifest.json').read_text())
           subprocess.check_call([sys.executable, '-m', 'pip', 'install', *manifest['requirements']])
           PY
-      - name: Verify bundled source provenance
+      - name: Verify the bundled files match their recorded hashes
         run: python tools/vendor_library.py --check
+      - name: Fetch the library commit the bundle names
+        run: |
+          read -r source commit < <(python -c "import json; p = json.load(open('custom_components/gac_connect/_vendor/provenance.json')); print(p['source'], p['commit'])")
+          git init -q "$RUNNER_TEMP/gac-connect"
+          git -C "$RUNNER_TEMP/gac-connect" fetch -q --depth 1 "$source" "$commit"
+      - name: Verify the bundle is exactly that library commit
+        run: python tools/vendor_library.py --check --source "$RUNNER_TEMP/gac-connect"
       - name: Test the shipped library and integration together
         run: python -m pytest -q
       - name: Static checks
