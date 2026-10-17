@@ -17,6 +17,7 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergyDistance,
     UnitOfLength,
     UnitOfPower,
     UnitOfPressure,
@@ -109,6 +110,10 @@ SENSORS: tuple[GacSensor, ...] = (
     GacSensor(key="battery_temp", translation_key="battery_temp", device_class=SensorDeviceClass.TEMPERATURE,
               native_unit_of_measurement=UnitOfTemperature.CELSIUS,
               state_class=SensorStateClass.MEASUREMENT, value=lambda s: getattr(s, "battery_temp_c", None)),
+    # The average of the drive under way, else the last one (the screen's Trip, within a few tenths).
+    GacSensor(key="trip_consumption", translation_key="trip_consumption", device_class=SensorDeviceClass.ENERGY_DISTANCE,
+              native_unit_of_measurement=UnitOfEnergyDistance.KILO_WATT_HOUR_PER_100_KM, suggested_display_precision=1,
+              state_class=SensorStateClass.MEASUREMENT, value=lambda s: getattr(s, "trip_consumption_kwh_100km", None)),
     GacSensor(key="charge_time", translation_key="charge_time", device_class=SensorDeviceClass.DURATION,
               native_unit_of_measurement=UnitOfTime.MINUTES,
               value=lambda s: s.estimated_charge_minutes),

@@ -27,7 +27,8 @@ _LOGGER = logging.getLogger(__name__)
 ENTITY_FEATURES = {
     "sensor:charge_schedule": "charge_control",
     "sensor:soc": "soc", "sensor:range": "range_km", "sensor:odometer": "odometer_km",
-    "sensor:cabin_temp": "cabin_temp_c", "sensor:aux_voltage": "aux_voltage", "sensor:battery_temp": "battery_temp_c", "sensor:pm25": "pm25",
+    "sensor:cabin_temp": "cabin_temp_c", "sensor:aux_voltage": "aux_voltage", "sensor:battery_temp": "battery_temp_c",
+    "sensor:trip_consumption": "trip_consumption_kwh_100km", "sensor:pm25": "pm25",
     "sensor:outside_temp": "outside_temp_c", "sensor:ac_fan_strength": "ac_fan_strength",
     "sensor:gps_coordinates": "location",
     "sensor:charge_time": "estimated_charge_minutes", "sensor:charge_current": "charge_current_a",
@@ -44,6 +45,7 @@ ENTITY_FEATURES = {
     **{f"binary_sensor:{position}_{kind}": f"{position}_{kind}_open"
        for position in ("front_left", "front_right", "rear_left", "rear_right") for kind in ("door", "window")},
     "binary_sensor:high_beam": "high_beam_on", "binary_sensor:rear_fog_light": "rear_fog_on",
+    "binary_sensor:brake_lights": "brake_lights_on",
     "binary_sensor:turn_signal": "turn_signal_on",
     "binary_sensor:online": "online", "binary_sensor:charger_locked": "charger_locked",
     "binary_sensor:vehicle_power": "power_on",

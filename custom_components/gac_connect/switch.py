@@ -44,11 +44,19 @@ class GacSwitch(SwitchEntityDescription):
     # can only be matched by session id, so a refusal may not clear the state
     events: tuple[str, ...] = ()
     attributes: Callable[[VehicleStatus], dict[str, Any]] | None = None
-    # Without a reported state, how long a request shows before the switch returns to unknown.
+    # Without a reported state, how long a request shows before the switch shows idle_state.
     hold_seconds: float = REQUEST_SECONDS
+    # Without a reported state, what the switch shows with no request (None = unknown).
+    idle_state: bool | None = None
 
 
 PRECONDITION_MODES = {0: "Off", 1: "Immediately", 2: "Once", 3: "Repeating"}
+
+
+def _all_windows_open(status: VehicleStatus) -> bool | None:
+    windows = [getattr(status, f"{position}_window_open", None)
+               for position in ("front_left", "front_right", "rear_left", "rear_right")]
+    return None if None in windows else all(windows)
 
 
 SWITCHES: tuple[GacSwitch, ...] = (
@@ -77,8 +85,10 @@ SWITCHES: tuple[GacSwitch, ...] = (
         on_cmd="ventilate-on",
         off_cmd="ventilate-off",
         events=("control_ventilate_mode",),
-        # The app: windows drop 2–3 cm and fresh-air circulation runs; the mode lasts 5 minutes.
-        hold_seconds=5 * 60,
+        # The app: windows drop 2–3 cm and fresh-air circulation runs. The mode is not reported, and
+        # the windows stayed down past the app's 5 minutes (Aion UT, 2026-10-17): on while every
+        # window reports open (as ventilation leaves them), also when started in the app.
+        state=lambda s: _all_windows_open(s),
     ),
     GacSwitch(
         key="precondition_battery",
@@ -161,7 +171,8 @@ class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
     def __init__(self, coordinator: GacCoordinator, description: GacSwitch) -> None:
         super().__init__(coordinator, description.key, description.events)
         self.entity_description = description
-        self._attr_assumed_state = description.state is None
+        # A switch with an idle state shows a toggle; otherwise HA offers separate on and off buttons.
+        self._attr_assumed_state = description.state is None and description.idle_state is None
 
     @property
     def _reports_value(self) -> bool:
@@ -169,7 +180,7 @@ class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
 
     def _reported(self) -> bool | None:
         state = self.entity_description.state
-        return state(self.status) if state is not None else None
+        return state(self.status) if state is not None else self.entity_description.idle_state
 
     def _hold_seconds(self) -> float:
         return self.entity_description.hold_seconds

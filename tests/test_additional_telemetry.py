@@ -190,31 +190,35 @@ def test_older_status_does_not_remove_climate_or_crash_the_charging_panel(tmp_pa
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("minutes", [None, 10, 60])
-def test_ventilation_without_telemetry_returns_to_unknown_after_its_five_minutes(monkeypatch, minutes):
-    # The app: ventilation mode lasts 5 minutes, whatever the A/C run time.
+def _windows(*open_positions, updated=1):
+    return decode_status({"windowAccessors": [{"window": n, "openMode": int(n in open_positions)} for n in (1, 2, 3, 4)]},
+                         updated_ms=updated)
+
+
+def test_ventilation_is_on_while_every_window_reports_open(monkeypatch):
+    # Aion UT, 2026-10-17: ventilation left all four windows reporting open, past the app's 5 minutes.
     from unittest.mock import AsyncMock, Mock
 
-    from custom_components.gac_connect.const import CONF_AC_MINUTES
+    monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later", lambda *args: Mock())
+
     from custom_components.gac_connect.switch import SWITCHES, GacCommandSwitch
     from test_regressions import ACCEPTED, coord
 
-    expected = 300
-    timers = []
-    monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later",
-                        lambda hass, delay, action: timers.append((delay, action)) or Mock())
-    c = coord(None)
-    if minutes is not None:
-        c.config_entry.options[CONF_AC_MINUTES] = minutes
+    c = coord(_windows())
     c.client.command = AsyncMock(return_value=ACCEPTED)
     sw = GacCommandSwitch(c, next(d for d in SWITCHES if d.key == "ventilation"))
     sw.hass, sw.async_write_ha_state = Mock(), Mock()
+    assert sw.assumed_state is False and sw.is_on is False
     asyncio.run(sw.async_turn_on())
-    assert sw.assumed_state is True and sw.is_on is True
-    delay, expire = timers[-1]
-    assert expected - 5 <= delay <= expected
-    monkeypatch.setattr("custom_components.gac_connect.requested.monotonic", lambda: float("inf"))
-    expire(None)
+    assert sw.is_on is True                                  # requested, until the report shows it
+    c.data = _windows(1, 2, 3, 4, updated=2)
+    sw._handle_coordinator_update()
+    assert sw._requested is None and sw.is_on is True        # confirmed by the windows
+    c.data = _windows(3, updated=3)                          # one window open by hand is not ventilation
+    sw._handle_coordinator_update()
+    assert sw.is_on is False
+    c.data = decode_status({}, updated_ms=4)
+    sw._handle_coordinator_update()
     assert sw.is_on is None
 
 

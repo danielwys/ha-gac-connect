@@ -25,7 +25,8 @@ from .seats import reported_seat, ventilation_state
 
 POSITIONS = ("front_left", "front_right", "rear_left", "rear_right")
 # Turn indicators covers the hazard lights too: the car reports them the same way.
-LIGHT_SENSORS = {"high_beam": "high_beam_on", "rear_fog_light": "rear_fog_on", "turn_signal": "turn_signal_on"}
+LIGHT_SENSORS = {"high_beam": "high_beam_on", "rear_fog_light": "rear_fog_on", "turn_signal": "turn_signal_on",
+                 "brake_lights": "brake_lights_on"}
 
 
 @dataclass(frozen=True, kw_only=True)

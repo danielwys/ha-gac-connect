@@ -177,6 +177,9 @@
       "battery_temp": {
         "name": "Battery temperature"
       },
+      "trip_consumption": {
+        "name": "Trip consumption"
+      },
       "last_gac_alert": {
         "name": "Last GAC alert",
         "state": {
@@ -409,6 +412,13 @@
       },
       "rear_fog_light": {
         "name": "Rear fog light",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "brake_lights": {
+        "name": "Brake lights",
         "state": {
           "on": "On",
           "off": "Off"

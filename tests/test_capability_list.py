@@ -388,8 +388,8 @@ def test_each_door_window_and_light_has_its_own_sensor(tmp_path):
     assert [k for k in ("front_left_door", "front_right_door", "rear_left_door", "rear_right_door")
             if sensors[k].is_on] == ["front_right_door"]
     assert sensors["front_right_window"].is_on is True and sensors["rear_left_window"].is_on is False
-    assert (sensors["high_beam"].is_on, sensors["rear_fog_light"].is_on, sensors["turn_signal"].is_on) == (
-        True, False, False)
+    assert (sensors["high_beam"].is_on, sensors["rear_fog_light"].is_on, sensors["turn_signal"].is_on,
+            sensors["brake_lights"].is_on) == (True, False, False, False)
 
     async def run():
         async with vehicle(tmp_path) as (_, _, c):

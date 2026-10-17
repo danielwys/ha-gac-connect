@@ -15,6 +15,7 @@ DETAILS: dict[str, str] = {
     "sensor:charge_schedule": "scheduled or whenever plugged in",
     "sensor:soc": "%", "sensor:range": "km", "sensor:odometer": "km",
     "sensor:cabin_temp": "°C", "sensor:outside_temp": "°C", "sensor:aux_voltage": "V", "sensor:battery_temp": "°C",
+    "sensor:trip_consumption": "kWh/100 km",
     "sensor:ac_fan_strength": "0–10", "sensor:gps_coordinates": "latitude, longitude",
     "sensor:charge_time": "minutes", "sensor:charge_current": "A", "sensor:charge_power": "kW",
     "sensor:charge_voltage": "V", "sensor:pm25": "µg/m³", "sensor:last_report": "time",
@@ -28,7 +29,7 @@ DETAILS: dict[str, str] = {
     "binary_sensor:hatch_open": "open/closed", "binary_sensor:hood_open": "open/closed", "binary_sensor:headlights": "on/off",
     **{f"binary_sensor:{position}_{kind}": "open/closed"
        for position in ("front_left", "front_right", "rear_left", "rear_right") for kind in ("door", "window")},
-    **{f"binary_sensor:{key}": "on/off" for key in ("high_beam", "rear_fog_light", "turn_signal")},
+    **{f"binary_sensor:{key}": "on/off" for key in ("high_beam", "rear_fog_light", "turn_signal", "brake_lights")},
     "binary_sensor:brake_fluid": "normal/low", "binary_sensor:online": "connected/disconnected",
     "binary_sensor:charger_locked": "locked/unlocked", "binary_sensor:ac_auto": "on/off",
     "binary_sensor:ac_compressor": "on/off", "binary_sensor:anti_theft": "armed/disarmed",

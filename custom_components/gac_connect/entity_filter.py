@@ -16,6 +16,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
         "charge_schedule": "Charging schedule",
         "soc": "Battery", "range": "Range", "odometer": "Odometer",
         "cabin_temp": "Cabin temperature", "aux_voltage": "12V battery", "battery_temp": "Battery temperature",
+        "trip_consumption": "Trip consumption",
         "outside_temp": "Outside temperature", "ac_fan_strength": "Cabin fan strength",
         "gps_coordinates": "GPS coordinates",
         "charge_time": "Estimated charge time", "charge_current": "Charge current",
@@ -35,6 +36,7 @@ ENTITY_CHOICES: dict[str, dict[str, str]] = {
             ("front_left", "Front left"), ("front_right", "Front right"), ("rear_left", "Rear left"),
             ("rear_right", "Rear right")) for kind in ("door", "window")},
         "high_beam": "High beams", "rear_fog_light": "Rear fog light", "turn_signal": "Turn indicators",
+        "brake_lights": "Brake lights",
         "hatch_open": "Boot state", "hood_open": "Hood state", "headlights": "Headlights", "brake_fluid": "Brake fluid", "online": "Online", "charger_locked": "Charger lock",
         "ac_auto": "A/C auto mode", "ac_compressor": "A/C compressor", "anti_theft": "Anti-theft enabled",
         **{f"seat_{i}_ventilation": f"{name} seat ventilation state" for i, name in
