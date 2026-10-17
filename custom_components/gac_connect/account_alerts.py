@@ -17,7 +17,7 @@ from homeassistant.helpers.event import async_call_later, async_track_time_inter
 from homeassistant.helpers.storage import Store
 
 from ._vendor.gac_connect.alerts import Alert, parse_alerts
-from ._vendor.gac_connect.errors import AccountSessionEnded, GacError
+from ._vendor.gac_connect.errors import AccountSessionEnded, GacError, ResponseError
 from .const import CONF_ALLOW_ACCOUNT_ALERTS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ class AccountAlerts:
         self._store = Store(hass, 1, store_key(entry.entry_id))
         self._unsub: list[Callable[[], None]] = []
         self._task: asyncio.Task | None = None      # the read in progress, cancelled on unload
+        self._saving: asyncio.Future | None = None  # the history write in progress, finished before removal
         self._closed = False
 
     async def async_setup(self) -> None:
@@ -70,9 +71,15 @@ class AccountAlerts:
         self._unsub.append(async_track_time_interval(self.hass, self._scheduled, READ_INTERVAL))
         self.entry.async_on_unload(self.async_close)
 
+    async def async_drain(self) -> None:
+        """Wait for a history write already under way, so an entry removal deletes the final file."""
+        if self._saving is not None and not self._saving.done():
+            await asyncio.wait({self._saving})
+
     @callback
     def async_close(self) -> None:
-        """Stop reading: no timers, and a read in progress publishes and saves nothing more."""
+        """Stop reading: no timers, and a read in progress publishes and starts no save. A save
+        already under way finishes (``async_drain``)."""
         self._closed = True
         for unsub in self._unsub:
             unsub()
@@ -93,7 +100,10 @@ class AccountAlerts:
         vin = self.coordinator.vin
         try:
             page = await self.coordinator.client.get_alarms(vin)
-            alerts = parse_alerts(page)       # a malformed page is a failed read, not an empty one
+            try:
+                alerts = parse_alerts(page)   # a malformed page is a failed read, not an empty one
+            except (TypeError, ValueError, AttributeError, KeyError) as err:
+                raise ResponseError(f"the alert list could not be read ({type(err).__name__})") from err
         except AccountSessionEnded as err:
             self.last_read = datetime.now(UTC)
             self.last_error = str(err)[:200]
@@ -124,7 +134,10 @@ class AccountAlerts:
         known = set(self._seen)
         self._seen.extend(alert.alert_id for alert in reversed(alerts) if alert.alert_id not in known)
         self._seen = self._seen[-SEEN_LIMIT:]
-        await self._store.async_save({"seen": self._seen})
+        if self._closed:
+            return
+        self._saving = asyncio.ensure_future(self._store.async_save({"seen": list(self._seen)}))
+        await asyncio.shield(self._saving)
         if self._closed:
             return
         self.latest = alerts[0] if alerts else self.latest

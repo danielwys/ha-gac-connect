@@ -62,3 +62,22 @@ def test_corrupt_private_store_does_not_fall_back_to_spent_legacy_token(tmp_path
             await ConfigEntryStore(hass, entry).load()
         assert entry.data["session"]["token"] == "spent"
     asyncio.run(run())
+
+
+def test_a_refresh_saves_only_over_the_credentials_it_started_from(tmp_path):
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        entry = make_entry(hass, {"vin": "VIN"})
+        hass.config_entries._store = Mock()
+        store, sign_in = ConfigEntryStore(hass, entry), ConfigEntryStore(hass, entry)
+        await store.save(Session(token="old", refresh_token="refresh"))
+        await sign_in.save(Session(token="fresh", refresh_token="fresh-refresh"))   # a Reconfigure
+        current = await store.replace(("old", "refresh"), Session(token="rotated", refresh_token="next"))
+        assert (current.token, (await store.load()).token) == ("fresh", "fresh")    # kept, and handed back
+        assert await store.replace(("fresh", "fresh-refresh"), Session(token="t2", refresh_token="r2")) is None
+        assert (await store.load()).token == "t2"
+        session_path(hass, entry.entry_id).write_text("{corrupt")
+        assert await store.replace(("t2", "r2"), Session(token="t3", refresh_token="r3")) is None
+        assert (await store.load()).token == "t3"      # unreadable: the rotated pair is the usable one
+        assert store._lock is sign_in._lock          # one lock per credentials file
+    asyncio.run(run())

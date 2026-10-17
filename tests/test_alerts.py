@@ -282,3 +282,29 @@ def test_a_malformed_alert_page_is_a_failed_read(tmp_path, page):
                 assert alerts.state == "error" and alerts.last_read == read_at and alerts.last_error
             alerts.async_close()
     asyncio.run(run())
+
+
+def test_a_history_write_under_way_finishes_before_removal_deletes_it(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, options={CONF_ALLOW_ACCOUNT_ALERTS: True}) as (hass, entry, c):
+            alerts, _ = alerts_for(hass, entry, c, [OLD], [NEW, OLD])
+            await alerts.async_setup()
+            await alerts.async_read()
+            writing, release, events = asyncio.Event(), asyncio.Event(), []
+
+            async def slow_save(data):
+                writing.set()
+                await release.wait()             # the write is under way
+                events.append("written")
+            alerts._store.async_save = slow_save
+            alerts._scheduled()
+            await writing.wait()
+            alerts.async_close()                 # the entry unloads mid-write
+            drained = asyncio.create_task(alerts.async_drain())
+            await asyncio.sleep(0.01)
+            assert not drained.done()            # unload, and so removal, waits for the write
+            release.set()
+            await drained
+            events.append("removal may delete it now")
+            assert events == ["written", "removal may delete it now"]
+    asyncio.run(run())

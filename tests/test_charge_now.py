@@ -176,3 +176,82 @@ def test_a_newer_schedule_cannot_overtake_a_switch_off_already_on_its_way(tmp_pa
                 await asyncio.wait_for(helper._task, 1)
             assert order == ["schedule off", "newer window"]   # the newer choice is the one left in place
     asyncio.run(run())
+
+
+def _window(c):
+    return async_send(c, "charge-window", c.client.set_charge_window("VIN", "23:00", "05:00", weekly=127,
+                                                                      until_soc=False))
+
+
+def test_a_schedule_made_while_the_restart_is_being_accepted_is_kept(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            helper = prepared(entry, c, report(4, 0))
+            entry.async_on_unload(c.async_add_listener(lambda: helper.observe(c.data)))
+            order, gate = [], asyncio.Event()
+
+            async def slow_restart(vin):
+                order.append("restart")
+                await gate.wait()
+                return ACCEPTED
+            c.client.restart_charging.side_effect = slow_restart
+            c.client.set_charge_window = AsyncMock(side_effect=lambda *a, **k: order.append("window") or ACCEPTED)
+            c.client.charge_now.side_effect = lambda *a, **k: order.append("schedule off") or ACCEPTED
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", ()), \
+                    patch("custom_components.gac_connect.charge_now.RESTART_READS", (0.05, 5)):
+                press = asyncio.create_task(async_send(c, "charge-now", charge_now_request(c)))
+                await asyncio.sleep(0.01)                        # the restart is out, awaiting acceptance
+                newer = asyncio.create_task(_window(c))
+                await asyncio.sleep(0.01)
+                gate.set()
+                await asyncio.gather(press, newer)
+                c.async_set_updated_data(report(2, 1))
+                await asyncio.wait_for(helper._task, 1)
+            assert order == ["restart", "window"]
+    asyncio.run(run())
+
+
+def test_a_schedule_queued_after_charge_now_behind_another_request_is_kept(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            helper = prepared(entry, c, report(4, 0))
+            entry.async_on_unload(c.async_add_listener(lambda: helper.observe(c.data)))
+            gate, order = asyncio.Event(), []
+
+            async def slow_resume(vin):
+                await gate.wait()
+                return ACCEPTED
+            c.client.resume_schedule = AsyncMock(side_effect=slow_resume)
+            c.client.restart_charging.side_effect = lambda vin: order.append("restart") or ACCEPTED
+            c.client.set_charge_window = AsyncMock(side_effect=lambda *a, **k: order.append("window") or ACCEPTED)
+            c.client.charge_now.side_effect = lambda *a, **k: order.append("schedule off") or ACCEPTED
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", ()), \
+                    patch("custom_components.gac_connect.charge_now.RESTART_READS", (0.05, 5)):
+                earlier = asyncio.create_task(async_send(c, "charge-resume", c.client.resume_schedule("VIN")))
+                await asyncio.sleep(0.01)
+                press = asyncio.create_task(async_send(c, "charge-now", charge_now_request(c)))
+                newer = asyncio.create_task(_window(c))
+                await asyncio.sleep(0.01)
+                gate.set()
+                await asyncio.gather(earlier, press, newer)
+                c.async_set_updated_data(report(2, 1))
+                if helper._task is not None:
+                    await asyncio.wait_for(helper._task, 1)
+            assert "schedule off" not in order and order[-1] == "window"
+    asyncio.run(run())
+
+
+def test_charge_now_again_with_another_stopping_rule_is_the_one_followed(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, c):
+            helper = prepared(entry, c, report(4, 0))
+            entry.async_on_unload(c.async_add_listener(lambda: helper.observe(c.data)))
+            with patch("custom_components.gac_connect.command_tracking.POLL_DELAYS", ()), \
+                    patch("custom_components.gac_connect.charge_now.RESTART_READS", (0.05, 5)):
+                await async_send(c, "charge-now", charge_now_request(c, until_soc=False))
+                await async_send(c, "charge-now", charge_now_request(c, until_soc=True))
+                c.async_set_updated_data(report(2, 1))
+                await asyncio.wait_for(helper._task, 1)
+            assert c.client.restart_charging.await_count == 1
+            c.client.charge_now.assert_awaited_once_with("VIN", until_soc=True)
+    asyncio.run(run())

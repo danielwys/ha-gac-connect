@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from inspect import iscoroutine
 from time import monotonic
@@ -17,7 +18,7 @@ from ._vendor.gac_connect import command_session_id
 from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
 from ._vendor.gac_connect.commands import refusal_hint
 from ._vendor.gac_connect.models import ChargingMode
-from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError
+from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError, result_reason
 from .api import doors_locked
 from .charging import CHARGE_COMMANDS
 from .const import (
@@ -113,7 +114,11 @@ class CommandTracker:
             "pending_commands": [record.command for record in self.pending],
             "failure_reason": last.failure_reason if last else None,
             "response_code": last.response_code if last else None,
-            # No VINs, session identifiers, command parameters or API messages.
+            # A refusal's meaning (the library's table for its code) and the causes the car
+            # reported: short signal labels such as "Driver door ajar", at most four.
+            "refusal_reason": (result_reason(last.response_code) or None) if last and last.response_code else None,
+            "reported_causes": [str(cause)[:80] for cause in (last.refusal_details or ())][:4] if last else [],
+            # No VINs, session identifiers, command parameters or free-form API messages.
             "recent_commands": [{"command": r.command, "state": r.state,
                                  "failure_reason": r.failure_reason, "response_code": r.response_code,
                                  "requested_at": r.requested_at.isoformat()} for r in list(self.records)[-5:]],
@@ -303,14 +308,25 @@ class CommandTracker:
 class ChargingRequests:
     """Charging requests leave one at a time, in the order they were made.
 
-    Each new charging choice moves the generation on; an automatic follow-up (Charge now
-    switching the schedule off) is sent only if no newer choice has been made by the time
-    it holds the lock, so it can never overwrite one.
+    Each charging choice takes the next generation number as it is made, before it waits
+    its turn; the request reads its own number with ``charging_generation()``. An automatic
+    follow-up (Charge now switching the schedule off) carries the number of the choice it
+    belongs to and is sent only while that is still the latest, so a newer choice, even one
+    made while the first was being sent, is never overwritten.
     """
 
     def __init__(self) -> None:
         self.lock = asyncio.Lock()
         self.generation = 0
+        self.latest: str | None = None      # the command of the latest choice
+
+
+_GENERATION: ContextVar[int | None] = ContextVar("gac_connect_charging_generation", default=None)
+
+
+def charging_generation() -> int | None:
+    """The generation number of the charging request being sent, from inside that request."""
+    return _GENERATION.get()
 
 
 def charging_requests(coordinator) -> ChargingRequests:
@@ -346,12 +362,18 @@ async def async_send(coordinator, command: str, request, *, expected=None, still
     charging = charging_requests(coordinator)
     if still_wanted is None:
         charging.generation += 1         # a new choice: older automatic follow-ups yield to it
+        charging.latest = command
+    mine = charging.generation
     async with charging.lock:
         if still_wanted is not None and not still_wanted():
             if iscoroutine(request):
                 request.close()
             return None
-        return await _dispatch(coordinator, command, request, expected)
+        token = _GENERATION.set(mine)
+        try:
+            return await _dispatch(coordinator, command, request, expected)
+        finally:
+            _GENERATION.reset(token)
 
 
 async def _dispatch(coordinator, command: str, request, expected):

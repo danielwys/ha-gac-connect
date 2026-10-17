@@ -340,3 +340,17 @@ def test_an_older_report_does_not_settle_a_requested_level(tmp_path):
                 select._handle_coordinator_update()
                 assert select._requested is None and select.current_option == "high"
     asyncio.run(run())
+
+
+
+def test_last_command_shows_the_cars_reported_causes_of_a_refusal(tmp_path):
+    async def run():
+        async with vehicle(tmp_path) as (_, _, c):
+            c.data = replace(decode_status({}), updated_ms=100)
+            await async_send(c, "lock", AsyncMock(return_value=ACCEPTED)())
+            refusal = PushResult(False, "13005", None, {}, session_id="s1", vin="VIN", details=("Driver door ajar",))
+            assert c.commands.result(refusal)
+            attributes = c.commands.attributes()
+            assert attributes["reported_causes"] == ["Driver door ajar"] and attributes["refusal_reason"]
+            assert "VIN" not in json.dumps(attributes) and "s1" not in json.dumps(attributes)
+    asyncio.run(run())

@@ -92,18 +92,32 @@ def test_the_whole_entry_lifecycle(tmp_path):
             assert car.state is ConfigEntryState.NOT_LOADED
             assert all(s.state == "unavailable" for s in hass.states.async_all() if "aion_ut" in s.entity_id)
 
-        # A set-up that fails is retried later, and leaves nothing running.
+        # A set-up that fails is retried later.
         with offline(fake_client(load_error=GacError("credentials unreadable"))):
             await hass.config_entries.async_reload(car.entry_id)
             await hass.async_block_till_done()
             assert car.state is ConfigEntryState.SETUP_RETRY
 
+        # Every file the entry owns exists before removal and is gone after it.
+        from homeassistant.helpers.storage import Store
+
+        from custom_components.gac_connect.account_alerts import store_key as alerts_key
+        from custom_components.gac_connect.capabilities import store_key as capabilities_key
+        from custom_components.gac_connect.fridge import store_key as fridge_key
+        from custom_components.gac_connect.session_store import session_path
+
+        owned = [tmp_path / ".storage" / key(car.entry_id) for key in (alerts_key, capabilities_key, fridge_key)]
+        for path in owned:
+            await Store(hass, 1, path.name).async_save({"seeded": True})
+        credentials = session_path(hass, car.entry_id)
+        credentials.write_text('{"version": 1, "data": {}}')
+        owned.append(credentials)
+        assert all(path.exists() for path in owned)
         with offline(client):
             await hass.config_entries.async_remove(car.entry_id)
             await hass.async_block_till_done()
-        assert not list((tmp_path / ".storage").glob("gac_connect.*VIN*"))
-        assert not list((tmp_path / ".storage").glob(f"gac_connect.session.{car.entry_id}"))
-        await hass.async_stop(force=True)
+        assert [path.name for path in owned if path.exists()] == []
+        await hass.async_stop()     # graceful: a forced stop abandons pending storage writes, which crashes Python 3.14 at exit
     asyncio.run(run())
 
 
@@ -126,7 +140,7 @@ def test_saved_request_limits_are_restored_once_and_a_corrupt_record_pauses(tmp_
             assert (DEFAULT_LIMITER._blocked_until > time.monotonic()) is paused
             assert DEFAULT_LIMITER.state_path is None and DEFAULT_LIMITER.on_change is not None
             DEFAULT_LIMITER._blocked_until = 0.0
-            await hass.async_stop(force=True)
+            await hass.async_stop()     # graceful: a forced stop abandons pending storage writes, which crashes Python 3.14 at exit
     asyncio.run(run())
 
 
@@ -154,5 +168,5 @@ def test_turning_moving_tracking_off_hides_the_position_at_once(tmp_path):
             tracker = hass.states.get(tracker.entity_id)
             assert tracker.attributes.get("latitude") is None
             assert await hass.config_entries.async_unload(car.entry_id)
-        await hass.async_stop(force=True)
+        await hass.async_stop()     # graceful: a forced stop abandons pending storage writes, which crashes Python 3.14 at exit
     asyncio.run(run())
