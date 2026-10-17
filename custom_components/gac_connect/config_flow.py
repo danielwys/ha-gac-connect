@@ -354,6 +354,7 @@ class GacOptionsFlow(OptionsFlow):
         return await self.async_step_charging()
 
     async def async_step_charge_now(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from .charge_now import charge_now_request
         from .command_tracking import async_send
 
         if (coordinator := self._loaded_coordinator()) is None:
@@ -361,7 +362,7 @@ class GacOptionsFlow(OptionsFlow):
         errors, refusal = {}, {"reason": ""}
         if user_input is not None:
             try:
-                await async_send(coordinator, "charge-now", coordinator.client.charge_now(coordinator.vin))
+                await async_send(coordinator, "charge-now", charge_now_request(coordinator))
             except CommandError as err:   # the gateway refused it; its reason says why
                 _LOGGER.warning("Charge now request failed: %s", err)
                 errors["base"], refusal["reason"] = "command_refused", str(err)
@@ -377,6 +378,7 @@ class GacOptionsFlow(OptionsFlow):
                                     description_placeholders=refusal)
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        from ._vendor.gac_connect.vehicle import WindowClosingError
         from .api import validate_clock
         from .charging import DAYS, window_target
         from .command_tracking import async_send
@@ -398,7 +400,9 @@ class GacOptionsFlow(OptionsFlow):
                 weekly = sum(1 << index for index, day in enumerate(DAYS) if day in days)
                 await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
                     coordinator.vin, start, stop, weekly=weekly, until_soc=until_soc),
-                    expected=window_target(start, stop, weekly, until_soc))
+                    expected=window_target(start, stop, weekly, until_soc, getattr(coordinator.client, "timezone", None)))
+            except WindowClosingError:
+                errors["base"] = "charge_window_closing"
             except ValueError:
                 errors["base"] = "invalid_charge_window"
             except CommandError as err:   # the gateway refused it; its reason says why
@@ -461,9 +465,6 @@ class GacOptionsFlow(OptionsFlow):
             user_input = {**self.config_entry.options, **user_input}
             if set(user_input.get(CONF_ENABLE_ENTITIES, ())) & set(user_input.get(CONF_OMIT_ENTITIES, ())):
                 errors[CONF_ENABLE_ENTITIES] = "conflicting_entity_choices"
-            picture = (user_input.get(CONF_PICTURE) or "").strip()
-            if picture and not (picture.startswith("/") or picture.lower().startswith(("http://", "https://"))):
-                errors[CONF_PICTURE] = "invalid_picture"
             quiet = {}
             for key in (CONF_QUIET_START, CONF_QUIET_END):
                 value = (user_input.get(key) or "").strip()
@@ -478,9 +479,10 @@ class GacOptionsFlow(OptionsFlow):
             if not errors:
                 # Persist through HA's normal update API (including its reload
                 # listener), without finishing and closing this options flow.
+                # The car picture option was retired (dashboards show the car); drop a stored one.
+                options = {key: value for key, value in {**user_input, **quiet}.items() if key != CONF_PICTURE}
                 self.hass.config_entries.async_update_entry(
-                    self.config_entry, options={**user_input, **quiet, CONF_PICTURE: picture,
-                                                CONF_ENABLE_TRACKER: location_enabled(user_input)}
+                    self.config_entry, options={**options, CONF_ENABLE_TRACKER: location_enabled(user_input)}
                 )
                 return await self.async_step_init()
         opts = {**self.config_entry.options, **(user_input or {})}
@@ -492,8 +494,6 @@ class GacOptionsFlow(OptionsFlow):
         enable_options = dict(OMIT_OPTIONS)
         selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
         fields = {
-            vol.Optional(CONF_ENABLE_ENTITIES,
-                         default=selected_enables): cv.multi_select(enable_options),
             vol.Optional(CONF_ALLOW_PLAINTEXT_PUSH,
                          default=opts.get(CONF_ALLOW_PLAINTEXT_PUSH, False)): bool,
             vol.Optional(CONF_SCAN_INTERVAL,
@@ -509,9 +509,10 @@ class GacOptionsFlow(OptionsFlow):
                          default=opts.get(CONF_ALLOW_ACCOUNT_ALERTS, False)): bool,
             vol.Optional(CONF_ALLOW_VEHICLE_SHUTDOWN,
                          default=opts.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)): bool,
+            vol.Optional(CONF_ENABLE_ENTITIES,
+                         default=selected_enables): cv.multi_select(enable_options),
             vol.Optional(CONF_OMIT_ENTITIES,
                          default=selected_omissions): cv.multi_select(omit_options),
-            vol.Optional(CONF_PICTURE, description={"suggested_value": opts.get(CONF_PICTURE, "")}): str,
             vol.Optional(CONF_QUIET_START, default=opts.get(CONF_QUIET_START, "")): str,
             vol.Optional(CONF_QUIET_END, default=opts.get(CONF_QUIET_END, "")): str,
         }

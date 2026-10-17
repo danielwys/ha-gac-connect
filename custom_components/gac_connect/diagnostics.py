@@ -64,6 +64,9 @@ def _push(coordinator, entry) -> dict[str, Any] | None:
     push = getattr(coordinator, "push", None)
     broker = getattr(push, "broker", None)
     if broker is None:
+        if getattr(push, "refused_plaintext", False) is True:
+            return {"connected": False, "not_used": "the broker is unencrypted and Allow unencrypted push "
+                                                    "connections is off; command results are polled"}
         return None
     mobile = re.sub(r"\D", "", str(entry.data.get("mobile") or "")).lstrip("0")
     known = {"VIN": str(entry.data.get("vin") or getattr(coordinator, "vin", None) or ""), "mobile": mobile}

@@ -1,0 +1,94 @@
+"""Charge now, which also starts a new charge once one has ended.
+
+GAC has no start command. Charge now switches the schedule off and the car charges
+whenever a charge begins (plugging in, the supply coming on), but once a charge has ended
+(a one-time window finished, the connector was unlocked) that alone does not start another.
+Then a one-time window to the charge limit is sent, starting at the next minute, and the
+schedule is switched off once charging has begun, which keeps it going past that window
+(Aion UT, 2026-10-17). A repeating schedule is never replaced this way.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from time import monotonic
+
+from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
+
+from ._vendor.gac_connect.errors import GacError
+from ._vendor.gac_connect.models import restart_needed
+from .charging import CHARGE_COMMANDS
+from .command_tracking import async_send
+
+_LOGGER = logging.getLogger(__name__)
+# Reads after the restart window is sent, in seconds. It starts 30-90 s later and the car
+# reported charging about two and a half minutes after it was sent.
+RESTART_READS = (60, 90, 120, 150, 180, 240, 300)
+
+
+def charge_now_request(coordinator, *, until_soc: bool = False):
+    """The Charge now request to send through the command ledger."""
+    helper = getattr(getattr(coordinator.config_entry, "runtime_data", None), "charge_now", None)
+    if helper is None:
+        return coordinator.client.charge_now(coordinator.vin, until_soc=until_soc)
+    return helper.request(until_soc=until_soc)
+
+
+class ChargeNow:
+    def __init__(self, coordinator) -> None:
+        self._coordinator = coordinator
+        self._charging = asyncio.Event()
+        self._task: asyncio.Task | None = None
+
+    @property
+    def restarting(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    @callback
+    def observe(self, status) -> None:
+        if self.restarting and getattr(status, "charging", None) is True:
+            self._charging.set()
+
+    async def request(self, *, until_soc: bool = False):
+        coordinator = self._coordinator
+        client, vin = coordinator.client, coordinator.vin
+        if self.restarting:
+            _LOGGER.info("Charge now: already starting a new charge; nothing more sent")
+            return None
+        if not restart_needed(coordinator.data):
+            return await client.charge_now(vin, until_soc=until_soc)
+        started = monotonic()
+        response = await client.restart_charging(vin)
+        _LOGGER.info("Charge now: the car's charge had ended, so a one-time window to the charge limit "
+                     "starts a new one; the schedule switches off once charging begins")
+        runtime = coordinator.config_entry.runtime_data
+        if (draft := getattr(runtime, "charge_draft", None)) is not None:
+            draft.mark_sent(None, None, 0, True)     # the dashboard's draft is not this window
+        self._charging.clear()
+        self._task = coordinator.config_entry.async_create_background_task(
+            coordinator.hass, self._follow(started, until_soc), "gac_connect charge now")
+        return response
+
+    async def _follow(self, started: float, until_soc: bool) -> None:
+        coordinator = self._coordinator
+        for at in RESTART_READS:
+            try:
+                async with asyncio.timeout(max(0.0, started + at - monotonic())):
+                    await self._charging.wait()
+            except TimeoutError:
+                await coordinator.async_refresh_now()
+            if self._charging.is_set():
+                break
+        tracker = getattr(coordinator, "commands", None)
+        if tracker is not None and any(record.command in CHARGE_COMMANDS and record.command != "charge-now"
+                                       and record.started > started for record in tracker.records):
+            _LOGGER.info("Charge now: another charging request followed, so the schedule is left as it is")
+            return
+        if not self._charging.is_set():
+            _LOGGER.info("Charge now: the car did not report charging; switching the schedule off anyway")
+        try:
+            await async_send(coordinator, "charge-now", coordinator.client.charge_now(coordinator.vin,
+                                                                                      until_soc=until_soc))
+        except (GacError, HomeAssistantError) as err:
+            _LOGGER.warning("Charge now could not switch the schedule off after starting the charge: %s", err)

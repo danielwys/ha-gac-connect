@@ -6,7 +6,7 @@ import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.gac_connect.config_flow import GacConfigFlow
+from custom_components.gac_connect.config_flow import GacConfigFlow, GacOptionsFlow
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
 
 
@@ -119,4 +119,18 @@ def test_reconfigure_signs_in_again_and_keeps_the_entry(tmp_path):
             assert entry.data["mobile"] == "0899999999"
             hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
             deprecated.assert_not_called()     # HA 2026.12 drops reload_and_abort with an update listener
+    asyncio.run(run())
+
+
+def test_settings_drop_the_retired_car_picture(tmp_path):
+    from test_autodetect import vehicle
+
+    async def run():
+        async with vehicle(tmp_path, options={"picture": "/local/old.png", "scan_interval": 120}) as (hass, entry, _):
+            flow = GacOptionsFlow()
+            flow.hass, flow.handler = hass, entry.entry_id
+            form = await flow.async_step_settings()
+            assert "picture" not in form["data_schema"].schema
+            await flow.async_step_settings({"scan_interval": 180})
+            assert "picture" not in entry.options and entry.options["scan_interval"] == 180
     asyncio.run(run())

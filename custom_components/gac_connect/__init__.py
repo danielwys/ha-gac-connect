@@ -16,6 +16,7 @@ from ._vendor.gac_connect.errors import GacError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
+from .charge_now import ChargeNow
 from .account_alerts import AccountAlerts, store_key as account_alerts_store_key
 from .cabin import controller as cabin_controller
 from .capabilities import FRIDGE_ENTITIES, store_key as capabilities_store_key
@@ -24,6 +25,7 @@ from .const import (
 )
 from .coordinator import GacCoordinator
 from .session_store import ConfigEntryStore
+from .settings import ChargeDraft, async_options_applied, needs_reload
 from .entity_filter import apply_registry_choices
 from .fridge import FridgeController, store_key
 from .helpers import async_build_client
@@ -39,6 +41,8 @@ class GacRuntime:
     options: dict = field(default_factory=dict)  # snapshot: reload only when these change
     fridge: FridgeController | None = None
     alerts: AccountAlerts | None = None
+    charge_draft: ChargeDraft | None = None
+    charge_now: ChargeNow | None = None
 
 
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
@@ -126,6 +130,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     await entry.runtime_data.fridge.async_setup(entry)
     entry.runtime_data.alerts = AccountAlerts(hass, entry, coordinator)
     await entry.runtime_data.alerts.async_setup()
+    draft = entry.runtime_data.charge_draft = ChargeDraft()
+    draft.observe(coordinator.data)
+    entry.async_on_unload(coordinator.async_add_listener(lambda: draft.observe(coordinator.data)))
+    charge_now = entry.runtime_data.charge_now = ChargeNow(coordinator)
+    entry.async_on_unload(coordinator.async_add_listener(lambda: charge_now.observe(coordinator.data)))
     coordinator.start_push()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload_on_update))
@@ -174,6 +183,10 @@ async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:
     # bounce the integration (it would close the session under a running poll).
     runtime = getattr(entry, "runtime_data", None)
     if runtime is not None and dict(entry.options) == runtime.options:
+        return
+    if runtime is not None and not needs_reload(runtime.options, entry.options):
+        runtime.options = dict(entry.options)      # read when needed: applies without a reload
+        async_options_applied(hass, entry)
         return
     await hass.config_entries.async_reload(entry.entry_id)
 

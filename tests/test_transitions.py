@@ -75,8 +75,10 @@ def test_control_holds_transition_until_a_new_matching_report(kind, target, time
         assert sensor.is_on is target  # Last observed state, not a fabricated command result.
     elif kind == "charge":
         assert entity.is_on is target
-        sent = coordinator.client.resume_schedule if target else coordinator.client.charge_now
-        sent.assert_awaited_once_with("TESTVIN")
+        if target:
+            coordinator.client.resume_schedule.assert_awaited_once_with("TESTVIN")
+        else:
+            coordinator.client.charge_now.assert_awaited_once_with("TESTVIN", until_soc=False)
     else:
         assert entity.state == ("closing" if target else "opening")
     # An auto-detect notification of the existing report is not confirmation.

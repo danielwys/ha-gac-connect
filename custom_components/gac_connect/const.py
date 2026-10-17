@@ -21,7 +21,7 @@ CONF_TRACK_PARKED: Final = "track_parked"
 CONF_TRACK_MOVING: Final = "track_moving"
 CONF_ENABLE_FRIDGE: Final = "enable_fridge"   # retired in 1.4; read only by the entry migration
 CONF_AC_MINUTES: Final = "ac_minutes"   # retired setting; seeds the Pre-conditioning run time
-CONF_PICTURE: Final = "picture"
+CONF_PICTURE: Final = "picture"        # retired option; removed from stored options on save
 CONF_OMIT_ENTITIES: Final = "omit_entities"
 CONF_PROFILE: Final = "profile"   # removed setting; read only to migrate older entries
 CONF_ENABLE_ENTITIES: Final = "enable_entities"
@@ -43,5 +43,5 @@ EVENT_COMMAND_RESULT: Final = "gac_connect_command_result"
 
 PLATFORMS: Final = [
     "sensor", "binary_sensor", "button", "switch", "device_tracker",
-    "climate", "lock", "cover", "select", "number", "event",
+    "climate", "lock", "cover", "select", "number", "event", "time",
 ]

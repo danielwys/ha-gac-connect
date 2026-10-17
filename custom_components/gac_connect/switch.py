@@ -25,6 +25,13 @@ from .entity import GacEntity
 from .requested import REQUEST_SECONDS, GacRequestedEntity
 from .transition import GacTransitionEntity
 from .entity_filter import add_configured_entities
+from .charge_now import charge_now_request
+from .charging import DAYS
+from .const import (CONF_ALLOW_ACCOUNT_ALERTS, CONF_ALLOW_CHARGER_UNLOCK, CONF_ALLOW_PLAINTEXT_PUSH,
+                    CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_QUIET_END, CONF_QUIET_START,
+                    CONF_TRACK_MOVING, CONF_TRACK_PARKED)
+from .option_entity import GacDraftEntity, GacOptionEntity
+from .settings import DEFAULT_QUIET, quiet_hours, track
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -107,6 +114,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_enti
     entities.extend(GacCommandSwitch(coordinator, d) for d in SWITCHES)
     add_configured_entities(entry, add_entities, "switch", entities)
     fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeSwitch(coordinator)], platform="switch")
+    # Settings and the charge window draft, for an admin dashboard (always present).
+    settings: list[SwitchEntity] = [GacOptionSwitch(coordinator, key, option) for key, option in OPTION_SWITCHES.items()]
+    settings.append(GacQuietHoursSwitch(coordinator))
+    settings.extend(GacDraftDaySwitch(coordinator, day) for day in DAYS)
+    settings.append(GacDraftUntilSocSwitch(coordinator))
+    add_entities(settings)
 
 
 class GacChargeSwitch(GacTransitionEntity, SwitchEntity):
@@ -139,7 +152,7 @@ class GacChargeSwitch(GacTransitionEntity, SwitchEntity):
                                    lambda: self.coordinator.client.resume_schedule(self.coordinator.vin))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._run_transition(False, "charge-now", lambda: self.coordinator.client.charge_now(self.coordinator.vin))
+        await self._run_transition(False, "charge-now", lambda: charge_now_request(self.coordinator))
 
 
 class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
@@ -280,3 +293,102 @@ class GacFridgeSwitch(GacEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._fridge.async_turn_off()
+
+
+# entity key -> option, as on the options page
+OPTION_SWITCHES = {
+    "allow_plaintext_push": CONF_ALLOW_PLAINTEXT_PUSH,
+    "track_parked": CONF_TRACK_PARKED,
+    "track_moving": CONF_TRACK_MOVING,
+    "allow_remote_unlock": CONF_EXPERIMENTAL_PINLESS_UNLOCK,
+    "allow_charger_unlock": CONF_ALLOW_CHARGER_UNLOCK,
+    "allow_account_alerts": CONF_ALLOW_ACCOUNT_ALERTS,
+    "allow_vehicle_shutdown": CONF_ALLOW_VEHICLE_SHUTDOWN,
+}
+
+
+class GacOptionSwitch(GacOptionEntity, SwitchEntity):
+    """One on/off option of the options page."""
+
+    def __init__(self, coordinator: GacCoordinator, key: str, option: str) -> None:
+        super().__init__(coordinator, key)
+        self._attr_translation_key = key
+        self._option = option
+
+    @property
+    def is_on(self) -> bool:
+        if self._option in (CONF_TRACK_PARKED, CONF_TRACK_MOVING):
+            return track(self.options)[self._option]
+        return self.options.get(self._option) is True
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.set_options(**{self._option: True})
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.set_options(**{self._option: False})
+
+
+class GacQuietHoursSwitch(GacOptionEntity, SwitchEntity):
+    """No polling between the quiet hours start and end; off clears both times."""
+
+    _attr_translation_key = "quiet_hours"
+    _attr_icon = "mdi:sleep"
+
+    def __init__(self, coordinator: GacCoordinator) -> None:
+        super().__init__(coordinator, "quiet_hours")
+        self._last = DEFAULT_QUIET
+
+    @property
+    def is_on(self) -> bool:
+        return quiet_hours(self.options) is not None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        if not self.is_on:
+            start, end = self._last
+            self.set_options(**{CONF_QUIET_START: start, CONF_QUIET_END: end})
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        if (current := quiet_hours(self.options)) is not None:
+            self._last = current      # turning it back on restores these times
+        self.set_options(**{CONF_QUIET_START: "", CONF_QUIET_END: ""})
+
+
+class GacDraftDaySwitch(GacDraftEntity, SwitchEntity):
+    """A day of the charge window being prepared; no days is a one-time window."""
+
+    _attr_icon = "mdi:calendar-week"
+
+    def __init__(self, coordinator: GacCoordinator, day: str) -> None:
+        super().__init__(coordinator, f"charge_window_{day}")
+        self._attr_translation_key = f"charge_window_{day}"
+        self._day = day
+
+    @property
+    def is_on(self) -> bool:
+        return self._day in self.draft.days
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.draft.set(days=self.draft.days | {self._day})
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.draft.set(days=self.draft.days - {self._day})
+
+
+class GacDraftUntilSocSwitch(GacDraftEntity, SwitchEntity):
+    """The charge window being prepared stops at the car's charge limit, not at its stop time."""
+
+    _attr_translation_key = "charge_window_until_soc"
+    _attr_icon = "mdi:battery-charging-high"
+
+    def __init__(self, coordinator: GacCoordinator) -> None:
+        super().__init__(coordinator, "charge_window_until_soc")
+
+    @property
+    def is_on(self) -> bool:
+        return self.draft.until_soc
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.draft.set(until_soc=True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.draft.set(until_soc=False)

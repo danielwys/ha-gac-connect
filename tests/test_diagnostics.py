@@ -73,3 +73,12 @@ def test_no_push_section_before_the_channel_connects():
     coordinator = SimpleNamespace(data=status, push=SimpleNamespace(connected=False, broker=None))
     entry = SimpleNamespace(data={}, options={}, runtime_data=SimpleNamespace(coordinator=coordinator))
     assert asyncio.run(async_get_config_entry_diagnostics(None, entry))["push"] is None
+
+
+def test_an_unused_push_channel_says_why():
+    status = SimpleNamespace(updated_ms=1, online=True, raw={})
+    push = SimpleNamespace(connected=False, broker=None, refused_plaintext=True)
+    entry = SimpleNamespace(data={}, options={}, runtime_data=SimpleNamespace(
+        coordinator=SimpleNamespace(data=status, push=push)))
+    section = asyncio.run(async_get_config_entry_diagnostics(None, entry))["push"]
+    assert section["connected"] is False and "command results are polled" in section["not_used"]

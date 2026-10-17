@@ -165,11 +165,21 @@ def schedule_summary(coordinator) -> str:
             f"{clock_note}The target charge level is not available here.")
 
 
-def window_target(start: str, stop: str | None, weekly: int, until_soc: bool) -> dict:
+def window_target(start: str, stop: str | None, weekly: int, until_soc: bool, timezone: str | None = None) -> dict:
     """The reported fields required to confirm a requested window (no days is a one-time window).
 
-    Stopping at the charge limit sends no stop time, and the car keeps its saved one.
+    Stopping at the charge limit sends no stop time, and the car keeps its saved one. A
+    one-time window already open is sent starting at the next minute, which the car then
+    reports; ``timezone`` (the car's) lets that start be expected.
     """
+    if not weekly and timezone:
+        try:
+            zone = dt_util.get_time_zone(timezone)
+            struct = window_operation(start, stop, zone, weekly=0, until_soc=until_soc).get("startTime") if zone else None
+        except ValueError:
+            struct = None
+        if struct:
+            start = f"{struct['hour']:02d}:{struct['minute']:02d}"
     target = {"charge_scheduled": True, "charge_window_start": start,
               "charge_weekly": weekly, "charge_end_type": int(until_soc)}
     if not until_soc:

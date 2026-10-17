@@ -15,6 +15,7 @@ from homeassistant.helpers import config_validation as cv
 from ._vendor.gac_connect.errors import GacError
 
 from .api import validate_clock, validate_weekly
+from .charge_now import charge_now_request
 from .command_tracking import async_send
 from .charging import window_target
 from .capability_report import cabin_capability_report, full_capability_report
@@ -91,7 +92,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         coordinator, vin = _resolve(hass, call)
         try:
             await async_send(coordinator, "charge-now",
-                             coordinator.client.charge_now(vin, until_soc=call.data.get(ATTR_UNTIL_SOC, False)))
+                             charge_now_request(coordinator, until_soc=call.data.get(ATTR_UNTIL_SOC, False)))
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
@@ -104,7 +105,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         try:
             await async_send(coordinator, "charge-window", coordinator.client.set_charge_window(
                 vin, start, stop, weekly=weekly, until_soc=until_soc,
-            ), expected=window_target(start, stop, weekly, until_soc))
+            ), expected=window_target(start, stop, weekly, until_soc, getattr(coordinator.client, "timezone", None)))
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         except GacError as err:
@@ -195,3 +196,27 @@ def async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(DOMAIN, "get_departure_plans", get_departure_plans, base,
                                  supports_response=SupportsResponse.ONLY)
+
+    async def set_entity_visibility(call: ServiceCall) -> None:
+        """Automatic (follow the car), always show, or omit one entity, as on the options page."""
+        from .const import CONF_ENABLE_ENTITIES, CONF_OMIT_ENTITIES
+        from .entity_filter import OMIT_OPTIONS
+        from .settings import async_set_options
+
+        coordinator, _ = _resolve(hass, call)
+        key, visibility = call.data["entity"], call.data["visibility"]
+        if key not in OMIT_OPTIONS:
+            raise ServiceValidationError(f"Unknown entity {key!r}; the Entity choices sensor lists them")
+        entry = coordinator.config_entry
+        always = [item for item in entry.options.get(CONF_ENABLE_ENTITIES, ()) if item != key]
+        omit = [item for item in entry.options.get(CONF_OMIT_ENTITIES, ()) if item != key]
+        if visibility == "always":
+            always.append(key)
+        elif visibility == "omit":
+            omit.append(key)
+        async_set_options(hass, entry, {CONF_ENABLE_ENTITIES: sorted(always), CONF_OMIT_ENTITIES: sorted(omit)})
+
+    hass.services.async_register(DOMAIN, "set_entity_visibility", set_entity_visibility, base.extend({
+        vol.Required("entity"): cv.string,
+        vol.Required("visibility"): vol.In(("automatic", "always", "omit")),
+    }))

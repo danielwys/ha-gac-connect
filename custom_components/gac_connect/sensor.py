@@ -40,7 +40,8 @@ from . import GacConfigEntry, fridge
 from ._vendor.gac_connect.alerts import ALERT_KEYS
 from .account_alerts import SIGNAL_ACCOUNT_ALERTS_UPDATED, alert_attributes
 from .entity import GacEntity
-from .entity_filter import add_configured_entities
+from .entity_filter import OMIT_OPTIONS, add_configured_entities
+from .const import CONF_ENABLE_ENTITIES, CONF_OMIT_ENTITIES
 from .command_tracking import STATES as COMMAND_STATES
 from .charging import schedule_attributes, schedule_mode
 from .location import shown_position
@@ -184,6 +185,7 @@ async def async_setup_entry(
     alerts = getattr(entry.runtime_data, "alerts", None)
     if alerts is not None and alerts.enabled:
         add_entities([GacLastAlertSensor(coordinator, alerts)])
+    add_entities([GacEntityChoicesSensor(coordinator)])
 
 
 class GacSensorEntity(GacEntity, SensorEntity):
@@ -286,3 +288,36 @@ class GacActivitySensor(GacEntity, SensorEntity):
                     "last_error_reason": self.coordinator.last_refresh_error,
                     "last_error_time": self.coordinator.last_refresh_error_at}
         return None
+
+
+class GacEntityChoicesSensor(GacEntity, SensorEntity):
+    """How many entities are always shown or omitted by choice; the attributes list them all.
+
+    Change one with the gac_connect.set_entity_visibility action (it reloads the integration).
+    """
+
+    _attr_translation_key = "entity_choices"
+    _attr_icon = "mdi:eye-settings-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _unrecorded_attributes = frozenset({"entities"})
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "entity_choices")
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    def _choices(self) -> tuple[list[str], list[str]]:
+        options = self.coordinator.config_entry.options
+        return sorted(options.get(CONF_ENABLE_ENTITIES, ())), sorted(options.get(CONF_OMIT_ENTITIES, ()))
+
+    @property
+    def native_value(self) -> int:
+        always, omit = self._choices()
+        return len(always) + len(omit)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        always, omit = self._choices()
+        return {"always_show": always, "omit": omit, "entities": dict(OMIT_OPTIONS)}

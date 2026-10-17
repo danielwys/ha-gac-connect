@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GacConfigEntry
-from .const import CONF_MODEL, CONF_PICTURE, DOMAIN
+from .const import CONF_MODEL, DOMAIN
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
@@ -41,9 +41,7 @@ async def async_setup_entry(
 
 
 async def _async_picture(hass: HomeAssistant, entry: GacConfigEntry) -> str | None:
-    """The picture set in the options, else a bundled one for the model, else none (initials)."""
-    if custom := (entry.options.get(CONF_PICTURE) or "").strip():
-        return custom
+    """A bundled picture for the model, else none (initials)."""
     name = _BUNDLED.get(str(entry.data.get(CONF_MODEL) or "").strip().lower())
     http = getattr(hass, "http", None)
     if name is None or http is None:

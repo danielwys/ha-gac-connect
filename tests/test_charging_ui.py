@@ -168,11 +168,13 @@ def test_real_ut_schedule_reads_calendar_fields_and_confirms_after_new_report(tm
             assert 'disagree' not in summary   # once timestamps read on the service clock (UTC+8) agree
             response = await flow.async_step_charge_window({'start': '23:00', 'stop': '07:00'})
             assert response['type'] == 'menu'
-            operation = client._reservation.await_args.args[1]   # one time: loop mode without days
-            assert (operation['chargingMode'], operation['weeklyReservation']) == (2, 0)
-            assert (operation['dailyReservationStartTime'], operation['dailyReservationStopTime']) == (82800000, 25200000 + 86400000)
+            operation = client._reservation.await_args.args[1]   # one time: the app's once, dated start and stop
+            assert operation['chargingMode'] == 1 and 'weeklyReservation' not in operation
+            assert (operation['stopTime']['hour'], operation['stopTime']['minute']) == (7, 0)
             assert c.commands.state == 'pending'
-            c.commands.observe(decode_status({'chargingAccessors': [operation]}, updated_ms=2000))
+            # The car reports the once window with weeklyReservation 0 (Aion UT, 2026-10-17).
+            c.commands.observe(decode_status({'chargingAccessors': [{**operation, 'weeklyReservation': 0}]},
+                                             updated_ms=2000))
             assert c.commands.state == 'confirmed'
     asyncio.run(run())
 
@@ -185,11 +187,13 @@ def test_editor_days_follow_the_app_once_repeat_and_every_day(tmp_path, days, we
             flow, client = setup_flow(hass, entry, c)
             await flow.async_step_charge_window({'start': '22:06', 'stop': '22:12', 'days': days, 'until_soc': False})
             operation = client._reservation.await_args.args[1]
-            assert (operation['chargingMode'], operation['weeklyReservation']) == (2, weekly)
-            assert operation['dailyReservationStartTime'] == 79560000
-            # The car records a window without days as the app's once: mode 1 with UTC+8 Unix-ms times.
-            report = operation if weekly else {**operation, 'chargingMode': 1, 'dailyReservationStartTime': 1791900360000,
-                                               'dailyReservationStopTime': 1791900720000}
+            if weekly:      # repeating: loop mode with times of day
+                assert (operation['chargingMode'], operation['weeklyReservation']) == (2, weekly)
+                assert operation['dailyReservationStartTime'] == 79560000
+                report = operation
+            else:           # one time: the app's once; the car reports it with weekly 0
+                assert operation['chargingMode'] == 1 and 'weeklyReservation' not in operation
+                report = {**operation, 'weeklyReservation': 0}
             c.data = decode_status({'chargingAccessors': [report]}, updated_ms=2000)
             assert schedule_attributes(c.data)['reported_days'] == {
                 0: 'One time', 18: 'Tuesday, Friday', 127: 'Every day'}[weekly]

@@ -21,6 +21,9 @@ from . import GacConfigEntry, cabin, fridge
 from .coordinator import GacCoordinator
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
+from .const import CONF_SCAN_INTERVAL, MIN_SCAN_INTERVAL
+from .option_entity import GacOptionEntity
+from .settings import MAX_SCAN_INTERVAL, scan_interval
 
 
 async def async_setup_entry(
@@ -28,6 +31,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data.coordinator
     add_configured_entities(entry, add_entities, "number", [GacRunTime(coordinator)])
+    add_entities([GacPollingInterval(coordinator)])
     fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeTemperature(coordinator)], platform="number")
 
 
@@ -120,3 +124,27 @@ class GacFridgeTemperature(GacEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         await self._fridge.async_set_temperature(value)
+
+
+class GacPollingInterval(GacOptionEntity, NumberEntity):
+    """How often the car's report is read; applies at once, without a reload."""
+
+    _attr_translation_key = "polling_interval"
+    _attr_icon = "mdi:timer-sync-outline"
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_native_min_value = float(MIN_SCAN_INTERVAL)
+    _attr_native_max_value = float(MAX_SCAN_INTERVAL)
+    _attr_native_step = 30.0
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator: GacCoordinator) -> None:
+        super().__init__(coordinator, "polling_interval")
+
+    @property
+    def native_value(self) -> float:
+        return scan_interval(self.options).total_seconds()
+
+    async def async_set_native_value(self, value: float) -> None:
+        if value != int(value):
+            raise ServiceValidationError("The polling interval must be a whole number of seconds")
+        self.set_options(**{CONF_SCAN_INTERVAL: int(value)})

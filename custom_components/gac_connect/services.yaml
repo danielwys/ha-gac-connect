@@ -95,3 +95,26 @@ get_departure_plans:
       description: Which vehicle (optional if you have only one).
       selector: { text: {} }
 
+set_entity_visibility:
+  name: Set entity visibility
+  description: Show an entity automatically (when the car reports the feature), always, or never, like the options page's Always show and Omit lists. The Entity choices sensor lists the entities and the current choices. Changing this reloads the integration.
+  fields:
+    vin:
+      name: VIN
+      description: Which vehicle (optional if you have only one).
+      selector: { text: {} }
+    entity:
+      name: Entity
+      description: The entity's key from the Entity choices sensor, such as binary_sensor:front_left_door.
+      required: true
+      example: binary_sensor:front_left_door
+      selector: { text: {} }
+    visibility:
+      name: Visibility
+      required: true
+      selector:
+        select:
+          options:
+            - automatic
+            - always
+            - omit

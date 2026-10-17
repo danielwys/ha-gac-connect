@@ -102,6 +102,17 @@ def test_live_platform_discovery_adds_only_observed_entities_once_without_comman
                     (p, entity.unique_id) for entity in entities))
             health = {("sensor", f"VIN_{key}") for key in ("data_freshness", "last_refresh", "polling_status", "last_command")}
             health.add(("event", "VIN_car_alert"))
+            # Settings and the charge window draft (an admin dashboard) are always present.
+            settings = {
+                "switch": ["allow_plaintext_push", "track_parked", "track_moving", "allow_remote_unlock",
+                           "allow_charger_unlock", "allow_account_alerts", "allow_vehicle_shutdown", "quiet_hours",
+                           *(f"charge_window_{day}" for day in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")),
+                           "charge_window_until_soc"],
+                "time": ["quiet_hours_start", "quiet_hours_end", "charge_window_start", "charge_window_stop"],
+                "number": ["polling_interval"], "button": ["send_charge_window", "refresh_capabilities"],
+                "sensor": ["entity_choices"],
+            }
+            health |= {(platform, f"VIN_{key}") for platform, keys in settings.items() for key in keys}
             assert set(added) == health | {("button", "VIN_refresh")}
 
             coordinator.client.get_status.return_value = decode_status({
