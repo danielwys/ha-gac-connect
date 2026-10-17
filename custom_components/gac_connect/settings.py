@@ -77,8 +77,7 @@ def async_set_options(hass: HomeAssistant, entry, updates: Mapping[str, Any]) ->
 @callback
 def async_options_applied(hass: HomeAssistant, entry) -> None:
     """Tell option entities and the poller about options changed without a reload."""
-    coordinator = entry.runtime_data.coordinator
-    coordinator.update_interval = scan_interval(entry.options)
+    entry.runtime_data.coordinator.async_set_interval(scan_interval(entry.options))
     async_dispatcher_send(hass, SIGNAL_OPTIONS.format(entry_id=entry.entry_id))
 
 

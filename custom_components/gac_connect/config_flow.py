@@ -42,6 +42,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
+from ._vendor.gac_connect.puzzle import PuzzleSession
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .location import location_enabled, tracking_choices
@@ -114,6 +115,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._view_registered = False
         self._http: aiohttp.ClientSession | None = None
         self._captcha_expiry = None
+        self._captcha = None          # the first puzzle, fetched before the puzzle step
 
     async def _new_http(self):
         if self._http is not None:
@@ -159,7 +161,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
                 try:
                     http = await self._new_http()
                     self._client = await async_build_client(self.hass, self._region, http)
-                    await self._client.start_captcha()
+                    self._captcha = await self._client.start_captcha()
                 except RateLimitedError:
                     errors["base"] = "rate_limited"
                 except (GacError, aiohttp.ClientError, TimeoutError):
@@ -187,11 +189,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         self._clear_puzzle()
         self._captcha_expiry = async_call_later(self.hass, CAPTCHA_SECONDS, self._expire_puzzle)
         flow_state(self.hass)[self.flow_id] = {
-            "client": self._client,
-            "mobile": self._mobile,
-            "captcha": self._client._captcha,  # already fetched in step 1
-            "attempt": 1,
-            "status": "pending",
+            "session": PuzzleSession(self._client, self._mobile, self._captcha),   # fetched in step 1
             "expires": time.monotonic() + CAPTCHA_SECONDS,
         }
         # This URL is opened in the user's own browser, so it must be one the
@@ -316,7 +314,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
         try:
             http = await self._new_http()
             self._client = await async_build_client(self.hass, self._region, http)
-            await self._client.start_captcha()
+            self._captcha = await self._client.start_captcha()
         except RateLimitedError:
             errors["base"] = "rate_limited"
         except (GacError, aiohttp.ClientError, TimeoutError):

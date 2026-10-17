@@ -2,7 +2,7 @@
   "format": 1,
   "source": "https://github.com/leecaochang/gac-connect",
   "upstream": "https://github.com/wattferry/gac-connect",
-  "commit": "6a146bdca0b6928a27370b9ccdeab47fa54bd39c",
+  "commit": "def6e0ee7ca77f84c2fe19bdaea40ff69637bb36",
   "version": "0.4.0b11",
   "requires_python": ">=3.11",
   "dependencies": [
@@ -14,7 +14,7 @@
     "cli.py"
   ],
   "sha256": {
-    "__init__.py": "f46d54ba60e15ea73010dcac84fb900b70d0e90aabc8472a9a358bb13b8b203d",
+    "__init__.py": "daf7ac179682a860c6fd237b01eb1952c60040ae8e061e5ff90ec3309549c451",
     "gac_connect/LICENSE": "57bc988e8f2b38d66b35f0bea5247f28978cd1bb83b91308a4d4a23b0b707108",
     "gac_connect/__init__.py": "2333ca07459ebdf92d7694b71d307166836b26ccee563eeff21d92ed9d10a7ff",
     "gac_connect/_material.pem": "fd0f684059f51cc9df4ac60f54618ee7b7f3ae1dc0e7896d903b6729731a5e38",
@@ -31,7 +31,8 @@
     "gac_connect/limits.py": "08b43fb32b5bfa902952265bea6bf975976b0af0c9e675c3b6e58aba7f1b3aa3",
     "gac_connect/models.py": "3b9be22d6323dba1c910397f6b50c6bb1749aed2f8ce8353e20d1861ab4f672e",
     "gac_connect/phone.py": "dc21e22b67ad4e7e027476594227aca7b91ba43c50fea527030c6d77e3dc7eec",
-    "gac_connect/push.py": "e7c8f2aaa595d8f1bb38c4f2788d8c2e6f117b9355cb3db6ad72cefabe5d4aa3",
+    "gac_connect/push.py": "c6e6461c5bfbadaeeec1b674ff0c85b9afeb2dfaa400c90a41b1c436b14b2bb7",
+    "gac_connect/puzzle.py": "418aa097c6f2d3dba4e6bcf8992ec22a054151d6463ba2c668f7f191848a9947",
     "gac_connect/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "gac_connect/session.py": "f1cf8f30cb461e0813d54718596d13af13677c3dbfa8fd0c78ba23bc066626a7",
     "gac_connect/signing.py": "57acfbbe3a704a09e9a9c2930a3269d064b91a8561948e3899e9bc28ca43873f",

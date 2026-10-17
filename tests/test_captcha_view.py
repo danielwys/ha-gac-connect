@@ -7,6 +7,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import UnknownFlow
 
+from custom_components.gac_connect._vendor.gac_connect.puzzle import PuzzleSession
 from custom_components.gac_connect.captcha_view import GacCaptchaView, flow_state
 from custom_components.gac_connect.config_flow import GacConfigFlow
 
@@ -14,9 +15,9 @@ from custom_components.gac_connect.config_flow import GacConfigFlow
 def pending(hass):
     hass.config_entries = SimpleNamespace(flow=SimpleNamespace(async_get=Mock(return_value={"step_id": "captcha"}),
                                                               async_abort=Mock(), async_configure=AsyncMock()))
-    client = SimpleNamespace(request_sms=AsyncMock())
-    flow_state(hass)["flow"] = {"client": client, "mobile": "synthetic", "expires": time.monotonic()+600,
-                               "attempt": 1, "status": "pending", "captcha": SimpleNamespace(background="", piece="")}
+    client = SimpleNamespace(request_sms=AsyncMock(), start_captcha=AsyncMock())
+    session = PuzzleSession(client, "synthetic", SimpleNamespace(background="", piece=""))
+    flow_state(hass)["flow"] = {"session": session, "expires": time.monotonic()+600}
     request = SimpleNamespace(app={"hass": hass}, query={"flow_id": "flow", "state": "1"},
                               json=AsyncMock(return_value={"x": 10}))
     return request, client
@@ -127,4 +128,26 @@ def test_expiry_aborts_the_flow(tmp_path):
         flow._expire_puzzle(None)
         hass.config_entries.flow.async_abort.assert_called_once_with("flow")
         assert not flow_state(hass)
+    asyncio.run(run())
+
+
+def test_a_right_slide_resumes_the_flow_once_and_a_wrong_one_shows_a_new_puzzle(tmp_path):
+    from custom_components.gac_connect._vendor.gac_connect.errors import CaptchaError
+
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        request, client = pending(hass)
+        client.request_sms.side_effect = [CaptchaError("rejected"), None]
+        client.start_captcha.return_value = SimpleNamespace(background="bg2", piece="piece2")
+        response = await GacCaptchaView().post(request)
+        assert response.status == 200 and flow_state(hass)["flow"]["session"].state()["attempt"] == 2
+        hass.config_entries.flow.async_configure.assert_not_called()
+        assert (await GacCaptchaView().post(request)).status == 200
+        await asyncio.sleep(0)
+        hass.config_entries.flow.async_configure.assert_called_once_with(flow_id="flow", user_input={})
+        assert (await GacCaptchaView().post(request)).status == 200      # already verified
+        await asyncio.sleep(0)
+        assert client.request_sms.await_count == 2 and hass.config_entries.flow.async_configure.call_count == 1
+        state = await GacCaptchaView().get(request)
+        assert state.status == 200
     asyncio.run(run())

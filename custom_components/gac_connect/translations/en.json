@@ -50,7 +50,7 @@
     "error": {
       "invalid_thai_mobile": "Enter a Thai mobile number such as 0812345678 or +66812345678.",
       "cannot_connect": "Could not reach GAC. Check your connection and try again.",
-      "invalid_code": "That code was not accepted. Request a new one and try again.",
+      "invalid_code": "That code was not accepted. Check it and enter it again. If it has expired, close this and start again for a new code.",
       "rate_limited": "Too many requests to GAC just now. Wait a minute and try again."
     },
     "abort": {

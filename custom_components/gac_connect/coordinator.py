@@ -185,6 +185,14 @@ class GacCoordinator(DataUpdateCoordinator[VehicleStatus]):
             return self._refresh_outcome
         return "quiet_hours" if self._in_quiet_hours() else self._refresh_outcome
 
+    @callback
+    def async_set_interval(self, interval: timedelta) -> None:
+        """Poll at a newly chosen interval from the next read on, without a reload."""
+        self._chosen_interval = int(interval.total_seconds())
+        if self.update_interval is not None:
+            self.update_interval = self._shared_interval()
+            self._schedule_refresh()
+
     def _shared_interval(self) -> timedelta:
         """The chosen poll interval, stretched so all vehicles' polls fit the shared budget."""
         vehicles = sum(1 for entry in self.hass.config_entries.async_entries(DOMAIN) if entry.disabled_by is None)
