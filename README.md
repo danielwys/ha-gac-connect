@@ -91,11 +91,11 @@ neither happened within 3 minutes (Not confirmed in time).
 | Smart battery temp | switch | Starts or cancels warming or cooling the battery, as in the app; the car runs it for up to 1.5 hours. |
 | Sterilisation | switch | Runs the A/C's hot-air cabin sterilisation for 30 minutes. The car must be switched off and locked, with the windows closed. |
 | Steering wheel heat | switch | On or off. |
-| Ventilation | switch | Lowers the windows 2–3 cm and runs fresh-air circulation. On while all four windows report open (so also when started in the app); off closes them. |
+| Ventilation | switch | Lowers the windows 2–3 cm and runs fresh-air circulation. On once started from Home Assistant, until it is turned off or a window closes: windows opened another way are not Ventilation. The car reports neither the mode nor how far a window is down, so Ventilation started in the GAC app shows off. Off closes the windows. |
 | Flash lights | switch | Flashes the lights. |
 | Driver seat ventilation | select | Off and the levels the car's capability list offers (up to Low, Medium, High). Choosing a level replaces the console's Smart mode. |
 | Front passenger seat ventilation | select | As for the driver seat. |
-| Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. Locked needs all four doors reported locked. |
+| Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. Locked needs all four doors reported locked and the boot shut; with the boot open the lock reads Open. |
 | Windows | cover | Open or close all windows. |
 | Sunroof | cover | Open or close. |
 | Boot | cover | Open or close. |
@@ -161,7 +161,7 @@ that would end before then is refused with that reason.
 | Plugged in | Charging cable connected. |
 | Charging | Charging. |
 | Charger lock | Charging connector unlocked. |
-| Lock | Unlocked. |
+| Lock | Unlocked, or the boot open. |
 | Door, Window | A door, or a window, open. |
 | Front left / Front right / Rear left / Rear right door | That door open. |
 | Front left / Front right / Rear left / Rear right window | That window open. |
@@ -181,6 +181,46 @@ that would end before then is refused with that reason.
 |---|---|
 | Car alert | From the car's reports, for everyone: charging stopped (with the cable still in), sterilisation finished, Smart battery temp finished; and, five minutes after the car is switched off, left unlocked, left open (doors, boot, bonnet) and window left open (which windows as an attribute). |
 | GAC alert | Each new alert in GAC's own alert list (charging, battery, security, openings, someone left in the car, lights, fridge and others). Only with **Allow GAC account alerts**; alerts already listed when it starts are history. |
+
+## Dashboard cards
+
+Six cards, each with one job, narrow enough for a three-column desktop or a phone:
+
+| Card | Shows |
+|---|---|
+| GAC Vehicle | Battery and range, a plan of the car with what is open, tyres, and quick actions. |
+| GAC Climate | Cabin and target temperature, A/C, fan, airflow, seats and comfort features, and the fridge where fitted. |
+| GAC Charging | Charging state, Charge now, and the charging window with its days. |
+| GAC Location | Where the car is, on Home Assistant's map, and location tracking. |
+| GAC Activity | Connection, the last command and its answer, and commands and alerts over two days. |
+| GAC Settings | Permissions, tracking, alerts, polling, quiet hours and entity choices. |
+
+Each card finds the car's entities itself and shows only what the car has. A command shows
+as in progress until the car answers, then whether it confirmed or refused it. Each card's
+footer says when the car last reported, and its refresh button reads the car now. Unlocking,
+opening the boot or windows, sounding the horn, releasing the cable and switching the car off
+need a held press; for half a minute after the horn sounds, one tap stops it. Times and the
+first day of the week follow your Home Assistant profile's language and time format.
+
+**At setup**, choose the cards for the car's dashboard (all six by default): GAC Connect
+creates a dashboard named after the car, in the sidebar, holding them. Pick none to skip it.
+Each car gets its own. Change the choice later under **Configure → Dashboard cards**, which
+also says where the dashboard is. Picking none removes the dashboard, after you confirm.
+Refresh the browser after a change.
+
+The generated dashboard stays GAC Connect's only while it is unchanged. Edit it as you like:
+once edited it is yours, and GAC Connect will neither change nor remove it. Delete it and it is
+not recreated.
+
+If a card says **Custom element doesn't exist** after installing or updating, the browser is
+still using its stored copy of Home Assistant's page: reload it, and if that is not enough,
+clear the browser's stored data for your Home Assistant address (in the Companion app:
+Settings → Companion app → Debugging → Reset frontend cache).
+
+**On your own dashboard:** Edit dashboard → Add card → search for **GAC**. Each card shows one
+car: with several cars, pick the car in the card's editor and add a card for each (with one
+car there is nothing to pick). The Vehicle card can also take a body style for its drawing, a
+photo of your car, a tyre pressure to warn below, and which actions to show.
 
 ## Options
 

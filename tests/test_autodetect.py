@@ -58,9 +58,17 @@ def result(sid="s1", *, ok=True, vin="VIN"):
 
 def test_setup_asks_only_which_remote_controls_to_allow():
     flow = GacConfigFlow()
+    flow._vehicle = Mock(model="Aion UT")
     flow._create_vehicle_entry = Mock()
-    asyncio.run(flow.async_step_remote_controls({"experimental_pinless_unlock": True, "allow_vehicle_shutdown": False}))
-    assert flow._create_vehicle_entry.call_args.args[0] == {"omit_entities": [], "enable_entities": []}
+    form = asyncio.run(flow.async_step_remote_controls({"experimental_pinless_unlock": True,
+                                                        "allow_vehicle_shutdown": False}))
+    every = ["vehicle", "charging", "climate", "location", "activity", "settings"]
+    assert form["step_id"] == "cards" and form["data_schema"]({}) == {"dashboard_cards": every}
+    finish = asyncio.run(flow.async_step_cards({"dashboard_cards": every}))
+    assert finish["step_id"] == "finish" and flow._create_vehicle_entry.call_count == 0
+    asyncio.run(flow.async_step_finish({}))
+    assert flow._create_vehicle_entry.call_args.args[0] == {"omit_entities": [], "enable_entities": [],
+                                                            "dashboard_cards": every}
     assert (flow._allow_unlock, flow._allow_vehicle_shutdown) == (True, False)
 
 

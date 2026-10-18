@@ -25,6 +25,7 @@ async def async_setup_entry(
 
 class GacDeviceTracker(GacEntity, TrackerEntity):
     _attr_translation_key = "location"
+    _attr_icon = "mdi:car"     # the dashboard map shows this car in place of the name's initials
     _attr_source_type = SourceType.GPS
     # TrackerEntity defaults to Diagnostic; keep both location readings in Sensors.
     _attr_entity_category = None

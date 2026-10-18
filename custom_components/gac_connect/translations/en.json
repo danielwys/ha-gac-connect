@@ -42,6 +42,17 @@
       "reauth_confirm": {
         "title": "Sign in again",
         "description": "Sign in to GAC again to renew the session. Your entities and settings stay as they are. Signing in here may sign the GAC app out on your phone."
+      },
+      "cards": {
+        "title": "Dashboard cards",
+        "description": "GAC Connect can create a dashboard for {model} with these cards. Pick none to skip it. All six cards can also be added to your own dashboards, and this choice can be changed later under Configure → Dashboard cards.",
+        "data": {
+          "dashboard_cards": "Cards on the dashboard"
+        }
+      },
+      "finish": {
+        "title": "Finish setup",
+        "description": "Refresh your browser after setup so the dashboard's cards load."
       }
     },
     "progress": {
@@ -97,6 +108,7 @@
         "title": "GAC Connect",
         "menu_options": {
           "settings": "Vehicle settings",
+          "cards": "Dashboard cards",
           "equipment": "Detected equipment",
           "capabilities": "Refresh vehicle capabilities",
           "charging": "Charging schedule"
@@ -140,6 +152,20 @@
           "days": "Leave empty for a one-time charge (the app’s Once). Select days to repeat, or all seven for every day. For an overnight window, select the day charging starts.",
           "until_soc": "Use the car’s existing target instead of the stop time. This integration cannot read or change that target; verify it in the car or official app."
         }
+      },
+      "cards": {
+        "title": "Dashboard cards",
+        "description": "{status}\n\nChoose the cards on this car's dashboard. Pick none to remove it; an edited dashboard is kept. The cards can always be added to your own dashboards too. Refresh your browser after a change.",
+        "data": {
+          "dashboard_cards": "Cards on the dashboard"
+        }
+      },
+      "confirm_remove_dashboard": {
+        "title": "Remove the dashboard",
+        "description": "Remove this car's dashboard and its cards? The cards stay available for your own dashboards.",
+        "data": {
+          "confirm": "Remove the dashboard"
+        }
       }
     },
     "error": {
@@ -151,7 +177,9 @@
       "invalid_charge_window": "Enter a start time and, unless stopping at the target charge level, a different stop time, in HH:MM format (00:00–23:59), and choose valid days.",
       "command_failed": "The request failed. Open Last command for the failure reason and service code, and check Polling status before trying again.",
       "command_refused": "{reason}",
-      "capability_read_failed": "The capability list could not be read. Equipment is still detected from the car's reports; try again later."
+      "capability_read_failed": "The capability list could not be read. Equipment is still detected from the car's reports; try again later.",
+      "dashboard_edited": "This car's dashboard has been edited, so GAC Connect will not change or remove it. Change it on the dashboard itself, or delete it there.",
+      "confirmation_required": "Tick Remove the dashboard to confirm, or close this dialog to keep it."
     },
     "abort": {
       "vehicle_not_loaded": "The vehicle integration is not loaded. Reconnect it before viewing or changing charging settings."
@@ -792,6 +820,18 @@
           "name": "Visibility",
           "description": "automatic, always or omit."
         }
+      }
+    }
+  },
+  "selector": {
+    "dashboard_cards": {
+      "options": {
+        "vehicle": "Vehicle",
+        "charging": "Charging",
+        "climate": "Climate",
+        "location": "Location",
+        "activity": "Activity",
+        "settings": "Settings"
       }
     }
   }

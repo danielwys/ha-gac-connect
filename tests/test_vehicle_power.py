@@ -128,7 +128,8 @@ def test_setup_and_options_save_the_shutdown_permission(tmp_path, allowed):
             form = await flow.async_step_remote_controls()
             defaults = form['data_schema']({})
             assert defaults[CONF_ALLOW_VEHICLE_SHUTDOWN] is False
-            created = await flow.async_step_remote_controls({**defaults, CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
+            await flow.async_step_remote_controls({**defaults, CONF_ALLOW_VEHICLE_SHUTDOWN: allowed})
+            created = await flow.async_step_cards({'dashboard_cards': []})
             assert created['options'][CONF_ALLOW_VEHICLE_SHUTDOWN] is allowed
             options_flow = GacOptionsFlow()
             options_flow.hass, options_flow.handler = hass, entry.entry_id

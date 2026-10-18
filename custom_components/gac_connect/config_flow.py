@@ -52,6 +52,7 @@ from .const import (
     CONF_ALLOW_ACCOUNT_ALERTS,
     CONF_ALLOW_CHARGER_UNLOCK,
     CONF_ALLOW_PLAINTEXT_PUSH,
+    CONF_DASHBOARD_CARDS,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
     CONF_TRACK_MOVING,
@@ -67,6 +68,7 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_SESSION,
     CONF_VIN,
+    DASHBOARD_CARDS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
@@ -98,10 +100,15 @@ def _thai_local_mobile(mobile: str) -> str:
     return f"0{match.group(1)}"
 
 
+def cards_selector() -> SelectSelector:
+    return SelectSelector(SelectSelectorConfig(options=list(DASHBOARD_CARDS), translation_key="dashboard_cards",
+                                               multiple=True, mode=SelectSelectorMode.LIST))
+
+
 class GacConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 6   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed;
-                        # 1.5: Smart battery temp entity ID; 1.6: A/C entity ID
+    MINOR_VERSION = 7   # 1.2: profiles removed; 1.3: Scheduled charging entity ID; 1.4: fridge option removed;
+                        # 1.5: Smart battery temp entity ID; 1.6: A/C entity ID; 1.7: dashboard cards
 
     def __init__(self) -> None:
         self._client: GacClient | None = None
@@ -266,7 +273,7 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             self._allow_unlock = user_input.get(CONF_EXPERIMENTAL_PINLESS_UNLOCK, False)
             self._allow_vehicle_shutdown = user_input.get(CONF_ALLOW_VEHICLE_SHUTDOWN, False)
             self._allow_charger_unlock = user_input.get(CONF_ALLOW_CHARGER_UNLOCK, False)
-            return self._create_vehicle_entry({CONF_OMIT_ENTITIES: [], CONF_ENABLE_ENTITIES: []})
+            return await self.async_step_cards()
         return self.async_show_form(
             step_id="remote_controls",
             data_schema=vol.Schema({
@@ -276,6 +283,31 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
             }),
             description_placeholders={"model": self._vehicle.model or "your vehicle"},
         )
+
+    # ---- step 6: the cards on the car's dashboard ----------------------
+    async def async_step_cards(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            chosen = set(user_input.get(CONF_DASHBOARD_CARDS) or ())
+            self._dashboard_cards = [card for card in DASHBOARD_CARDS if card in chosen]
+            if self._dashboard_cards:
+                return await self.async_step_finish()
+            return self._create_entry_with_cards()
+        return self.async_show_form(
+            step_id="cards",
+            data_schema=vol.Schema({vol.Optional(CONF_DASHBOARD_CARDS, default=list(DASHBOARD_CARDS)):
+                                    cards_selector()}),
+            description_placeholders={"model": self._vehicle.model or "your vehicle"},
+        )
+
+    async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Say that the browser needs a refresh before the new dashboard's cards load."""
+        if user_input is not None:
+            return self._create_entry_with_cards()
+        return self.async_show_form(step_id="finish", data_schema=vol.Schema({}), last_step=True)
+
+    def _create_entry_with_cards(self) -> ConfigFlowResult:
+        return self._create_vehicle_entry({CONF_OMIT_ENTITIES: [], CONF_ENABLE_ENTITIES: [],
+                                           CONF_DASHBOARD_CARDS: getattr(self, "_dashboard_cards", [])})
 
     def _create_vehicle_entry(self, options: dict[str, Any]) -> ConfigFlowResult:
         veh = self._vehicle
@@ -331,7 +363,58 @@ class GacConfigFlow(ConfigFlow, domain=DOMAIN):
 
 class GacOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["settings", "equipment", "capabilities", "charging"])
+        return self.async_show_menu(step_id="init",
+                                    menu_options=["settings", "cards", "equipment", "capabilities", "charging"])
+
+    async def async_step_cards(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Choose the cards on this car's dashboard; none removes it, after a confirmation."""
+        from .dashboard import VehicleDashboard, _available, dashboard_cards
+
+        current = list(dashboard_cards(self.config_entry.options))
+        status = await VehicleDashboard(self.hass, self.config_entry.entry_id).async_status() \
+            if _available(self.hass) else None
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chosen = set(user_input.get(CONF_DASHBOARD_CARDS) or ())
+            cards = [card for card in DASHBOARD_CARDS if card in chosen]
+            if status and status["edited"] and tuple(cards) != status["cards"]:
+                errors["base"] = "dashboard_edited"
+            elif current and not cards and status:
+                self._pending_cards = cards
+                return await self.async_step_confirm_remove_dashboard()
+            else:
+                return await self._save_cards(cards)
+        if status is None:
+            where = "There is no dashboard for this car yet." if not current else \
+                "This car's dashboard is being created; refresh your browser if it is not in the sidebar."
+        elif status["edited"]:
+            where = (f"This car's dashboard (/{status['url_path']}) has been edited, so GAC Connect will not "
+                     "change or remove it. Change it on the dashboard itself.")
+        else:
+            where = f"This car's dashboard is at /{status['url_path']}."
+        return self.async_show_form(
+            step_id="cards", errors=errors, description_placeholders={"status": where},
+            data_schema=vol.Schema({vol.Optional(CONF_DASHBOARD_CARDS, default=current): cards_selector()}))
+
+    async def async_step_confirm_remove_dashboard(self, user_input: dict[str, Any] | None = None
+                                                  ) -> ConfigFlowResult:
+        if getattr(self, "_pending_cards", None) is None:
+            return await self.async_step_cards()
+        if user_input is not None and user_input.get("confirm") is True:
+            cards, self._pending_cards = self._pending_cards, None
+            return await self._save_cards(cards)
+        return self.async_show_form(
+            step_id="confirm_remove_dashboard",
+            data_schema=vol.Schema({vol.Required("confirm", default=False): bool}),
+            errors={"base": "confirmation_required"} if user_input is not None else {},
+        )
+
+    async def _save_cards(self, cards: list[str]) -> ConfigFlowResult:
+        # Saved like Vehicle settings: through HA's update API, applied without a reload.
+        options = {key: value for key, value in self.config_entry.options.items() if key != "dashboard"}
+        self.hass.config_entries.async_update_entry(self.config_entry,
+                                                    options={**options, CONF_DASHBOARD_CARDS: cards})
+        return await self.async_step_init()
 
     def _loaded_coordinator(self):
         runtime = getattr(self.config_entry, "runtime_data", None)

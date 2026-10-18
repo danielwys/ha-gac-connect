@@ -66,7 +66,8 @@ def test_setup_and_options_save_the_permission(tmp_path, allowed):
             flow._client = SimpleNamespace(session=SimpleNamespace(to_dict=Mock(return_value={})))
             defaults = (await flow.async_step_remote_controls())["data_schema"]({})
             assert defaults[CONF_ALLOW_CHARGER_UNLOCK] is False
-            created = await flow.async_step_remote_controls({**defaults, CONF_ALLOW_CHARGER_UNLOCK: allowed})
+            await flow.async_step_remote_controls({**defaults, CONF_ALLOW_CHARGER_UNLOCK: allowed})
+            created = await flow.async_step_cards({"dashboard_cards": []})
             assert created["options"][CONF_ALLOW_CHARGER_UNLOCK] is allowed
             options_flow = GacOptionsFlow()
             options_flow.hass, options_flow.handler = hass, entry.entry_id

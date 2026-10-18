@@ -31,6 +31,8 @@ CONF_ALLOW_PLAINTEXT_PUSH: Final = "allow_plaintext_push"
 CONF_ALLOW_VEHICLE_SHUTDOWN: Final = "allow_vehicle_shutdown"
 CONF_ALLOW_CHARGER_UNLOCK: Final = "allow_charger_unlock"
 CONF_ALLOW_ACCOUNT_ALERTS: Final = "allow_account_alerts"
+CONF_DASHBOARD_CARDS: Final = "dashboard_cards"   # the cards on the car's generated dashboard; none: no dashboard
+DASHBOARD_CARDS: Final = ("vehicle", "charging", "climate", "location", "activity", "settings")
 VEHICLE_SHUTDOWN_COMMANDS: Final = frozenset({"vehicle-power-off", "power-off", "powerkeep-stop"})
 
 DEFAULT_SCAN_INTERVAL: Final = 300     # seconds

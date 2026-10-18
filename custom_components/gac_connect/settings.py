@@ -18,6 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .charging import DAYS
 from .const import (
+    CONF_DASHBOARD_CARDS,
     CONF_ENABLE_ENTITIES,
     CONF_ENABLE_TRACKER,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK,
@@ -35,7 +36,7 @@ from .location import location_enabled, tracking_choices
 
 # Read when needed (polling, quiet hours, unlock requests, the shown position): no reload.
 LIVE_OPTIONS = frozenset({CONF_SCAN_INTERVAL, CONF_QUIET_START, CONF_QUIET_END, CONF_EXPERIMENTAL_PINLESS_UNLOCK,
-                          CONF_TRACK_PARKED, CONF_TRACK_MOVING, CONF_ENABLE_TRACKER, CONF_PICTURE})
+                          CONF_TRACK_PARKED, CONF_TRACK_MOVING, CONF_ENABLE_TRACKER, CONF_PICTURE, CONF_DASHBOARD_CARDS})
 MAX_SCAN_INTERVAL = 3600
 DEFAULT_QUIET = ("22:00", "07:00")
 SIGNAL_OPTIONS = "gac_connect_options_{entry_id}"

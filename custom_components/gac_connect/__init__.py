@@ -22,8 +22,10 @@ from .account_alerts import AccountAlerts, store_key as account_alerts_store_key
 from .cabin import controller as cabin_controller
 from .capabilities import FRIDGE_ENTITIES, store_key as capabilities_store_key
 from .const import (
-    CONF_ENABLE_FRIDGE, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE, CONF_REGION, CONF_VIN, DOMAIN, PLATFORMS,
+    CONF_DASHBOARD_CARDS, CONF_ENABLE_FRIDGE, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE, CONF_REGION, CONF_VIN,
+    DOMAIN, PLATFORMS,
 )
+from .dashboard import async_apply_dashboard, async_remove_dashboard, async_want_cards
 from .coordinator import GacCoordinator
 from .session_store import ConfigEntryStore
 from .settings import ChargeDraft, async_options_applied, needs_reload
@@ -96,6 +98,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.version == 1 and entry.minor_version < 6:
         _rename_default_id(hass, entry, "climate_power", "_pre_conditioning", "_a_c")
         hass.config_entries.async_update_entry(entry, minor_version=6)
+    if entry.version == 1 and entry.minor_version < 7:
+        # Dashboard cards arrived: an existing car gets the cards, but no dashboard it did not ask for.
+        hass.config_entries.async_update_entry(
+            entry, options={CONF_DASHBOARD_CARDS: [], **entry.options}, minor_version=7)
     return True
 
 
@@ -146,6 +152,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     coordinator.start_push()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload_on_update))
+    await async_apply_dashboard(hass, entry, _device_id(hass, entry))
 
     _register_services(hass)
     return True
@@ -168,10 +175,17 @@ def _remove_retired_entities(hass: HomeAssistant, entry: GacConfigEntry) -> None
             registry.async_remove(entity_id)
 
 
+def _device_id(hass: HomeAssistant, entry: GacConfigEntry) -> str | None:
+    wanted = (DOMAIN, entry.data[CONF_VIN])
+    return next((device.id for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+                 if wanted in device.identifiers), None)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await entry.runtime_data.coordinator.capabilities.async_close()
+        await async_want_cards(hass, entry.entry_id, False)
     return unloaded
 
 
@@ -184,6 +198,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None
     await Store(hass, 1, capabilities_store_key(entry.entry_id)).async_remove()
     await Store(hass, 1, account_alerts_store_key(entry.entry_id)).async_remove()
     await ConfigEntryStore(hass, entry).remove()
+    await async_remove_dashboard(hass, entry.entry_id)
 
 
 async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:
@@ -193,8 +208,11 @@ async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:
     if runtime is not None and dict(entry.options) == runtime.options:
         return
     if runtime is not None and not needs_reload(runtime.options, entry.options):
+        dashboard_changed = runtime.options.get(CONF_DASHBOARD_CARDS) != entry.options.get(CONF_DASHBOARD_CARDS)
         runtime.options = dict(entry.options)      # read when needed: applies without a reload
         async_options_applied(hass, entry)
+        if dashboard_changed:
+            await async_apply_dashboard(hass, entry, _device_id(hass, entry))
         return
     await hass.config_entries.async_reload(entry.entry_id)
 
