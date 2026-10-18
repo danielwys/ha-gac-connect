@@ -964,3 +964,23 @@ def test_the_alert_read_decodes_each_alert_and_the_plan_read_passes_through():
     assert plans == {"plans": [{"customFeatureId": "7", "configName": "Work"}], "standby": {"active": 0},
                      "default_plan": {"error": "standby setting was not accepted"}}
 
+
+
+@pytest.mark.parametrize("hatch,expected_locked,expected_open", [(0, True, False), (1, False, True)])
+def test_the_car_is_locked_only_with_the_boot_shut(hatch, expected_locked, expected_open):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
+    from custom_components.gac_connect.lock import GacLock
+
+    s = decode_status({"doorAccessors": [{"door": i, "lock": 0} for i in range(1, 5)],
+                       "hatchAccessors": [{"hatch": 3, "openMode": hatch, "openModeFlag": 1}]})
+    c = coord(s)
+    c.config_entry = SimpleNamespace(data={"model": "Aion V"}, options={})
+    lock = GacLock(c)
+    lock.hass = Mock()
+    assert lock.is_locked is expected_locked and lock.is_open is expected_open
+    assert lock._reported_state() is True                    # lock commands are confirmed by the doors
+    sensor = GacBinaryEntity(c, next(d for d in BINARY_SENSORS if d.key == "locked"))
+    assert sensor.is_on is (not expected_locked)             # on means unlocked

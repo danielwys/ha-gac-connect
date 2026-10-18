@@ -15,6 +15,7 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from ._vendor.gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
 from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
@@ -85,9 +86,9 @@ SWITCHES: tuple[GacSwitch, ...] = (
         on_cmd="ventilate-on",
         off_cmd="ventilate-off",
         events=("control_ventilate_mode",),
-        # The app: windows drop 2–3 cm and fresh-air circulation runs. The mode is not reported, and
-        # the windows stayed down past the app's 5 minutes (Aion UT, 2026-10-17): on while every
-        # window reports open (as ventilation leaves them), also when started in the app.
+        # The app: windows drop 2–3 cm and fresh-air circulation runs. The mode is not reported, and a
+        # window reports open alike whether it is 2 cm or all the way down (Aion UT, 2026-10-17), so
+        # opened windows are not Ventilation: see GacVentilationSwitch.
         state=lambda s: _all_windows_open(s),
     ),
     GacSwitch(
@@ -121,7 +122,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: GacConfigEntry, add_enti
     coordinator = entry.runtime_data.coordinator
     entities: list[SwitchEntity] = [GacChargeSwitch(coordinator), GacClimateSwitch(coordinator),
                                     GacRecirculationSwitch(coordinator)]
-    entities.extend(GacCommandSwitch(coordinator, d) for d in SWITCHES)
+    entities.extend((GacVentilationSwitch if d.key == "ventilation" else GacCommandSwitch)(coordinator, d)
+                    for d in SWITCHES)
     add_configured_entities(entry, add_entities, "switch", entities)
     fridge.async_add_when_fitted(entry, coordinator, add_entities, lambda: [GacFridgeSwitch(coordinator)], platform="switch")
     # Settings and the charge window draft, for an admin dashboard (always present).
@@ -203,6 +205,44 @@ class GacCommandSwitch(GacRequestedEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set(False)
+
+
+class GacVentilationSwitch(GacCommandSwitch, RestoreEntity):
+    """On once Home Assistant has started Ventilation, until it is turned off or a window closes.
+
+    The car reports neither the mode nor how far a window is down, so windows opened another way
+    are not Ventilation, and Ventilation started in the GAC app shows off here.
+    """
+
+    def __init__(self, coordinator: GacCoordinator, description: GacSwitch) -> None:
+        super().__init__(coordinator, description)
+        self._started = False
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        self._started = last is not None and last.state == "on"
+
+    def _reported(self) -> bool | None:
+        windows = _all_windows_open(self.status)
+        if not self._started:
+            return False
+        return windows
+
+    def _handle_coordinator_update(self) -> None:
+        # Any window closing ends it, even if windows are opened again later.
+        if self._started and self._requested is None and _all_windows_open(self.status) is False:
+            self._started = False
+        super()._handle_coordinator_update()
+
+    def _on_command_result(self, result) -> None:
+        if result.ok is False and self._requested is True:
+            self._started = False
+        super()._on_command_result(result)
+
+    async def _set(self, on: bool) -> None:
+        await super()._set(on)
+        self._started = on
 
 
 class GacClimateSwitch(GacEntity, SwitchEntity):

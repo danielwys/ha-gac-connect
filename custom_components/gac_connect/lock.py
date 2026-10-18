@@ -12,7 +12,7 @@ from . import GacConfigEntry
 from .const import CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_MODEL
 from .coordinator import GacCoordinator
 from .entity_filter import add_configured_entities
-from .lock_state import doors_locked
+from .lock_state import car_locked, doors_locked
 from .transition import GacTransitionEntity
 
 
@@ -30,10 +30,17 @@ class GacLock(GacTransitionEntity, LockEntity):
 
     @property
     def is_locked(self) -> bool | None:
-        return doors_locked(self.status, self.coordinator.config_entry.data.get(CONF_MODEL))
+        # The car is locked only with all four doors locked and the boot shut.
+        return car_locked(self.status, self.coordinator.config_entry.data.get(CONF_MODEL))
+
+    @property
+    def is_open(self) -> bool | None:
+        """Open while the boot is open, whatever the doors: the car is not secure."""
+        return None if self.status is None else self.status.hatch_open
 
     def _reported_state(self) -> bool | None:
-        return self.is_locked
+        # A lock or unlock command acts on the doors, so the doors alone confirm it.
+        return doors_locked(self.status, self.coordinator.config_entry.data.get(CONF_MODEL))
 
     @property
     def is_locking(self) -> bool:

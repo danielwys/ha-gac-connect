@@ -195,31 +195,42 @@ def _windows(*open_positions, updated=1):
                          updated_ms=updated)
 
 
-def test_ventilation_is_on_while_every_window_reports_open(monkeypatch):
+def test_ventilation_is_on_only_once_started_until_a_window_closes(monkeypatch):
     # Aion UT, 2026-10-17: ventilation left all four windows reporting open, past the app's 5 minutes.
     from unittest.mock import AsyncMock, Mock
 
     monkeypatch.setattr("custom_components.gac_connect.requested.async_call_later", lambda *args: Mock())
 
-    from custom_components.gac_connect.switch import SWITCHES, GacCommandSwitch
+    from custom_components.gac_connect.switch import SWITCHES, GacVentilationSwitch
     from test_regressions import ACCEPTED, coord
 
     c = coord(_windows())
     c.client.command = AsyncMock(return_value=ACCEPTED)
-    sw = GacCommandSwitch(c, next(d for d in SWITCHES if d.key == "ventilation"))
+    sw = GacVentilationSwitch(c, next(d for d in SWITCHES if d.key == "ventilation"))
     sw.hass, sw.async_write_ha_state = Mock(), Mock()
     assert sw.assumed_state is False and sw.is_on is False
+    c.data = _windows(1, 2, 3, 4, updated=1)                 # windows opened another way are not ventilation
+    sw._handle_coordinator_update()
+    assert sw.is_on is False
     asyncio.run(sw.async_turn_on())
     assert sw.is_on is True                                  # requested, until the report shows it
     c.data = _windows(1, 2, 3, 4, updated=2)
     sw._handle_coordinator_update()
     assert sw._requested is None and sw.is_on is True        # confirmed by the windows
-    c.data = _windows(3, updated=3)                          # one window open by hand is not ventilation
+    c.data = _windows(3, updated=3)                          # a window closed: ventilation has ended
     sw._handle_coordinator_update()
     assert sw.is_on is False
-    c.data = decode_status({}, updated_ms=4)
+    c.data = _windows(1, 2, 3, 4, updated=4)                 # and opening them again does not restart it
     sw._handle_coordinator_update()
-    assert sw.is_on is None
+    assert sw.is_on is False
+    asyncio.run(sw.async_turn_on())
+    c.data = _windows(1, 2, 3, 4, updated=5)
+    sw._handle_coordinator_update()
+    assert sw.is_on is True
+    asyncio.run(sw.async_turn_off())
+    c.data = _windows(1, 2, 3, 4, updated=6)                 # turned off here: off, even before they close
+    sw._handle_coordinator_update()
+    assert sw.is_on is False
 
 
 def _air(cycling, running, updated):
