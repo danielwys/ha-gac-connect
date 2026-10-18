@@ -45,11 +45,9 @@ def test_setup_saves_the_unlock_choice(tmp_path, allow_unlock):
 
         cards = await flow.async_step_remote_controls(validated)
         assert cards["step_id"] == "cards"
-        assert (await flow.async_step_cards(cards["data_schema"]({})))["step_id"] == "finish"
-        result = await flow.async_step_finish({})
-        assert result["type"] == "create_entry"
-        assert result["options"]["dashboard_cards"] == ["vehicle", "charging", "climate", "location", "activity",
-                                                        "settings"]
+        result = await flow.async_step_cards(cards["data_schema"]({}))
+        assert result["type"] == "create_entry"     # the cards are off unless chosen: no refresh step
+        assert result["options"]["load_cards"] is False and result["options"]["dashboard_cards"] == []
         assert result["options"][CONF_EXPERIMENTAL_PINLESS_UNLOCK] is (allow_unlock is True)
         assert "profile" not in result["options"]
         assert "enable_fridge" not in result["options"]

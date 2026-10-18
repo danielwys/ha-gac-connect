@@ -202,11 +202,13 @@ opening the boot or windows, sounding the horn, releasing the cable and switchin
 need a held press; for half a minute after the horn sounds, one tap stops it. Times and the
 first day of the week follow your Home Assistant profile's language and time format.
 
-**At setup**, choose the cards for the car's dashboard (all six by default): GAC Connect
-creates a dashboard named after the car, in the sidebar, holding them. Pick none to skip it.
-Each car gets its own. Change the choice later under **Configure → Dashboard cards**, which
-also says where the dashboard is. Picking none removes the dashboard, after you confirm.
-Refresh the browser after a change.
+The cards are optional and off by default: until you install them, GAC Connect adds nothing
+to Home Assistant's pages. **At setup**, answer **Install dashboard cards?** and choose the
+cards for the car's dashboard (all six by default): GAC Connect creates a dashboard named
+after the car, in the sidebar, holding them. Pick none to install the cards for your own
+dashboards only. Each car gets its own. Change either choice later under **Configure →
+Dashboard cards**, which also says where the dashboard is. Picking none, or uninstalling the
+cards, removes the dashboard after you confirm. Refresh the browser after a change.
 
 The generated dashboard stays GAC Connect's only while it is unchanged. Edit it as you like:
 once edited it is yours, and GAC Connect will neither change nor remove it. Delete it and it is

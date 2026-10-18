@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import slugify
 
-from .const import CONF_DASHBOARD_CARDS, DASHBOARD_CARDS, DOMAIN
+from .const import CONF_DASHBOARD_CARDS, CONF_LOAD_CARDS, DASHBOARD_CARDS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,8 +39,15 @@ class DashboardEdited(DashboardError):
     """The generated dashboard was edited, so it is left for the owner to change."""
 
 
+def cards_loaded(options: dict[str, Any]) -> bool:
+    """Whether the owner chose to load the cards; until then nothing is added to Home Assistant's pages."""
+    return options.get(CONF_LOAD_CARDS) is True
+
+
 def dashboard_cards(options: dict[str, Any]) -> tuple[str, ...]:
-    """The chosen cards in dashboard order; an entry from before the cards has none."""
+    """The chosen cards in dashboard order; none while the cards are not loaded, or from before the cards."""
+    if not cards_loaded(options):
+        return ()
     chosen = set(options.get(CONF_DASHBOARD_CARDS) or ())
     return tuple(card for card in DASHBOARD_CARDS if card in chosen)
 
@@ -76,7 +83,7 @@ def _cards(hass: HomeAssistant) -> _Cards:
 
 
 async def async_want_cards(hass: HomeAssistant, entry_id: str, want: bool) -> None:
-    """Load the bundle on every dashboard while any entry is set up; drop it when none is."""
+    """Load the bundle on every page while any entry that loads the cards is set up; drop it when none is."""
     if not _available(hass) or not (FRONTEND_DIR / BUNDLE).exists() or not (FRONTEND_DIR / CARDS).exists():
         return
     from homeassistant.components import frontend
@@ -209,9 +216,9 @@ class VehicleDashboard:
 
 
 async def async_apply_dashboard(hass: HomeAssistant, entry, device_id: str | None) -> None:
-    """Load the cards, and bring the generated dashboard in line with the entry's choice."""
+    """Load the cards if the owner chose them, and bring the generated dashboard in line with the entry's choice."""
     try:
-        await async_want_cards(hass, entry.entry_id, True)
+        await async_want_cards(hass, entry.entry_id, cards_loaded(entry.options))
     except Exception as err:   # never let a dashboard problem stop the car's entities
         _LOGGER.warning("GAC Connect could not load its dashboard cards: %s", err)
         return

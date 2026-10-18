@@ -22,7 +22,8 @@ from .account_alerts import AccountAlerts, store_key as account_alerts_store_key
 from .cabin import controller as cabin_controller
 from .capabilities import FRIDGE_ENTITIES, store_key as capabilities_store_key
 from .const import (
-    CONF_DASHBOARD_CARDS, CONF_ENABLE_FRIDGE, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE, CONF_REGION, CONF_VIN,
+    CONF_DASHBOARD_CARDS, CONF_ENABLE_FRIDGE, CONF_LOAD_CARDS, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE,
+    CONF_REGION, CONF_VIN,
     DOMAIN, PLATFORMS,
 )
 from .dashboard import async_apply_dashboard, async_remove_dashboard, async_want_cards
@@ -75,7 +76,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     1.6: Pre-conditioning became A/C, as it shows the A/C however it was started; its
     default entity ID follows. A custom ID is left alone.
+
+    1.7: the dashboard cards arrived; an existing car gets no dashboard it did not ask for.
+
+    1.8: loading the cards became the owner's choice, off by default. A car that already had
+    the cards (1.7) keeps them loaded; an older one gets them only when the owner turns them on.
     """
+    had_cards = entry.version == 1 and entry.minor_version >= 7
     if entry.version == 1 and entry.minor_version < 2:
         options = dict(entry.options)
         profile = options.pop(CONF_PROFILE, None)
@@ -102,6 +109,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Dashboard cards arrived: an existing car gets the cards, but no dashboard it did not ask for.
         hass.config_entries.async_update_entry(
             entry, options={CONF_DASHBOARD_CARDS: [], **entry.options}, minor_version=7)
+    if entry.version == 1 and entry.minor_version < 8:
+        hass.config_entries.async_update_entry(
+            entry, options={CONF_LOAD_CARDS: had_cards, **entry.options}, minor_version=8)
     return True
 
 
@@ -208,7 +218,8 @@ async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:
     if runtime is not None and dict(entry.options) == runtime.options:
         return
     if runtime is not None and not needs_reload(runtime.options, entry.options):
-        dashboard_changed = runtime.options.get(CONF_DASHBOARD_CARDS) != entry.options.get(CONF_DASHBOARD_CARDS)
+        dashboard_changed = any(runtime.options.get(key) != entry.options.get(key)
+                                for key in (CONF_LOAD_CARDS, CONF_DASHBOARD_CARDS))
         runtime.options = dict(entry.options)      # read when needed: applies without a reload
         async_options_applied(hass, entry)
         if dashboard_changed:

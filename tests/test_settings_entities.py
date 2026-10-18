@@ -41,6 +41,7 @@ def entity(cls, hass, *args):
     ({"allow_account_alerts": False}, {"allow_account_alerts": True}, True),
     ({"allow_vehicle_shutdown": False}, {"allow_vehicle_shutdown": True}, True),
     ({"omit_entities": []}, {"omit_entities": ["sensor:pm25"]}, True),
+    ({"load_cards": False}, {"load_cards": True}, False),
 ])
 def test_only_options_that_add_or_remove_entities_reload(before, after, reload):
     assert needs_reload(before, after) is reload
@@ -59,6 +60,10 @@ def test_a_live_option_applies_without_a_reload(tmp_path):
             assert c.update_interval == timedelta(seconds=120) and entry.runtime_data.options["scan_interval"] == 120
             assert c._shared_interval() == timedelta(seconds=120)    # kept when the next poll is scheduled
             published.assert_called()                                 # entities publish the change at once
+            with patch("custom_components.gac_connect.async_apply_dashboard", AsyncMock()) as applied:
+                hass.config_entries.async_update_entry(entry, options={**entry.options, "load_cards": True})
+                await _reload_on_update(hass, entry)
+            applied.assert_awaited_once()                             # installing the cards needs no reload
             hass.config_entries.async_update_entry(entry, options={**entry.options, "allow_account_alerts": True})
             await _reload_on_update(hass, entry)
             hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)

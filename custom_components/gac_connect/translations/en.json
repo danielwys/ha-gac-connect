@@ -45,14 +45,19 @@
       },
       "cards": {
         "title": "Dashboard cards",
-        "description": "GAC Connect can create a dashboard for {model} with these cards. Pick none to skip it. All six cards can also be added to your own dashboards, and this choice can be changed later under Configure → Dashboard cards.",
+        "description": "GAC Connect comes with six dashboard cards for {model}. They are installed only if you choose them; until then GAC Connect adds nothing to Home Assistant's pages. Once installed, they can be added to any dashboard, and GAC Connect also creates a dashboard for the car with the cards picked below (pick none to skip it). Both can be changed later under Configure → Dashboard cards.",
         "data": {
+          "load_cards": "Install dashboard cards?",
           "dashboard_cards": "Cards on the dashboard"
+        },
+        "data_description": {
+          "load_cards": "Off by default.",
+          "dashboard_cards": "Used only when the cards are installed."
         }
       },
       "finish": {
         "title": "Finish setup",
-        "description": "Refresh your browser after setup so the dashboard's cards load."
+        "description": "Refresh your browser after setup so the cards load."
       }
     },
     "progress": {
@@ -155,14 +160,18 @@
       },
       "cards": {
         "title": "Dashboard cards",
-        "description": "{status}\n\nChoose the cards on this car's dashboard. Pick none to remove it; an edited dashboard is kept. The cards can always be added to your own dashboards too. Refresh your browser after a change.",
+        "description": "{status}\n\nInstalled, the cards can be added to any dashboard; not installed, GAC Connect adds nothing to Home Assistant's pages. With the cards installed, choose the cards on this car's dashboard. Pick none to remove it; an edited dashboard is kept. Refresh your browser after a change.",
         "data": {
+          "load_cards": "Install dashboard cards?",
           "dashboard_cards": "Cards on the dashboard"
+        },
+        "data_description": {
+          "dashboard_cards": "Used only when the cards are installed."
         }
       },
       "confirm_remove_dashboard": {
         "title": "Remove the dashboard",
-        "description": "Remove this car's dashboard and its cards? The cards stay available for your own dashboards.",
+        "description": "Remove this car's dashboard? {after}",
         "data": {
           "confirm": "Remove the dashboard"
         }

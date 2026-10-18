@@ -1,5 +1,6 @@
-"""The dashboard cards: the bundle loads while any car wants it, and the generated dashboard is
-created, kept, updated or removed only while it is exactly as generated."""
+"""The dashboard cards: nothing loads until the owner installs them, the bundle loads while any car
+wants it, and the generated dashboard is created, kept, updated or removed only while it is exactly
+as generated."""
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -126,13 +127,15 @@ def test_a_dashboard_the_owner_deleted_is_not_recreated(tmp_path):
             assert await car.async_apply(EVERY, "device", "AION V") is False
             assert len(collection.created) == 1 and await car.store.async_load() is None
 
-            entry = SimpleNamespace(entry_id="entry", title="AION V", options={"dashboard_cards": list(EVERY)})
+            entry = SimpleNamespace(entry_id="entry", title="AION V",
+                                    options={"load_cards": True, "dashboard_cards": list(EVERY)})
             await car.async_apply(EVERY, "device", "AION V")
             boards.clear()
             hass.config_entries = Mock()
             with patch.object(dashboard, "async_want_cards", AsyncMock()):
                 await async_apply_dashboard(hass, entry, "device")
-            hass.config_entries.async_update_entry.assert_called_once_with(entry, options={"dashboard_cards": []})
+            hass.config_entries.async_update_entry.assert_called_once_with(
+                entry, options={"load_cards": True, "dashboard_cards": []})
         finally:
             stop()
             await hass.async_stop(force=True)
@@ -174,9 +177,32 @@ def test_removing_the_entry_removes_an_unedited_dashboard_and_its_record(tmp_pat
     asyncio.run(run())
 
 
-def test_the_chosen_cards_come_back_in_dashboard_order():
-    assert dashboard_cards({"dashboard_cards": ["settings", "vehicle"]}) == ("vehicle", "settings")
-    assert dashboard_cards({}) == () and dashboard_cards({"dashboard_cards": None}) == ()
+def test_the_chosen_cards_come_back_in_dashboard_order_only_once_installed():
+    assert dashboard_cards({"load_cards": True, "dashboard_cards": ["settings", "vehicle"]}) == ("vehicle", "settings")
+    assert dashboard_cards({}) == () and dashboard_cards({"load_cards": True, "dashboard_cards": None}) == ()
+    assert dashboard_cards({"dashboard_cards": ["vehicle"]}) == ()
+    assert dashboard_cards({"load_cards": False, "dashboard_cards": ["vehicle"]}) == ()
+
+
+@pytest.mark.parametrize("options, loads", [
+    ({}, False),
+    ({"load_cards": False, "dashboard_cards": list(EVERY)}, False),
+    ({"load_cards": True, "dashboard_cards": []}, True),
+])
+def test_nothing_is_added_to_the_pages_until_the_cards_are_installed(tmp_path, options, loads):
+    async def run():
+        hass = HomeAssistant(str(tmp_path))
+        hass.http = Mock(async_register_static_paths=AsyncMock())
+        entry = SimpleNamespace(entry_id="entry", title="AION V", options=options)
+        apply = AsyncMock(return_value=True)
+        with patch.object(dashboard, "_available", lambda hass: True), \
+             patch("homeassistant.components.frontend.add_extra_js_url") as added, \
+             patch.object(VehicleDashboard, "async_apply", apply):
+            await async_apply_dashboard(hass, entry, "device")
+        assert added.called is loads and hass.http.async_register_static_paths.called is loads
+        assert apply.await_args.args[0] == ()        # no generated dashboard without its cards
+        await hass.async_stop(force=True)
+    asyncio.run(run())
 
 
 def test_the_bundle_loads_while_any_car_wants_the_cards(tmp_path):
@@ -205,7 +231,8 @@ def test_the_bundle_loads_while_any_car_wants_the_cards(tmp_path):
 def test_without_the_frontend_nothing_is_registered(tmp_path):
     async def run():
         hass = HomeAssistant(str(tmp_path))
-        entry = SimpleNamespace(entry_id="entry", title="AION V", options={"dashboard_cards": ["vehicle"]})
+        entry = SimpleNamespace(entry_id="entry", title="AION V",
+                                options={"load_cards": True, "dashboard_cards": ["vehicle"]})
         with patch("homeassistant.components.frontend.add_extra_js_url") as added:
             await async_apply_dashboard(hass, entry, "device")
         added.assert_not_called()
@@ -232,6 +259,7 @@ def test_the_configure_page_confirms_removal_and_leaves_an_edited_dashboard_alon
     async def run():
         async with vehicle(tmp_path) as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options={**entry.options, "dashboard": "cards",
+                                                                   "load_cards": True,
                                                                    "dashboard_cards": list(EVERY)})
             flow = GacOptionsFlow()
             flow.hass, flow.handler = hass, entry.entry_id
@@ -240,18 +268,46 @@ def test_the_configure_page_confirms_removal_and_leaves_an_edited_dashboard_alon
                  patch.object(VehicleDashboard, "async_status", AsyncMock(side_effect=lambda: status)):
                 form = await flow.async_step_cards()
                 assert form["description_placeholders"]["status"] == "This car's dashboard is at /gac-aion-ut."
-                assert form["data_schema"]({}) == {"dashboard_cards": list(EVERY)}
+                assert form["data_schema"]({}) == {"load_cards": True, "dashboard_cards": list(EVERY)}
 
-                confirm = await flow.async_step_cards({"dashboard_cards": []})
+                confirm = await flow.async_step_cards({"load_cards": True, "dashboard_cards": []})
                 assert confirm["step_id"] == "confirm_remove_dashboard"
+                assert confirm["description_placeholders"]["after"].startswith("The cards stay installed")
                 again = await flow.async_step_confirm_remove_dashboard({"confirm": False})
                 assert again["errors"] == {"base": "confirmation_required"}
                 assert entry.options["dashboard_cards"] == list(EVERY)
                 assert (await flow.async_step_confirm_remove_dashboard({"confirm": True}))["step_id"] == "init"
                 assert entry.options["dashboard_cards"] == [] and "dashboard" not in entry.options
+                assert entry.options["load_cards"] is True
 
                 status["edited"] = True
-                form = await flow.async_step_cards({"dashboard_cards": ["vehicle"]})
+                form = await flow.async_step_cards({"load_cards": True, "dashboard_cards": ["vehicle"]})
                 assert form["errors"] == {"base": "dashboard_edited"} and entry.options["dashboard_cards"] == []
                 assert "has been edited" in form["description_placeholders"]["status"]
+    asyncio.run(run())
+
+
+def test_uninstalling_the_cards_removes_the_dashboard_after_a_confirmation(tmp_path):
+    from custom_components.gac_connect.config_flow import GacOptionsFlow
+    from test_autodetect import vehicle
+
+    async def run():
+        async with vehicle(tmp_path) as (hass, entry, _):
+            hass.config_entries.async_update_entry(entry, options={**entry.options, "load_cards": True,
+                                                                   "dashboard_cards": list(EVERY)})
+            flow = GacOptionsFlow()
+            flow.hass, flow.handler = hass, entry.entry_id
+            status = {"url_path": "gac-aion-ut", "cards": EVERY, "edited": False}
+            with patch.object(dashboard, "_available", lambda hass: True), \
+                 patch.object(VehicleDashboard, "async_status", AsyncMock(side_effect=lambda: status)):
+                # The card list does not count once the cards are off.
+                confirm = await flow.async_step_cards({"load_cards": False, "dashboard_cards": list(EVERY)})
+                assert confirm["step_id"] == "confirm_remove_dashboard"
+                assert "stop working on your own dashboards" in confirm["description_placeholders"]["after"]
+                assert (await flow.async_step_confirm_remove_dashboard({"confirm": True}))["step_id"] == "init"
+                assert entry.options["load_cards"] is False and entry.options["dashboard_cards"] == []
+
+                status = None       # with no dashboard, the cards go back on without a question
+                assert (await flow.async_step_cards({"load_cards": True}))["step_id"] == "init"
+                assert entry.options["load_cards"] is True and entry.options["dashboard_cards"] == []
     asyncio.run(run())

@@ -18,7 +18,7 @@ def test_aion_ut_entries_lose_only_the_preset_omissions(tmp_path, stored_profile
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options=options, minor_version=1)
             assert await async_migrate_entry(hass, entry)
-            assert entry.minor_version == 7 and "profile" not in entry.options
+            assert entry.minor_version == 8 and "profile" not in entry.options
             assert entry.options["omit_entities"] == ["sensor:pm25"]      # the preset's fridge Off is not the owner's
             assert "enable_fridge" not in entry.options
             assert entry.options["enable_tracker"] is False and entry.options["experimental_pinless_unlock"] is True
@@ -34,7 +34,7 @@ def test_other_profiles_keep_every_choice(tmp_path, profile):
             hass.config_entries.async_update_entry(entry, options=options, minor_version=1)
             assert await async_migrate_entry(hass, entry)
             assert entry.options == {"omit_entities": sorted({"cover:sunroof", "sensor:tyre_1_temp", *FRIDGE_ENTITIES}),
-                                     "dashboard_cards": []}
+                                     "dashboard_cards": [], "load_cards": False}
     asyncio.run(run())
 
 
@@ -63,7 +63,7 @@ def test_the_charge_switch_entity_id_follows_its_new_meaning(tmp_path, object_id
             hass.config_entries.async_update_entry(entry, minor_version=2)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_charge_switch") == expected
-            assert entry.minor_version == 7
+            assert entry.minor_version == 8
     asyncio.run(run())
 
 
@@ -83,7 +83,7 @@ def test_the_smart_battery_temp_entity_id_follows_its_new_name(tmp_path, object_
             hass.config_entries.async_update_entry(entry, minor_version=4)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_precondition_battery") == expected
-            assert entry.minor_version == 7
+            assert entry.minor_version == 8
     asyncio.run(run())
 
 
@@ -103,7 +103,7 @@ def test_the_a_c_entity_id_follows_its_new_name(tmp_path, object_id, expected):
             hass.config_entries.async_update_entry(entry, minor_version=5)
             assert await async_migrate_entry(hass, entry)
             assert registry.async_get_entity_id("switch", "gac_connect", "VIN_climate_power") == expected
-            assert entry.minor_version == 7
+            assert entry.minor_version == 8
     asyncio.run(run())
 
 def test_the_charge_switch_rename_never_takes_an_existing_id(tmp_path):
@@ -134,8 +134,22 @@ def test_existing_cars_get_the_cards_but_no_dashboard_they_did_not_ask_for(tmp_p
         async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
             hass.config_entries.async_update_entry(entry, options={"scan_interval": 120}, minor_version=6)
             assert await async_migrate_entry(hass, entry)
-            assert entry.minor_version == 7 and entry.options == {"scan_interval": 120, "dashboard_cards": []}
+            assert entry.minor_version == 8
+            assert entry.options == {"scan_interval": 120, "dashboard_cards": [], "load_cards": False}
             hass.config_entries.async_update_entry(entry, options={"dashboard_cards": ["vehicle"]}, minor_version=6)
             assert await async_migrate_entry(hass, entry)
-            assert entry.options == {"dashboard_cards": ["vehicle"]}
+            assert entry.options == {"dashboard_cards": ["vehicle"], "load_cards": False}
+    asyncio.run(run())
+
+
+def test_cars_that_had_the_cards_keep_them_and_older_ones_get_none_until_chosen(tmp_path):
+    async def run():
+        async with vehicle(tmp_path, model="Aion UT") as (hass, entry, _):
+            hass.config_entries.async_update_entry(entry, options={"dashboard_cards": ["vehicle"]}, minor_version=7)
+            assert await async_migrate_entry(hass, entry)
+            assert entry.minor_version == 8 and entry.options == {"dashboard_cards": ["vehicle"], "load_cards": True}
+            hass.config_entries.async_update_entry(entry, options={"dashboard_cards": [], "load_cards": False},
+                                                   minor_version=7)
+            assert await async_migrate_entry(hass, entry)
+            assert entry.options["load_cards"] is False       # the owner's own choice stays
     asyncio.run(run())
