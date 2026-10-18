@@ -192,6 +192,15 @@ Thanks to their authors for showing what a good community integration looks like
 
 ## Changes
 
+- **0.4.0b3** — **UK (`GB`) sign-in is confirmed working end to end** on a real
+  My AION account and AION V: all entities create and state of charge and the
+  rest populate. Requires `gac-connect` 0.4.0b6, which fixes the last step of
+  the UK sign-in (the IoV session exchange). Also fixes a crash during entity
+  setup on the UK backend, which reports the vehicle model as a numeric code
+  rather than a name; an unrecognised code now stops setup with a clear
+  message instead of crashing, and a recognised one (currently the AION V) is
+  shown normally. No change for other regions.
+
 - **0.4.0b2** — fixes **UK (`GB`) sign-in**, which failed at the very first step
   with a signature error and never showed the slide puzzle. The integration was
   loading GAC International's key material for every region instead of the one the
