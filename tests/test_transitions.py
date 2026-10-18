@@ -10,9 +10,9 @@ from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinar
 from custom_components.gac_connect.cover import COVERS, GacCoverEntity
 from custom_components.gac_connect.lock import GacLock
 from custom_components.gac_connect.switch import GacChargeSwitch
-from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
-from custom_components.gac_connect._vendor.gac_connect.models import ChargingMode, VehicleStatus
-from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+from gac_connect.errors import CommandError
+from gac_connect.models import ChargingMode, VehicleStatus
+from gac_connect.push import PushResult
 from homeassistant.exceptions import HomeAssistantError
 
 from test_regressions import ACCEPTED, coord

@@ -3,7 +3,7 @@ import json
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from custom_components.gac_connect._vendor.gac_connect.push import interpret
+from gac_connect.push import interpret
 from custom_components.gac_connect.api import PushClient
 
 
@@ -48,7 +48,7 @@ def test_transport_requires_tls_or_explicit_consent(host, allow, connect):
         connection = Mock()
         connection.__aenter__ = AsyncMock(return_value=Mock(subscribe=AsyncMock()))
         connection.__aexit__ = AsyncMock(return_value=False)
-        with patch("custom_components.gac_connect._vendor.gac_connect.push.aiomqtt.Client", return_value=connection) as factory:
+        with patch("gac_connect.push.aiomqtt.Client", return_value=connection) as factory:
             await client.run()
         assert factory.called is connect
         if connect:

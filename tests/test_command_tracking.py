@@ -9,8 +9,8 @@ import pytest
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.command_tracking import async_send
 from custom_components.gac_connect.const import CONF_EXPERIMENTAL_PINLESS_UNLOCK
-from custom_components.gac_connect._vendor.gac_connect.errors import CommandError, GacError
-from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+from gac_connect.errors import CommandError, GacError
+from gac_connect.push import PushResult
 from homeassistant.exceptions import HomeAssistantError
 from test_autodetect import result, vehicle
 from test_regressions import ACCEPTED

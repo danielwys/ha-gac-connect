@@ -8,8 +8,8 @@ import pytest
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from custom_components.gac_connect._vendor.gac_connect.alerts import ALERT_KEYS
-from custom_components.gac_connect._vendor.gac_connect.errors import AccountSessionEnded, ResponseError
+from gac_connect.alerts import ALERT_KEYS
+from gac_connect.errors import AccountSessionEnded, ResponseError
 from custom_components.gac_connect.account_alerts import SIGNAL_ACCOUNT_ALERT, AccountAlerts
 from custom_components.gac_connect.api import decode_status
 from custom_components.gac_connect.car_alerts import CAR_ALERT_TYPES, HOLD_SECONDS, CarAlertWatcher

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from custom_components.gac_connect._vendor.gac_connect.commands import CATALOG
-from custom_components.gac_connect._vendor.gac_connect.models import ChargingMode, VehicleStatus
-from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+from gac_connect.commands import CATALOG
+from gac_connect.models import ChargingMode, VehicleStatus
+from gac_connect.push import PushResult
 from homeassistant.components.climate import HVACMode
 
 from custom_components.gac_connect.binary_sensor import BINARY_SENSORS, GacBinaryEntity
@@ -183,7 +183,7 @@ def test_console_half_degree_temperature_report_remains_visible_while_running():
 
 @pytest.mark.parametrize("reported_auto", [False, True])
 def test_running_temperature_change_never_restarts_auto_or_copies_fan_airflow(reported_auto):
-    from custom_components.gac_connect._vendor.gac_connect.commands import build_body
+    from gac_connect.commands import build_body
 
     c, e = climate(VehicleStatus(ac_on=True, ac_target_temp_c=21, ac_fan_strength=1,
                                 ac_blowing_mode=2, ac_auto_on=reported_auto))
@@ -591,7 +591,7 @@ def test_client_read_uses_corrected_decoder_and_existing_transport():
 
 @pytest.mark.parametrize("data", [[], "invalid", {"results": []}, {"results": [None]}])
 def test_malformed_report_envelope_fails_clearly(data):
-    from custom_components.gac_connect._vendor.gac_connect.errors import AuthExpiredError, GacError
+    from gac_connect.errors import AuthExpiredError, GacError
 
     c = coord(VehicleStatus())
     c.client._iov_read = AsyncMock(return_value={"data": data})
@@ -752,7 +752,7 @@ def test_reported_switch_expires_without_poll(scheduled):
 
 
 def test_generic_switch_restores_previous_result_correlation_after_failure():
-    from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
+    from gac_connect.errors import CommandError
     from homeassistant.exceptions import HomeAssistantError
 
     from custom_components.gac_connect.switch import GacCommandSwitch
@@ -952,7 +952,7 @@ def test_the_alert_read_decodes_each_alert_and_the_plan_read_passes_through():
     c.client.get_alarms = AsyncMock(return_value={"pageNo": 1, "list": [
         {"alarmId": "1", "createTime": "x", "alarmContent": content}, {"alarmId": "2", "alarmContent": "not json"}]})
     c.client.get_departure_plans = AsyncMock(return_value=[{"customFeatureId": "7", "configName": "Work"}])
-    from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
+    from gac_connect.errors import ResponseError
     c.client.get_standby_config = AsyncMock(side_effect=[{"active": 0}, ResponseError("standby setting was not accepted")])
     registry = service_registry(c)
     alerts = asyncio.run(registry["get_alerts"][0](SimpleNamespace(data={"page": 2})))

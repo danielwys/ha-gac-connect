@@ -17,9 +17,9 @@ import math
 from time import monotonic
 from typing import Any
 
-from ._vendor.gac_connect import GacError, command_session_id
-from ._vendor.gac_connect.commands import FRIDGE_DEFAULT_TEMP, FRIDGE_MODES, FRIDGE_TEMP_RANGE, validate_fridge
-from ._vendor.gac_connect.push import PushResult
+from gac_connect import GacError, command_session_id
+from gac_connect.commands import FRIDGE_DEFAULT_TEMP, FRIDGE_MODES, FRIDGE_TEMP_RANGE, validate_fridge
+from gac_connect.push import PushResult
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback

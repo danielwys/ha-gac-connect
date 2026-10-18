@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from ._vendor.gac_connect.errors import GacError
+from gac_connect.errors import GacError
 
 from .api import validate_clock, validate_weekly
 from .charge_now import charge_now_request

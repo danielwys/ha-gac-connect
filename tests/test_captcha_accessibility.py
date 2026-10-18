@@ -12,7 +12,7 @@ class Page(HTMLParser):
 
 
 def test_captcha_controls_have_names_help_and_live_status():
-    from custom_components.gac_connect._vendor.gac_connect.puzzle import page as puzzle_page
+    from gac_connect.puzzle import page as puzzle_page
 
     html = puzzle_page("Home Assistant")      # the library's page, as the view serves it
     page = Page(html)

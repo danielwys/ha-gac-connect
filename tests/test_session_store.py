@@ -4,8 +4,8 @@ import json
 from unittest.mock import Mock, patch
 
 import pytest
-from custom_components.gac_connect._vendor.gac_connect.errors import GacError
-from custom_components.gac_connect._vendor.gac_connect.session import Session
+from gac_connect.errors import GacError
+from gac_connect.session import Session
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant
 

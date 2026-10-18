@@ -17,8 +17,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from ._vendor.gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
-from ._vendor.gac_connect.models import ChargingMode, VehicleStatus
+from gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
+from gac_connect.models import ChargingMode, VehicleStatus
 
 from . import GacConfigEntry, cabin, fridge
 from .coordinator import GacCoordinator

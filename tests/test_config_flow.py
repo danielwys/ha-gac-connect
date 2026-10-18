@@ -108,7 +108,7 @@ def test_a_model_code_is_named_once_at_setup(tmp_path, model, shown, outcome):
 
 
 def test_every_launched_market_and_the_uk_can_be_chosen_by_name(tmp_path):
-    from custom_components.gac_connect._vendor.gac_connect.const import LISTED_REGIONS, REGIONS as LIBRARY_REGIONS
+    from gac_connect.const import LISTED_REGIONS, REGIONS as LIBRARY_REGIONS
     from custom_components.gac_connect.config_flow import REGION_NAMES, REGIONS
 
     async def run():

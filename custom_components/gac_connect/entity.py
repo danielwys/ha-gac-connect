@@ -4,10 +4,10 @@ from __future__ import annotations
 from collections.abc import Awaitable
 from typing import Any
 
-from ._vendor.gac_connect import GacError
+from gac_connect import GacError
 
 from homeassistant.exceptions import HomeAssistantError
-from ._vendor.gac_connect.push import PushResult
+from gac_connect.push import PushResult
 
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo

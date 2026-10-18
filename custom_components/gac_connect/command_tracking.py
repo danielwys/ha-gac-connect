@@ -14,11 +14,11 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
-from ._vendor.gac_connect import command_session_id
-from ._vendor.gac_connect.capabilities import COMMAND_FEATURES
-from ._vendor.gac_connect.commands import refusal_hint
-from ._vendor.gac_connect.models import ChargingMode
-from ._vendor.gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError, result_reason
+from gac_connect import command_session_id
+from gac_connect.capabilities import COMMAND_FEATURES
+from gac_connect.commands import refusal_hint
+from gac_connect.models import ChargingMode
+from gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError, result_reason
 from .api import doors_locked
 from .charging import CHARGE_COMMANDS
 from .const import (

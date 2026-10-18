@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from ._vendor.gac_connect.alerts import ALERT_KEYS, Alert
+from gac_connect.alerts import ALERT_KEYS, Alert
 
 from . import GacConfigEntry
 from .account_alerts import SIGNAL_ACCOUNT_ALERT, alert_attributes

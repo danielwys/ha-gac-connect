@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntries, ConfigEntry, ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from custom_components.gac_connect._vendor.gac_connect.errors import GacError
+from gac_connect.errors import GacError
 from custom_components.gac_connect.api import decode_status
 
 REPO = Path(__file__).resolve().parents[1]
@@ -136,7 +136,7 @@ def test_saved_request_limits_are_restored_once_and_a_corrupt_record_pauses(tmp_
     from homeassistant.helpers.storage import Store
 
     from custom_components.gac_connect import helpers
-    from custom_components.gac_connect._vendor.gac_connect.limits import DEFAULT_LIMITER
+    from gac_connect.limits import DEFAULT_LIMITER
 
     async def run():
         for saved, paused in (({"sent": [], "commands": [], "blocked_until": time.time() + 120, "last_done": 0}, True),

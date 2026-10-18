@@ -1,23 +1,23 @@
-"""The integration must exercise only its bundled library's public API."""
+"""The integration must exercise only the library's public API."""
 import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-from custom_components.gac_connect._vendor import gac_connect
+import gac_connect
 import pytest
-from custom_components.gac_connect._vendor.gac_connect.client import GacClient as LibraryClient
-from custom_components.gac_connect._vendor.gac_connect.const import PROFILE_MATERIAL, REGIONS
-from custom_components.gac_connect._vendor.gac_connect.session import MemoryStore
+from gac_connect.client import GacClient as LibraryClient
+from gac_connect.const import PROFILE_MATERIAL, REGIONS
+from gac_connect.session import MemoryStore
 
 from custom_components.gac_connect import api, helpers
 
 
-def test_bundled_library_is_actually_exercised():
+def test_the_library_is_actually_exercised():
     assert api.GacClient is LibraryClient
     for name in api.__all__:
         assert getattr(api, name) is getattr(gac_connect, name), name
-    assert api.GacClient.__module__ == "custom_components.gac_connect._vendor.gac_connect.client"
+    assert api.GacClient.__module__ == "gac_connect.client"
     assert not any(name.startswith("custom_components.gac_connect._compat_b1") for name in sys.modules)
 
 

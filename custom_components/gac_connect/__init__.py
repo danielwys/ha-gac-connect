@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ._vendor.gac_connect.client import GacClient
+    from gac_connect.client import GacClient
 
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from ._vendor.gac_connect.errors import GacError
+from gac_connect.errors import GacError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import slugify
 from homeassistant.helpers.aiohttp_client import async_create_clientsession

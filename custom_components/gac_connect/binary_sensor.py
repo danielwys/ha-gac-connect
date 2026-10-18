@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ._vendor.gac_connect.models import VehicleStatus
+from gac_connect.models import VehicleStatus
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,

@@ -7,7 +7,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import UnknownFlow
 
-from custom_components.gac_connect._vendor.gac_connect.puzzle import PuzzleSession
+from gac_connect.puzzle import PuzzleSession
 from custom_components.gac_connect.captcha_view import GacCaptchaView, flow_state
 from custom_components.gac_connect.config_flow import GacConfigFlow
 
@@ -132,7 +132,7 @@ def test_expiry_aborts_the_flow(tmp_path):
 
 
 def test_a_right_slide_resumes_the_flow_once_and_a_wrong_one_shows_a_new_puzzle(tmp_path):
-    from custom_components.gac_connect._vendor.gac_connect.errors import CaptchaError
+    from gac_connect.errors import CaptchaError
 
     async def run():
         hass = HomeAssistant(str(tmp_path))

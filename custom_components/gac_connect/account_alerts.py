@@ -16,8 +16,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
 
-from ._vendor.gac_connect.alerts import Alert, parse_alerts
-from ._vendor.gac_connect.errors import AccountSessionEnded, GacError, ResponseError
+from gac_connect.alerts import Alert, parse_alerts
+from gac_connect.errors import AccountSessionEnded, GacError, ResponseError
 from .const import CONF_ALLOW_ACCOUNT_ALERTS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)

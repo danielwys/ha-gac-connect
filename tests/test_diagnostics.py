@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 
 from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics
-from custom_components.gac_connect._vendor import LIBRARY_COMMIT, LIBRARY_SOURCE, LIBRARY_VERSION
+from gac_connect import __version__ as LIBRARY_VERSION
 
 
 def test_diagnostics_omit_private_urls_and_unreviewed_options():
@@ -23,9 +23,7 @@ def test_diagnostics_omit_private_urls_and_unreviewed_options():
     assert result["options"] == {"scan_interval": 300}
     assert result["status_raw"]["soc"] == 0.5
     assert result["status_updated_ms"] == 123
-    assert result["library"] == {
-        "source": LIBRARY_SOURCE, "version": LIBRARY_VERSION, "commit": LIBRARY_COMMIT, "bundled": True,
-    }
+    assert result["library"] == {"version": LIBRARY_VERSION, "bundled": False}
     assert entry.options["future_secret_option"] == "PRIVATE-FUTURE"
 
 
@@ -50,7 +48,7 @@ def test_location_and_contact_groups_keep_field_names_but_mask_every_value():
 
 
 def test_push_identifiers_show_their_shape_but_no_values():
-    from custom_components.gac_connect._vendor.gac_connect.push import BrokerInfo
+    from gac_connect.push import BrokerInfo
 
     broker = BrokerInfo(host="broker.invalid", port=2883, client_id="app_1234567890abcdef",
                         username="66812345678", password="PRIVATE-PASSWORD",
@@ -89,7 +87,7 @@ def test_diagnostics_never_carry_the_cars_free_form_refusal_labels(tmp_path):
     from dataclasses import replace
     from unittest.mock import AsyncMock
 
-    from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+    from gac_connect.push import PushResult
     from custom_components.gac_connect.api import decode_status
     from custom_components.gac_connect.command_tracking import async_send
     from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics

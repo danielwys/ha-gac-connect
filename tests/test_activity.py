@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
 from custom_components.gac_connect.api import decode_status
-from custom_components.gac_connect._vendor.gac_connect.errors import GacError, RateLimitedError
+from gac_connect.errors import GacError, RateLimitedError
 from custom_components.gac_connect.sensor import ACTIVITY_SENSORS, GacActivitySensor
 from test_autodetect import vehicle
 

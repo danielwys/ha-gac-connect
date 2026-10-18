@@ -3,8 +3,8 @@ from datetime import datetime
 
 from homeassistant.util import dt as dt_util
 
-from ._vendor.gac_connect.errors import result_reason
-from ._vendor.gac_connect.models import ChargingMode
+from gac_connect.errors import result_reason
+from gac_connect.models import ChargingMode
 from .api import window_operation
 
 DAYS = {"mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",

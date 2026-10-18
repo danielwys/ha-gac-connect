@@ -8,8 +8,8 @@ import logging
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
-from ._vendor.gac_connect import GacError
-from ._vendor.gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
+from gac_connect import GacError
+from gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
 from .api import Capabilities, Support, doors_locked, equipment_from_capabilities, ranges_from_capabilities
 from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled

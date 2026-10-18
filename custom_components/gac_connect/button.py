@@ -12,8 +12,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from ._vendor.gac_connect.client import GacClient
-from ._vendor.gac_connect.errors import GacError
+from gac_connect.client import GacClient
+from gac_connect.errors import GacError
 
 from . import GacConfigEntry
 from .charge_now import charge_now_request

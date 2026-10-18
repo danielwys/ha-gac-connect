@@ -19,10 +19,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from ._vendor.gac_connect.const import PROFILE_MATERIAL, RECOVERY_PAUSE, REGIONS
-from ._vendor.gac_connect.keys import Material, load_material
-from ._vendor.gac_connect.limits import DEFAULT_LIMITER
-from ._vendor.gac_connect.session import TokenStore
+from gac_connect.const import PROFILE_MATERIAL, RECOVERY_PAUSE, REGIONS
+from gac_connect.keys import Material, load_material
+from gac_connect.limits import DEFAULT_LIMITER
+from gac_connect.session import TokenStore
 
 from .api import GacClient
 from .const import DOMAIN

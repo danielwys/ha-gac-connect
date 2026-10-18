@@ -1,7 +1,7 @@
 """Map library lock state to Home Assistant's binary sensor polarity."""
 from __future__ import annotations
 
-from ._vendor.gac_connect.models import VehicleStatus
+from gac_connect.models import VehicleStatus
 
 from .api import doors_locked as doors_locked
 

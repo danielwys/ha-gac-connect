@@ -26,6 +26,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install Home Assistant and test tools
         run: python -m pip install 'homeassistant==${{ matrix.ha }}' 'pytest>=9,<10' 'ruff>=0.16,<0.17'
+      - name: Install the library commit until gac-connect 0.5.0 is on PyPI
+        run: python -m pip install 'gac-connect @ git+https://github.com/leecaochang/gac-connect@c8dccb8ee83c1b011e80e6ca7d91819a8b378ace'
       - name: Install the exact manifest requirements
         run: |
           python - <<'PY'
@@ -36,19 +38,10 @@ jobs:
           manifest = json.loads(Path('custom_components/gac_connect/manifest.json').read_text())
           subprocess.check_call([sys.executable, '-m', 'pip', 'install', *manifest['requirements']])
           PY
-      - name: Verify the bundled files match their recorded hashes
-        run: python tools/vendor_library.py --check
-      - name: Fetch the library commit the bundle names
-        run: |
-          read -r source commit < <(python -c "import json; p = json.load(open('custom_components/gac_connect/_vendor/provenance.json')); print(p['source'], p['commit'])")
-          git init -q "$RUNNER_TEMP/gac-connect"
-          git -C "$RUNNER_TEMP/gac-connect" fetch -q --depth 1 "$source" "$commit"
-      - name: Verify the bundle is exactly that library commit
-        run: python tools/vendor_library.py --check --source "$RUNNER_TEMP/gac-connect"
-      - name: Test the shipped library and integration together
+      - name: Test the integration with the library
         run: python -m pytest -q
       - name: Static checks
-        run: ruff check custom_components tests tools
+        run: ruff check custom_components tests
   frontend:
     runs-on: ubuntu-latest
     steps:

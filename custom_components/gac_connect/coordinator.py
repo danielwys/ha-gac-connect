@@ -11,12 +11,12 @@ from time import monotonic
 
 import aiohttp
 
-from ._vendor.gac_connect import GacError
-from ._vendor.gac_connect.client import GacClient
-from ._vendor.gac_connect.const import REQUEST_BUDGETS
-from ._vendor.gac_connect.errors import AuthExpiredError, RateLimitedError, ResponseError
-from ._vendor.gac_connect.models import VehicleStatus
-from ._vendor.gac_connect.push import PushResult
+from gac_connect import GacError
+from gac_connect.client import GacClient
+from gac_connect.const import REQUEST_BUDGETS
+from gac_connect.errors import AuthExpiredError, RateLimitedError, ResponseError
+from gac_connect.models import VehicleStatus
+from gac_connect.push import PushResult
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback

@@ -9,8 +9,8 @@ from typing import Any
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_call_later
 
-from ._vendor.gac_connect import command_session_id
-from ._vendor.gac_connect.push import PushResult
+from gac_connect import command_session_id
+from gac_connect.push import PushResult
 
 from .entity import GacEntity
 

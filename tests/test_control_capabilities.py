@@ -7,7 +7,7 @@ import pytest
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
+from gac_connect.errors import ResponseError
 from custom_components.gac_connect.capability_report import cabin_capability_report
 from custom_components.gac_connect.services import async_register_services
 from test_regressions import coord, service_registry
@@ -77,7 +77,7 @@ def test_capability_service_is_response_only_and_never_sends_or_confirms_a_comma
 
 
 @pytest.mark.parametrize("code", [0, "0", "0000", 1000, 2000, 13000])
-def test_capability_action_uses_vendored_success_parser_before_scrubbing_response(code):
+def test_capability_action_uses_the_library_success_parser_before_scrubbing_response(code):
     coordinator = coord(None)
     coordinator.client._iov_read = AsyncMock(return_value={"code": code, "data": report({
         "airConditionCapabilities": [{"supportBlowingModes": [1, 2, 3, 4], "token": "PRIVATE"}],

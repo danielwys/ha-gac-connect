@@ -14,11 +14,11 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_call_later
 
-from ._vendor.gac_connect import GacError, command_session_id
-from ._vendor.gac_connect.commands import (
+from gac_connect import GacError, command_session_id
+from gac_connect.commands import (
     CLIMATE_MINUTES_RANGE, CLIMATE_TEMP_RANGE, validate_blowing_mode, validate_climate, validate_cycling_mode,
 )
-from ._vendor.gac_connect.push import PushResult
+from gac_connect.push import PushResult
 
 from .capabilities import remote_choices
 from .const import CONF_AC_MINUTES, DEFAULT_AC_MINUTES, SIGNAL_COMMAND_RESULT

@@ -14,7 +14,7 @@ from custom_components.gac_connect.device_tracker import GacDeviceTracker
 from custom_components.gac_connect.climate import GacClimate
 from custom_components.gac_connect.sensor import SENSORS, GacSensorEntity
 from custom_components.gac_connect.switch import SWITCHES, GacCommandSwitch
-from custom_components.gac_connect._vendor.gac_connect.errors import CommandError, RateLimitedError
+from gac_connect.errors import CommandError, RateLimitedError
 from custom_components.gac_connect.command_tracking import async_send
 from custom_components.gac_connect.diagnostics import async_get_config_entry_diagnostics
 from custom_components.gac_connect.charging import schedule_attributes
@@ -87,7 +87,7 @@ def test_unknown_seat_enable_code_is_exposed_without_inventing_smart_state():
 
 @pytest.mark.parametrize('seat_id', [1, 2])
 def test_seat_level_selects_send_levels_and_correlate_only_their_session(tmp_path, seat_id):
-    from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+    from gac_connect.push import PushResult
     from custom_components.gac_connect.select import GacSeatVentilationSelect
     from homeassistant.exceptions import HomeAssistantError
 

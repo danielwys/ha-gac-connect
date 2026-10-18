@@ -43,7 +43,7 @@ def _release_stopped_home_assistant():
 def _detach_request_limiter():
     """The bundled library's limiter is process-wide; a test's storage callback must not outlive it."""
     yield
-    from custom_components.gac_connect._vendor.gac_connect.limits import DEFAULT_LIMITER
+    from gac_connect.limits import DEFAULT_LIMITER
 
     DEFAULT_LIMITER.on_change = None
 

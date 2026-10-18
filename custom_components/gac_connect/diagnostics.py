@@ -8,8 +8,8 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import GacConfigEntry
-from ._vendor import LIBRARY_COMMIT, LIBRARY_SOURCE, LIBRARY_VERSION
-from ._vendor.gac_connect.const import REGIONS
+from gac_connect import __version__ as LIBRARY_VERSION
+from gac_connect.const import REGIONS
 from .const import (
     CONF_ALLOW_ACCOUNT_ALERTS, CONF_ALLOW_CHARGER_UNLOCK, CONF_ALLOW_PLAINTEXT_PUSH, CONF_ENABLE_TRACKER,
     CONF_EXPERIMENTAL_PINLESS_UNLOCK, CONF_OMIT_ENTITIES, CONF_ENABLE_ENTITIES,
@@ -90,12 +90,7 @@ async def async_get_config_entry_diagnostics(
         value = getattr(coordinator, attr, None)
         polling[name] = value.isoformat() if value is not None else None
     return {
-        "library": {
-            "source": LIBRARY_SOURCE,
-            "version": LIBRARY_VERSION,
-            "commit": LIBRARY_COMMIT,
-            "bundled": True,
-        },
+        "library": {"version": LIBRARY_VERSION, "bundled": False},
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
         "options": {key: value for key, value in entry.options.items() if key in SAFE_OPTIONS},
         "endpoints": {"account_host": region.get("main"), "vehicle_host": region.get("iov")},

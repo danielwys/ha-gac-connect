@@ -11,7 +11,7 @@ Monitor and control a **GAC / AION** vehicle from Home Assistant: battery, range
 charging and charge scheduling, climate and seats, doors, windows, boot and
 location.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=leecaochang&repository=ha-gac-connect&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wattferry&repository=ha-gac-connect&category=integration)
 
 ## Requirements
 
@@ -34,8 +34,8 @@ integration's HACS page.
 **Manually:** copy `custom_components/gac_connect` into your Home Assistant
 `config/custom_components/` folder and restart.
 
-The integration installs one Python package, `aiomqtt`, used only for the optional push
-feed (see **Allow unencrypted push connections**). The `gac-connect` library is bundled.
+Home Assistant installs the [`gac-connect`](https://pypi.org/project/gac-connect/) library,
+which brings `aiomqtt` for the optional push feed (see **Allow unencrypted push connections**).
 
 ## Set up
 
@@ -419,5 +419,5 @@ Thanks to their authors for showing what a good community integration looks like
 
 ## License
 
-MIT. Includes the [`gac-connect`](https://github.com/leecaochang/gac-connect)
+MIT. Uses the [`gac-connect`](https://github.com/wattferry/gac-connect)
 library.

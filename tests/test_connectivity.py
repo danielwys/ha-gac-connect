@@ -13,7 +13,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from custom_components.gac_connect.api import decode_status
-from custom_components.gac_connect._vendor.gac_connect.errors import (
+from gac_connect.errors import (
     AuthExpiredError, RateLimitedError, ResponseError,
 )
 from custom_components.gac_connect.coordinator import NETWORK_GRACE_SECONDS, _failure_reason

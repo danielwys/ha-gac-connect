@@ -16,7 +16,7 @@ from custom_components.gac_connect.config_flow import GacOptionsFlow
 from custom_components.gac_connect.equipment import equipment_summary
 from custom_components.gac_connect.number import GacFridgeTemperature, GacRunTime
 from custom_components.gac_connect.select import GacFridgeModeSelect, GacSeatVentilationSelect
-from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
+from gac_connect.errors import ResponseError
 from test_autodetect import vehicle
 
 UT_LIST = json.loads((Path(__file__).parent / "fixtures" / "ut_capabilities.json").read_text())

@@ -1,7 +1,7 @@
 """Public behavior API of the library snapshot shipped with this integration."""
 from __future__ import annotations
 
-from ._vendor.gac_connect import (
+from gac_connect import (
     Capabilities,
     Support,
     GacClient,

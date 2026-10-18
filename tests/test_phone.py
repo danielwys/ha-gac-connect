@@ -2,8 +2,8 @@ import asyncio
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from custom_components.gac_connect._vendor.gac_connect.const import REGIONS
-from custom_components.gac_connect._vendor.gac_connect.errors import LoginError
+from gac_connect.const import REGIONS
+from gac_connect.errors import LoginError
 from custom_components.gac_connect.api import GacClient, local_mobile
 
 

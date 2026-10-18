@@ -10,15 +10,15 @@
   ],
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/leecaochang/ha-gac-connect",
+  "documentation": "https://github.com/wattferry/ha-gac-connect",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/leecaochang/ha-gac-connect/issues",
+  "issue_tracker": "https://github.com/wattferry/ha-gac-connect/issues",
   "loggers": [
-    "custom_components.gac_connect._vendor.gac_connect"
+    "gac_connect"
   ],
   "requirements": [
-    "aiomqtt==2.5.1"
+    "gac-connect==0.5.0"
   ],
   "version": "0.5.0"
 }

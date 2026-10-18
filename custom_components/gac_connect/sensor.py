@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from ._vendor.gac_connect.models import VehicleStatus
+from gac_connect.models import VehicleStatus
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -38,7 +38,7 @@ else:
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import GacConfigEntry, fridge
-from ._vendor.gac_connect.alerts import ALERT_KEYS
+from gac_connect.alerts import ALERT_KEYS
 from .account_alerts import SIGNAL_ACCOUNT_ALERTS_UPDATED, alert_attributes
 from .entity import GacEntity
 from .entity_filter import OMIT_OPTIONS, add_configured_entities

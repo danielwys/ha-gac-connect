@@ -11,13 +11,13 @@ import time
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ._vendor.gac_connect.client import GacClient
-    from ._vendor.gac_connect.models import Vehicle
+    from gac_connect.client import GacClient
+    from gac_connect.models import Vehicle
 
 import aiohttp
 import voluptuous as vol
-from ._vendor.gac_connect.const import LISTED_REGIONS
-from ._vendor.gac_connect.errors import CommandError, GacError, LoginError, RateLimitedError
+from gac_connect.const import LISTED_REGIONS
+from gac_connect.errors import CommandError, GacError, LoginError, RateLimitedError
 
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
@@ -42,7 +42,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from ._vendor.gac_connect.puzzle import PuzzleSession
+from gac_connect.puzzle import PuzzleSession
 from .captcha_view import CAPTCHA_URL, CAPTCHA_SECONDS, GacCaptchaView, flow_state, discard_flow_state
 from .helpers import async_build_client
 from .location import location_enabled, tracking_choices
@@ -493,7 +493,7 @@ class GacOptionsFlow(OptionsFlow):
                                     description_placeholders=refusal)
 
     async def async_step_charge_window(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        from ._vendor.gac_connect.vehicle import WindowClosingError
+        from gac_connect.vehicle import WindowClosingError
         from .api import validate_clock
         from .charging import DAYS, window_target
         from .command_tracking import async_send

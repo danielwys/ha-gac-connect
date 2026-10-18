@@ -9,10 +9,10 @@ import pytest
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from custom_components.gac_connect._vendor.gac_connect.commands import CATALOG, build_body
-from custom_components.gac_connect._vendor.gac_connect.errors import GacError
-from custom_components.gac_connect._vendor.gac_connect.models import VehicleStatus
-from custom_components.gac_connect._vendor.gac_connect.push import PushResult
+from gac_connect.commands import CATALOG, build_body
+from gac_connect.errors import GacError
+from gac_connect.models import VehicleStatus
+from gac_connect.push import PushResult
 from custom_components.gac_connect.cabin import controller
 from custom_components.gac_connect.climate import AIRFLOW_NAMES
 from test_autodetect import vehicle

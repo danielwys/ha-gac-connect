@@ -16,8 +16,8 @@ from time import monotonic
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 
-from ._vendor.gac_connect.errors import GacError
-from ._vendor.gac_connect.models import restart_needed
+from gac_connect.errors import GacError
+from gac_connect.models import restart_needed
 from .command_tracking import async_send, charging_generation, charging_requests
 
 _LOGGER = logging.getLogger(__name__)

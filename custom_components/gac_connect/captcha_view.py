@@ -15,8 +15,8 @@ from typing import Any
 
 from aiohttp import web
 
-from ._vendor.gac_connect import puzzle
-from ._vendor.gac_connect.puzzle import PuzzleSession
+from gac_connect import puzzle
+from gac_connect.puzzle import PuzzleSession
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant

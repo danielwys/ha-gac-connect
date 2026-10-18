@@ -10,7 +10,7 @@ import pytest
 from custom_components.gac_connect.api import GacClient, decode_status
 from custom_components.gac_connect.config_flow import GacOptionsFlow
 from custom_components.gac_connect.charging import schedule_attributes, schedule_mode
-from custom_components.gac_connect._vendor.gac_connect.errors import CommandError
+from gac_connect.errors import CommandError
 from test_autodetect import result, vehicle
 from test_regressions import ACCEPTED
 
@@ -238,7 +238,7 @@ def test_the_stop_time_is_needed_only_without_the_charge_limit(tmp_path, until_s
 
 
 def test_a_window_that_could_not_be_sent_says_the_request_failed(tmp_path):
-    from custom_components.gac_connect._vendor.gac_connect.errors import ResponseError
+    from gac_connect.errors import ResponseError
 
     async def run():
         async with vehicle(tmp_path) as (hass, entry, c):
