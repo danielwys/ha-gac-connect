@@ -25,11 +25,15 @@ class GacEntity(CoordinatorEntity[GacCoordinator]):
     def __init__(self, coordinator: GacCoordinator, key: str) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.vin}_{key}"
+        # Always a plain name string (or absent) by the time it is stored: the
+        # config flow resolves a numeric model code, which some markets (e.g.
+        # the UK) report instead of a name, before it ever reaches here.
+        model = coordinator.config_entry.data.get(CONF_MODEL)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.vin)},
             manufacturer="GAC Aion",
-            name=coordinator.config_entry.data.get(CONF_MODEL) or "Aion",
-            model=coordinator.config_entry.data.get(CONF_MODEL),
+            name=model or "Aion",
+            model=model,
             serial_number=coordinator.vin,
         )
 

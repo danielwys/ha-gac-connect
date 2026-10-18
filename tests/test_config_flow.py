@@ -75,6 +75,38 @@ def test_vehicle_choice_reuses_the_list_it_showed(tmp_path):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("model, shown, outcome", [
+    ("1", "AION V (P1)", "AION V"),            # the UK reports a model code; a confirmed one gets its name
+    (1, "AION V (P1)", "AION V"),
+    ("Aion UT", "Aion UT (P1)", "Aion UT"),
+    ("99", "99 (P1)", None),                   # an unconfirmed code is shown as it is, and stops setup
+])
+def test_a_model_code_is_named_once_at_setup(tmp_path, model, shown, outcome):
+    async def run():
+        flow = GacConfigFlow()
+        flow.hass = HomeAssistant(str(tmp_path))
+        flow.context = {"source": "user"}
+        flow._region, flow._mobile = "GB", "07123456789"
+        vehicles = [SimpleNamespace(vin="VIN1", model=model, plate="P1"),
+                    SimpleNamespace(vin="VIN2", model="Aion V", plate="P2")]
+        flow._client = SimpleNamespace(list_vehicles=AsyncMock(return_value=vehicles),
+                                       session=SimpleNamespace(to_dict=Mock(return_value={})))
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = Mock()
+        form = await flow.async_step_vehicle()
+        assert form["data_schema"].schema["vin"].container["VIN1"] == shown
+        result = await flow.async_step_vehicle({"vin": "VIN1"})
+        if outcome is None:
+            assert result["type"] == "abort" and result["reason"] == "unrecognised_model"
+            return
+        assert result["step_id"] == "remote_controls"
+        assert result["description_placeholders"]["model"] == outcome
+        await flow.async_step_remote_controls({})
+        created = await flow.async_step_cards({})
+        assert created["title"] == outcome and created["data"]["model"] == outcome
+    asyncio.run(run())
+
+
 def test_every_launched_market_and_the_uk_can_be_chosen_by_name(tmp_path):
     from custom_components.gac_connect._vendor.gac_connect.const import LISTED_REGIONS, REGIONS as LIBRARY_REGIONS
     from custom_components.gac_connect.config_flow import REGION_NAMES, REGIONS
