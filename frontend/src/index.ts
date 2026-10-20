@@ -28,5 +28,5 @@ for (const [type, element, name, description] of CARDS) {
   if (customElements.get(type)) continue;
   customElements.define(type, element);
   registry.push({ type, name, description, preview: true,
-                  documentationURL: "https://github.com/leecaochang/ha-gac-connect#dashboard-cards" });
+                  documentationURL: "https://github.com/wattferry/ha-gac-connect#dashboard-cards" });
 }
