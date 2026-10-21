@@ -26,8 +26,6 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install Home Assistant and test tools
         run: python -m pip install 'homeassistant==${{ matrix.ha }}' 'pytest>=9,<10' 'ruff>=0.16,<0.17'
-      - name: Install the library commit until gac-connect 0.5.0 is on PyPI
-        run: python -m pip install 'gac-connect @ git+https://github.com/leecaochang/gac-connect@c8dccb8ee83c1b011e80e6ca7d91819a8b378ace'
       - name: Install the exact manifest requirements
         run: |
           python - <<'PY'
