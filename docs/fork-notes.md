@@ -45,11 +45,15 @@ The Vehicle card now displays **Lock status unknown** rather than omitting the l
 line when neither lock entity has a reading. **Alarm armed** and **Doors & windows
 closed** are separate indicators and do not stand in for a confirmed lock report.
 
-## Dashboard colours
+## Dashboard appearance
 
 The custom cards use Home Assistant's card backgrounds, text and divider colours
-in light and dark mode. Their layout, typography, controls and semantic status
-colours are retained. The bundled JavaScript is rebuilt from the TypeScript source.
+in light and dark mode. Typography follows Home Assistant's body/heading fonts,
+and the outer card corners follow `--ha-card-border-radius` (12 px by default).
+The cards no longer load Barlow fonts. Contents, controls and semantic status
+colours are retained. Action grids adapt to the available width, and long button
+labels wrap instead of forcing columns beyond the card edge. The bundled
+JavaScript is rebuilt from the TypeScript source.
 
 ## Before a live upgrade
 

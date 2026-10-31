@@ -1,32 +1,6 @@
-// Keep the atlas drawings and typography, using Home Assistant's surface and text colours.
+// Keep the vehicle drawings and controls, using Home Assistant's theme and typography.
 
 import { css } from "lit";
-
-const FONTS: [string, number][] = [
-  ["Barlow Condensed", 500], ["Barlow Condensed", 600], ["Barlow Condensed", 700],
-  ["Barlow", 400], ["Barlow", 500],
-];
-const RANGES = {
-  latin: "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,"
-    + "U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
-  "latin-ext": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,"
-    + "U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
-};
-
-/** Shadow roots cannot declare fonts, so the faces shipped beside the bundle go in the document once. */
-export function loadFonts(base: string): void {
-  // A page that already loads Barlow (the published demo) keeps its own faces.
-  if (document.getElementById("gac-connect-fonts") || document.querySelector('link[href*="family=Barlow"]')) return;
-  const rules = FONTS.flatMap(([family, weight]) => Object.entries(RANGES).map(([subset, range]) => {
-    const file = `${family.toLowerCase().replace(" ", "-")}-${subset}-${weight}-normal.woff2`;
-    return `@font-face{font-family:"${family}";font-style:normal;font-weight:${weight};font-display:swap;`
-      + `src:url(${new URL(`fonts/${file}`, base).href}) format("woff2");unicode-range:${range}}`;
-  }));
-  const style = document.createElement("style");
-  style.id = "gac-connect-fonts";
-  style.textContent = rules.join("\n");
-  document.head.append(style);
-}
 
 export const tokens = css`
   :host {
@@ -55,8 +29,8 @@ export const tokens = css`
     --gac-lamp-high: #ffffff;
     --gac-body: var(--secondary-background-color, #f5f5f5);
     --gac-glass: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, var(--gac-land));
-    --gac-label: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
-    --gac-text: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --gac-label: var(--ha-font-family-heading, var(--ha-font-family-body, Roboto, Noto, sans-serif));
+    --gac-text: var(--ha-font-family-body, Roboto, Noto, sans-serif);
     color-scheme: light;
   }
   :host([dark]) {
@@ -99,11 +73,11 @@ export const base = css`
     display: block;
     background: var(--gac-land);
     color: var(--gac-ink);
-    border: 1px solid var(--gac-hair);
-    border-radius: 4px;
-    box-shadow: none;
+    border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--gac-hair));
+    border-radius: var(--ha-card-border-radius, 12px);
+    box-shadow: var(--ha-card-box-shadow, none);
     overflow: hidden;
-    font: 400 15px/1.35 var(--gac-text);
+    font: 400 14px/1.4 var(--gac-text);
     container-type: inline-size;
     -webkit-font-smoothing: antialiased;
   }
@@ -112,7 +86,7 @@ export const base = css`
     color: var(--gac-mw-ink);
   }
   .plate {
-    height: 44px;
+    min-height: 56px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -132,9 +106,9 @@ export const base = css`
     height: 16px;
   }
   .name {
-    font: 700 22px/1 var(--gac-label);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    font: 400 var(--ha-card-header-font-size, 24px)/1.2 var(--gac-label);
+    letter-spacing: -0.012em;
+    text-transform: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -148,9 +122,9 @@ export const base = css`
     max-width: 45%;
   }
   .lab {
-    font: 600 12px/16px var(--gac-label);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font: 500 12px/16px var(--gac-text);
+    letter-spacing: normal;
+    text-transform: none;
     color: var(--gac-muted);
   }
   .sec {
@@ -160,14 +134,14 @@ export const base = css`
     border-top: 1px solid var(--gac-hair);
   }
   .fig {
-    font: 600 40px/1 var(--gac-label);
+    font: 400 40px/1 var(--gac-text);
     font-variant-numeric: tabular-nums lining-nums;
-    letter-spacing: 0.01em;
+    letter-spacing: normal;
   }
   .fig small,
   .unit {
     font-size: 18px;
-    font-weight: 500;
+    font-weight: 400;
     color: var(--gac-muted);
     letter-spacing: 0.02em;
   }
@@ -314,12 +288,12 @@ export const base = css`
   }
   .grid3 {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
     gap: 8px;
   }
   .grid2 {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
   .empty {
@@ -331,8 +305,8 @@ export const base = css`
     display: block;
     color: var(--gac-ink);
     font: 600 18px/1.2 var(--gac-label);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: normal;
+    text-transform: none;
     margin-bottom: 4px;
   }
   @container (max-width: 330px) {
@@ -346,9 +320,6 @@ export const base = css`
     }
     .fig {
       font-size: 34px;
-    }
-    .grid3 {
-      grid-template-columns: repeat(2, 1fr);
     }
   }
 `;

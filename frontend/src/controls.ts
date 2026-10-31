@@ -79,22 +79,25 @@ export class GacAction extends LitElement {
   static override styles = [focus, marching, css`
     :host {
       display: block;
+      min-width: 0;
     }
     button {
       position: relative;
       width: 100%;
-      height: 48px;
+      min-width: 0;
+      min-height: 48px;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 0 8px;
-      font: 600 16px/1 var(--gac-label);
-      letter-spacing: 0.02em;
+      padding: 12px 10px;
+      font: 500 14px/1.3 var(--gac-text);
+      letter-spacing: normal;
       color: var(--gac-ink);
       background: var(--gac-paper);
       border: 1px solid var(--gac-edge);
-      border-radius: 2px;
+      border-radius: var(--ha-border-radius-md, 8px);
       cursor: pointer;
       overflow: hidden;
       transition: background-color 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
@@ -114,9 +117,9 @@ export class GacAction extends LitElement {
       flex: none;
     }
     span {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
     .on {
       background: var(--gac-mw);
@@ -404,8 +407,8 @@ export class GacSegments extends LitElement {
       min-width: 0;
       height: 44px;
       padding: 0 4px;
-      font: 600 15px/1 var(--gac-label);
-      letter-spacing: 0.03em;
+      font: 500 14px/1.3 var(--gac-text);
+      letter-spacing: normal;
       color: var(--gac-ink);
       background: none;
       border: 0;

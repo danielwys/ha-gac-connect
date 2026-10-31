@@ -2,7 +2,6 @@
 
 import { defineControls } from "./controls";
 import { GacCardEditor } from "./editor";
-import { loadFonts } from "./theme";
 import { GacActivityCard } from "./cards/activity-card";
 import { GacChargingCard } from "./cards/charging-card";
 import { GacClimateCard } from "./cards/climate-card";
@@ -19,7 +18,6 @@ const CARDS: [string, CustomElementConstructor, string, string][] = [
   ["gac-settings-card", GacSettingsCard, "GAC Settings", "Permissions, tracking, polling and entity choices."],
 ];
 
-loadFonts(import.meta.url);
 defineControls();
 if (!customElements.get("gac-card-editor")) customElements.define("gac-card-editor", GacCardEditor);
 

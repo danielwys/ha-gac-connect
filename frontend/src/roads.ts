@@ -167,11 +167,11 @@ export function tempRoad(o: TempRoadOptions): TemplateResult {
 export const roadStyles = `
   .road { display: block; overflow: visible; }
   .road-text { font-family: var(--gac-label); fill: var(--gac-ink); }
-  .road-lab { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; fill: var(--gac-muted); }
-  .road-num { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .road-lab { font-size: 12px; font-weight: 500; fill: var(--gac-muted); }
+  .road-num { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
   .road-unit { font-size: 15px; font-weight: 500; fill: var(--gac-muted); }
-  .road-tick { font: 600 12px var(--gac-label); fill: var(--gac-muted); letter-spacing: 0.06em; }
-  .plan-label { font: 600 12px var(--gac-label); fill: var(--gac-ink); letter-spacing: 0.06em; }
+  .road-tick { font: 500 12px var(--gac-label); fill: var(--gac-muted); }
+  .plan-label { font: 500 12px var(--gac-label); fill: var(--gac-ink); }
   .flow { animation: gac-flow 1.6s linear infinite; }
   .blink { animation: gac-blink 1s steps(1, end) infinite; }
   @keyframes gac-blink { 50% { opacity: 0.12; } }
