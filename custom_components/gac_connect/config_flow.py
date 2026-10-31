@@ -48,6 +48,7 @@ from .helpers import async_build_client
 from .location import location_enabled, tracking_choices
 from .model_names import UnrecognisedModelCode, resolve_model_name
 from .session_store import ConfigEntryStore
+from .settings import picture_url
 from .entity_filter import OMIT_OPTIONS
 from .const import (
     CONF_ALLOW_ACCOUNT_ALERTS,
@@ -578,6 +579,10 @@ class GacOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = {**self.config_entry.options, **user_input}
+            try:
+                user_input[CONF_PICTURE] = picture_url(user_input.get(CONF_PICTURE))
+            except ValueError:
+                errors[CONF_PICTURE] = "invalid_picture"
             if set(user_input.get(CONF_ENABLE_ENTITIES, ())) & set(user_input.get(CONF_OMIT_ENTITIES, ())):
                 errors[CONF_ENABLE_ENTITIES] = "conflicting_entity_choices"
             quiet = {}
@@ -594,8 +599,7 @@ class GacOptionsFlow(OptionsFlow):
             if not errors:
                 # Persist through HA's normal update API (including its reload
                 # listener), without finishing and closing this options flow.
-                # The car picture option was retired (dashboards show the car); drop a stored one.
-                options = {key: value for key, value in {**user_input, **quiet}.items() if key != CONF_PICTURE}
+                options = {**user_input, **quiet}
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, options={**options, CONF_ENABLE_TRACKER: location_enabled(user_input)}
                 )
@@ -609,6 +613,7 @@ class GacOptionsFlow(OptionsFlow):
         enable_options = dict(OMIT_OPTIONS)
         selected_enables = [key for key in opts.get(CONF_ENABLE_ENTITIES, ()) if key in enable_options]
         fields = {
+            vol.Optional(CONF_PICTURE, description={"suggested_value": opts.get(CONF_PICTURE, "")}): str,
             vol.Optional(CONF_ALLOW_PLAINTEXT_PUSH,
                          default=opts.get(CONF_ALLOW_PLAINTEXT_PUSH, False)): bool,
             vol.Optional(CONF_SCAN_INTERVAL,

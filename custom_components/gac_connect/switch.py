@@ -373,10 +373,10 @@ class GacOptionSwitch(GacOptionEntity, SwitchEntity):
         return self.options.get(self._option) is True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        self.set_options(**{self._option: True})
+        await self.async_set_options(**{self._option: True})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self.set_options(**{self._option: False})
+        await self.async_set_options(**{self._option: False})
 
 
 class GacQuietHoursSwitch(GacOptionEntity, SwitchEntity):
@@ -396,12 +396,12 @@ class GacQuietHoursSwitch(GacOptionEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         if not self.is_on:
             start, end = self._last
-            self.set_options(**{CONF_QUIET_START: start, CONF_QUIET_END: end})
+            await self.async_set_options(**{CONF_QUIET_START: start, CONF_QUIET_END: end})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if (current := quiet_hours(self.options)) is not None:
             self._last = current      # turning it back on restores these times
-        self.set_options(**{CONF_QUIET_START: "", CONF_QUIET_END: ""})
+        await self.async_set_options(**{CONF_QUIET_START: "", CONF_QUIET_END: ""})
 
 
 class GacDraftDaySwitch(GacDraftEntity, SwitchEntity):

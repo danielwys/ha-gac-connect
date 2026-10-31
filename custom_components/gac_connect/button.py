@@ -129,6 +129,9 @@ class GacCapabilitiesButton(GacEntity, ButtonEntity):
         return True
 
     async def async_press(self) -> None:
+        from .permissions import async_require_admin
+
+        await async_require_admin(self.hass, self._context)
         coordinator = self.coordinator
         try:
             await coordinator.capabilities.async_read_capability_list(coordinator.client, coordinator.vin)
