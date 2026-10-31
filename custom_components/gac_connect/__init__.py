@@ -22,7 +22,7 @@ from .account_alerts import AccountAlerts, store_key as account_alerts_store_key
 from .cabin import controller as cabin_controller
 from .capabilities import FRIDGE_ENTITIES, store_key as capabilities_store_key
 from .const import (
-    CONF_DASHBOARD_CARDS, CONF_ENABLE_FRIDGE, CONF_LOAD_CARDS, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PROFILE,
+    CONF_DASHBOARD_CARDS, CONF_ENABLE_FRIDGE, CONF_LOAD_CARDS, CONF_MODEL, CONF_OMIT_ENTITIES, CONF_PICTURE, CONF_PROFILE,
     CONF_REGION, CONF_VIN,
     DOMAIN, PLATFORMS,
 )
@@ -33,7 +33,6 @@ from .settings import ChargeDraft, async_options_applied, needs_reload
 from .entity_filter import apply_registry_choices
 from .fridge import FridgeController, store_key
 from .helpers import async_build_client
-from .statistics import async_setup_cleanup
 
 type GacConfigEntry = ConfigEntry[GacRuntime]
 
@@ -50,8 +49,7 @@ class GacRuntime:
 
 
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
-    """Watch permanent sensor removals even while vehicle entries are unloaded."""
-    async_setup_cleanup(hass)
+    """Set up the integration; Recorder owns sensor-history retention."""
     return True
 
 
@@ -200,10 +198,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: GacConfigEntry) -> bool
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GacConfigEntry) -> None:
-    """Remove this entry's statistics, credentials, preferences and equipment."""
+    """Remove credentials, preferences and equipment; keep Recorder statistics."""
     from homeassistant.helpers.storage import Store
 
-    async_setup_cleanup(hass).async_remove_entry(entry)
     await Store(hass, 1, store_key(entry.entry_id)).async_remove()
     await Store(hass, 1, capabilities_store_key(entry.entry_id)).async_remove()
     await Store(hass, 1, account_alerts_store_key(entry.entry_id)).async_remove()
@@ -219,7 +216,7 @@ async def _reload_on_update(hass: HomeAssistant, entry: GacConfigEntry) -> None:
         return
     if runtime is not None and not needs_reload(runtime.options, entry.options):
         dashboard_changed = any(runtime.options.get(key) != entry.options.get(key)
-                                for key in (CONF_LOAD_CARDS, CONF_DASHBOARD_CARDS))
+                                for key in (CONF_LOAD_CARDS, CONF_DASHBOARD_CARDS, CONF_PICTURE))
         runtime.options = dict(entry.options)      # read when needed: applies without a reload
         async_options_applied(hass, entry)
         if dashboard_changed:

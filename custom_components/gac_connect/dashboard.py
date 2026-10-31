@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import slugify
 
-from .const import CONF_DASHBOARD_CARDS, CONF_LOAD_CARDS, DASHBOARD_CARDS, DOMAIN
+from .const import CONF_DASHBOARD_CARDS, CONF_LOAD_CARDS, CONF_PICTURE, DASHBOARD_CARDS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,10 +52,14 @@ def dashboard_cards(options: dict[str, Any]) -> tuple[str, ...]:
     return tuple(card for card in DASHBOARD_CARDS if card in chosen)
 
 
-def dashboard_config(device_id: str, title: str, cards: tuple[str, ...] = DASHBOARD_CARDS) -> dict[str, Any]:
+def dashboard_config(device_id: str, title: str, cards: tuple[str, ...] = DASHBOARD_CARDS,
+                     picture: str | None = None) -> dict[str, Any]:
     """What the generated dashboard holds; only this exact configuration is ever replaced or removed."""
     def card(kind: str) -> dict[str, str]:
-        return {"type": f"custom:gac-{kind}-card", "device": device_id}
+        config = {"type": f"custom:gac-{kind}-card", "device": device_id}
+        if kind == "vehicle" and picture:
+            config["image"] = picture
+        return config
 
     views = []
     if car := [card(kind) for kind in CAR_CARDS if kind in cards]:
@@ -168,13 +172,14 @@ class VehicleDashboard:
         return {"url_path": owned["url_path"], "cards": tuple(owned.get("cards", ())),
                 "edited": await _load(board) != owned.get("config")}
 
-    async def async_apply(self, cards: tuple[str, ...], device_id: str | None, title: str) -> bool:
+    async def async_apply(self, cards: tuple[str, ...], device_id: str | None, title: str,
+                          picture: str | None = None) -> bool:
         """Create, update or remove the dashboard to hold these cards. False: the owner deleted it."""
         async with self.lock:
             owned = await self.store.async_load() or {}
             if not owned:
                 if cards and device_id:
-                    await self._create(cards, device_id, title)
+                    await self._create(cards, device_id, title, picture)
                 return True
             board = _dashboards(self.hass).get(owned.get("url_path"))
             if board is None or (board.config or {}).get("id") != owned.get("id"):
@@ -189,13 +194,13 @@ class VehicleDashboard:
                 await _collection(self.hass).async_delete_item(owned["id"])
                 await self.store.async_remove()
                 return True
-            wanted = dashboard_config(device_id, title, cards) if device_id else current
+            wanted = dashboard_config(device_id, title, cards, picture) if device_id else current
             if wanted != current:
                 await board.async_save(wanted)
                 await self.store.async_save({**owned, "cards": list(cards), "config": wanted})
             return True
 
-    async def _create(self, cards: tuple[str, ...], device_id: str, title: str) -> None:
+    async def _create(self, cards: tuple[str, ...], device_id: str, title: str, picture: str | None = None) -> None:
         collection = _collection(self.hass)
         boards = _dashboards(self.hass)
         base = f"gac-{slugify(title, separator='-') or 'car'}"
@@ -204,7 +209,7 @@ class VehicleDashboard:
             "url_path": url_path, "title": title, "icon": "mdi:car-electric",
             "require_admin": False, "show_in_sidebar": True,
         })
-        config = dashboard_config(device_id, title, cards)
+        config = dashboard_config(device_id, title, cards, picture)
         try:
             await _dashboards(self.hass)[url_path].async_save(config)
             await self.store.async_save({"id": created["id"], "url_path": url_path, "cards": list(cards),
@@ -226,7 +231,7 @@ async def async_apply_dashboard(hass: HomeAssistant, entry, device_id: str | Non
         return
     try:
         kept = await VehicleDashboard(hass, entry.entry_id).async_apply(dashboard_cards(entry.options), device_id,
-                                                                        entry.title)
+                                                                        entry.title, entry.options.get(CONF_PICTURE))
     except Exception as err:
         _LOGGER.warning("GAC Connect could not update the %s dashboard: %s", entry.title, err)
         return

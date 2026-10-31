@@ -153,3 +153,24 @@ def test_cars_that_had_the_cards_keep_them_and_older_ones_get_none_until_chosen(
             assert await async_migrate_entry(hass, entry)
             assert entry.options["load_cards"] is False       # the owner's own choice stays
     asyncio.run(run())
+
+
+def test_aion_v_upgrade_preserves_picture_sensor_id_and_user_disabled_equipment(tmp_path):
+    from homeassistant.helpers import entity_registry as er
+
+    async def run():
+        options = {"picture": "/api/image/serve/example-image/512x512", "enable_tracker": False}
+        async with vehicle(tmp_path, model="Aion V", options=options) as (hass, entry, _):
+            registry = er.async_get(hass)
+            soc = registry.async_get_or_create("sensor", "gac_connect", "VIN_soc", config_entry=entry,
+                                               suggested_object_id="aion_v_battery")
+            steering = registry.async_get_or_create("switch", "gac_connect", "VIN_steering_heat", config_entry=entry,
+                                                    disabled_by=er.RegistryEntryDisabler.USER)
+            hass.config_entries.async_update_entry(entry, minor_version=1)
+            assert await async_migrate_entry(hass, entry)
+            assert entry.options["picture"] == options["picture"]
+            assert entry.options["enable_tracker"] is False
+            assert entry.options["load_cards"] is False and entry.options["dashboard_cards"] == []
+            assert registry.async_get_entity_id("sensor", "gac_connect", "VIN_soc") == soc.entity_id
+            assert registry.async_get(steering.entity_id).disabled_by is er.RegistryEntryDisabler.USER
+    asyncio.run(run())

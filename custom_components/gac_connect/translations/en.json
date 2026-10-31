@@ -96,7 +96,8 @@
           "enable_entities": "Always show",
           "omit_entities": "Omit unsupported entities",
           "quiet_start": "Quiet hours start (HH:MM, optional)",
-          "quiet_end": "Quiet hours end (HH:MM, optional)"
+          "quiet_end": "Quiet hours end (HH:MM, optional)",
+          "picture": "Car picture (optional)"
         },
         "data_description": {
           "allow_plaintext_push": "Off by default. If GAC offers only a plaintext broker, enabling this sends the broker credentials and topic names without TLS, which allows network interception or forged results. On GAC's Southeast Asia service they include an account number, but not the VIN or phone number. Polling continues when disabled.",
@@ -107,7 +108,8 @@
           "enable_entities": "Show these entities even if the car does not appear to have them. Omit and the fridge and location settings still take priority; remote unlocking, connector unlock and shutdown need their Allow settings.",
           "omit_entities": "Hide these entities even if the car has them. Existing entities are disabled while selected and return with the same IDs if you clear them.",
           "track_parked": "Show the car's location while it is switched off. With either location setting on, the Home/Away location tracker and a GPS coordinates sensor are added; with both off, neither is shown. Coordinates remain redacted in downloaded diagnostics.",
-          "track_moving": "Show the car's location while it is switched on. The car reports no speed or gear, so switched on counts as moving, even when stationary. While the car is in a state you do not track, both location entities show unknown and no position is recorded."
+          "track_moving": "Show the car's location while it is switched on. The car reports no speed or gear, so switched on counts as moving, even when stationary. While the car is in a state you do not track, both location entities show unknown and no position is recorded.",
+          "picture": "A local Home Assistant image path or HTTP(S) URL, shown on the vehicle card and location tracker. Leave empty to use the card drawing."
         }
       },
       "init": {
@@ -189,7 +191,8 @@
       "command_refused": "{reason}",
       "capability_read_failed": "The capability list could not be read. Equipment is still detected from the car's reports; try again later.",
       "dashboard_edited": "This car's dashboard has been edited, so GAC Connect will not change or remove it. Change it on the dashboard itself, or delete it there.",
-      "confirmation_required": "Tick Remove the dashboard to confirm, or close this dialog to keep it."
+      "confirmation_required": "Tick Remove the dashboard to confirm, or close this dialog to keep it.",
+      "invalid_picture": "Enter a local image path or an HTTP(S) URL."
     },
     "abort": {
       "vehicle_not_loaded": "The vehicle integration is not loaded. Reconnect it before viewing or changing charging settings."

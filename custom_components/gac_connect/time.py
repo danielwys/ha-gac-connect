@@ -47,7 +47,7 @@ class GacQuietTime(GacOptionEntity, TimeEntity):
         start, end = quiet_hours(self.options) or DEFAULT_QUIET
         clock = f"{value.hour:02d}:{value.minute:02d}"
         start, end = (clock, end) if self._option == CONF_QUIET_START else (start, clock)
-        self.set_options(**{CONF_QUIET_START: start, CONF_QUIET_END: end})
+        await self.async_set_options(**{CONF_QUIET_START: start, CONF_QUIET_END: end})
 
 
 class GacDraftTime(GacDraftEntity, TimeEntity):

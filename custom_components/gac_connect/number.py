@@ -147,4 +147,4 @@ class GacPollingInterval(GacOptionEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         if value != int(value):
             raise ServiceValidationError("The polling interval must be a whole number of seconds")
-        self.set_options(**{CONF_SCAN_INTERVAL: int(value)})
+        await self.async_set_options(**{CONF_SCAN_INTERVAL: int(value)})

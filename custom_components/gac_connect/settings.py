@@ -11,6 +11,7 @@ import re
 from collections.abc import Callable, Mapping
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
@@ -45,6 +46,21 @@ SIGNAL_OPTIONS = "gac_connect_options_{entry_id}"
 _CLOCK = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]")
 
 
+def picture_url(value: str | None) -> str:
+    """Allow HA image paths or HTTP(S) images; never executable URL schemes."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if any(ord(char) < 32 for char in value) or "\\" in value:
+        raise ValueError("Invalid car picture URL")
+    parsed = urlsplit(value)
+    if (value.startswith("/") and not value.startswith("//") and not parsed.netloc) or (
+        parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username and not parsed.password
+    ):
+        return value
+    raise ValueError("Use a local image path or an HTTP(S) URL")
+
+
 def needs_reload(before: Mapping[str, Any], after: Mapping[str, Any]) -> bool:
     """Whether a change of options adds or removes entities or connections."""
     def shape(options: Mapping[str, Any]) -> tuple:
@@ -73,7 +89,11 @@ def async_set_options(hass: HomeAssistant, entry, updates: Mapping[str, Any]) ->
     if set(options.get(CONF_ENABLE_ENTITIES, ())) & set(options.get(CONF_OMIT_ENTITIES, ())):
         raise ServiceValidationError("An entity cannot be both always shown and omitted")
     options[CONF_ENABLE_TRACKER] = location_enabled(options)
-    options.pop(CONF_PICTURE, None)
+    if CONF_PICTURE in options:
+        try:
+            options[CONF_PICTURE] = picture_url(options[CONF_PICTURE])
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
     hass.config_entries.async_update_entry(entry, options=options)
 
 

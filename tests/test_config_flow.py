@@ -157,7 +157,7 @@ def test_reconfigure_signs_in_again_and_keeps_the_entry(tmp_path):
     asyncio.run(run())
 
 
-def test_settings_drop_the_retired_car_picture(tmp_path):
+def test_settings_preserve_the_existing_car_picture(tmp_path):
     from test_autodetect import vehicle
 
     async def run():
@@ -165,7 +165,7 @@ def test_settings_drop_the_retired_car_picture(tmp_path):
             flow = GacOptionsFlow()
             flow.hass, flow.handler = hass, entry.entry_id
             form = await flow.async_step_settings()
-            assert "picture" not in form["data_schema"].schema
+            assert "picture" in form["data_schema"].schema
             await flow.async_step_settings({"scan_interval": 180})
-            assert "picture" not in entry.options and entry.options["scan_interval"] == 180
+            assert entry.options["picture"] == "/local/old.png" and entry.options["scan_interval"] == 180
     asyncio.run(run())

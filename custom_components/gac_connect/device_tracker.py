@@ -1,6 +1,6 @@
 """Device tracker: the vehicle's GPS location. Off by default for privacy.
 
-The tracker has no picture of its own; dashboard cards supply the car's image.
+The optional custom picture is shared with the vehicle dashboard card.
 """
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GacConfigEntry
 from .coordinator import GacCoordinator
+from .const import CONF_PICTURE
 from .entity import GacEntity
 from .entity_filter import add_configured_entities
 from .location import location_enabled, shown_position
@@ -32,6 +33,10 @@ class GacDeviceTracker(GacEntity, TrackerEntity):
 
     def __init__(self, coordinator: GacCoordinator) -> None:
         super().__init__(coordinator, "location")
+
+    @property
+    def entity_picture(self) -> str | None:
+        return self.coordinator.config_entry.options.get(CONF_PICTURE) or None
 
     @property
     def latitude(self) -> float | None:

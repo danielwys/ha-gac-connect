@@ -8,11 +8,13 @@ import re
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from gac_connect.errors import GacError
+from gac_connect.capabilities import COMMAND_FEATURES
 
 from .api import validate_clock, validate_weekly
 from .charge_now import charge_now_request
@@ -20,6 +22,7 @@ from .command_tracking import async_send
 from .charging import window_target
 from .capability_report import cabin_capability_report, full_capability_report
 from .const import DOMAIN
+from .permissions import async_require_admin, async_require_vehicle_permission
 
 ATTR_VIN = "vin"
 ATTR_START = "start"
@@ -76,12 +79,19 @@ def _coordinators(hass: HomeAssistant) -> dict[str, object]:
     return out
 
 
-def _resolve(hass: HomeAssistant, call: ServiceCall):
+async def _resolve(hass: HomeAssistant, call: ServiceCall, *, permission: str = POLICY_READ,
+                   feature: str | None = None, admin_only: bool = False):
     coordinators = _coordinators(hass)
     vin = call.data.get(ATTR_VIN) or (next(iter(coordinators)) if len(coordinators) == 1 else None)
     if vin not in coordinators:
-        raise HomeAssistantError(f"unknown or unspecified vin; known: {', '.join(coordinators) or 'none'}")
-    return coordinators[vin], vin
+        raise HomeAssistantError("Unknown or unspecified vehicle")
+    coordinator = coordinators[vin]
+    context = getattr(call, "context", None)
+    if admin_only:
+        await async_require_admin(hass, context)
+    else:
+        await async_require_vehicle_permission(hass, context, coordinator, permission=permission, feature=feature)
+    return coordinator, vin
 
 
 def async_register_services(hass: HomeAssistant) -> None:
@@ -89,7 +99,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         return
 
     async def charge_now(call: ServiceCall) -> None:
-        coordinator, vin = _resolve(hass, call)
+        coordinator, vin = await _resolve(hass, call, permission=POLICY_CONTROL, feature="charge_control")
         try:
             await async_send(coordinator, "charge-now",
                              charge_now_request(coordinator, until_soc=call.data.get(ATTR_UNTIL_SOC, False)))
@@ -97,7 +107,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(str(err)) from err
 
     async def set_charge_window(call: ServiceCall) -> None:
-        coordinator, vin = _resolve(hass, call)
+        coordinator, vin = await _resolve(hass, call, permission=POLICY_CONTROL, feature="charge_control")
         start, stop = call.data[ATTR_START], call.data.get(ATTR_STOP)
         weekly, until_soc = call.data.get(ATTR_WEEKLY, 0), call.data.get(ATTR_UNTIL_SOC, False)
         if stop is None and not until_soc:
@@ -112,9 +122,11 @@ def async_register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(str(err)) from err
 
     async def send_command(call: ServiceCall) -> None:
-        coordinator, vin = _resolve(hass, call)
+        command = call.data[ATTR_COMMAND]
+        feature = COMMAND_FEATURES.get(command)
+        coordinator, vin = await _resolve(hass, call, permission=POLICY_CONTROL, feature=feature,
+                                           admin_only=feature is None)
         try:
-            command = call.data[ATTR_COMMAND]
             params = call.data.get(ATTR_PARAMS) or {}
             await async_send(coordinator, command, coordinator.client.command(vin, command, **params),
                              expected={} if params else None)
@@ -125,7 +137,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(str(err)) from err
 
     async def get_control_capabilities(call: ServiceCall) -> dict:
-        coordinator, vin = _resolve(hass, call)
+        coordinator, vin = await _resolve(hass, call)
         try:
             data = await coordinator.client.get_control_capabilities(vin)
             return {**cabin_capability_report(data), "all": full_capability_report(data)}
@@ -133,14 +145,14 @@ def async_register_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(str(err)) from err
 
     async def get_position(call: ServiceCall) -> dict:
-        coordinator, vin = _resolve(hass, call)
+        coordinator, vin = await _resolve(hass, call)
         try:
             return {"position": _masked(await coordinator.client.get_position(vin))}
         except GacError as err:
             raise HomeAssistantError(str(err)) from err
 
     async def get_alerts(call: ServiceCall) -> dict:
-        coordinator, vin = _resolve(hass, call)
+        coordinator, vin = await _resolve(hass, call)
         try:
             page = await coordinator.client.get_alarms(vin, page=call.data.get(ATTR_PAGE, 1))
         except GacError as err:
@@ -149,7 +161,7 @@ def async_register_services(hass: HomeAssistant) -> None:
 
     async def get_departure_plans(call: ServiceCall) -> dict:
         """Both generations the app uses: the plan list, and the older single standby setting."""
-        coordinator, vin = _resolve(hass, call)
+        coordinator, vin = await _resolve(hass, call)
         reads = {"plans": coordinator.client.get_departure_plans(vin),
                  "standby": coordinator.client.get_standby_config(vin),
                  "default_plan": coordinator.client.get_standby_config(vin, default=True)}
@@ -203,7 +215,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         from .entity_filter import OMIT_OPTIONS
         from .settings import async_set_options
 
-        coordinator, _ = _resolve(hass, call)
+        coordinator, _ = await _resolve(hass, call, admin_only=True)
         key, visibility = call.data["entity"], call.data["visibility"]
         if key not in OMIT_OPTIONS:
             raise ServiceValidationError(f"Unknown entity {key!r}; the Entity choices sensor lists them")

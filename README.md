@@ -11,6 +11,9 @@ Monitor and control a **GAC / AION** vehicle from Home Assistant: battery, range
 charging and charge scheduling, climate and seats, doors, windows, boot and
 location.
 
+This branch adds authorization checks, preserves Recorder statistics and restores
+custom car pictures on top of PR #11. See [fork notes and upgrade considerations](docs/fork-notes.md).
+
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wattferry&repository=ha-gac-connect&category=integration)
 
 ## Requirements
@@ -234,6 +237,7 @@ photo of your car, a tyre pressure to warn below, and which actions to show.
 |---|---|---|
 | Allow unencrypted push connections | off | Receive command results through GAC's push feed where its broker is unencrypted. The broker credentials and topic names then travel without encryption; on GAC's Southeast Asia service they include an account number, but not the VIN or phone number. Without it, the integration asks GAC for each command's result instead (see **How commands report back**). |
 | Poll interval | 300 s | Minimum 60 s. Lengthened automatically when several vehicles share the request budget. Applies at once. |
+| Car picture | empty | A local Home Assistant image path or HTTP(S) URL for the vehicle card and location tracker. Existing pictures are preserved. |
 | Enable location tracking when parked | off | Show the location while the car is switched off. |
 | Enable location tracking when moving | off | Show the location while the car is switched on. A change hides or shows the position at once; positions already recorded stay in Home Assistant's history. |
 | Allow remote unlocking | off | Lets the Doors lock unlock the car. |
@@ -347,8 +351,9 @@ Thanks to their authors for showing what a good community integration looks like
   never overwritten by Charge now's follow-up; a new sign-in is not lost to a refresh
   in progress; partial reports no longer read as locked; command outcomes need the full
   target and a fresh report, and the car's refusal wins; undecryptable or refused
-  replies are errors. Sign-in uses the library's puzzle page. The car-picture option,
-  bundled pictures and example dashboard were removed. Requires Home Assistant 2025.3+.
+  replies are errors. Sign-in uses the library's puzzle page. Bundled pictures and the
+  example dashboard were removed; this fork keeps the custom car-picture option.
+  Requires Home Assistant 2025.3+.
 
 - **0.4.0b3** — **UK (`GB`) sign-in is confirmed working end to end** on a real
   My AION account and AION V: all entities create and state of charge and the

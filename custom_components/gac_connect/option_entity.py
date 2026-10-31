@@ -7,6 +7,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .entity import GacEntity
+from .permissions import async_require_admin
 from .settings import SIGNAL_OPTIONS, async_set_options
 
 
@@ -29,7 +30,8 @@ class GacOptionEntity(GacEntity):
             self.hass, SIGNAL_OPTIONS.format(entry_id=self.coordinator.config_entry.entry_id),
             self.async_write_ha_state))
 
-    def set_options(self, **updates: Any) -> None:
+    async def async_set_options(self, **updates: Any) -> None:
+        await async_require_admin(self.hass, self._context)
         async_set_options(self.hass, self.coordinator.config_entry, updates)
         self.async_write_ha_state()
 
