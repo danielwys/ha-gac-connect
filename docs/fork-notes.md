@@ -41,6 +41,16 @@ For an Aion V reporting locks `[0, 0, -1, -1]`, the result is **Unknown**: the f
 locks are reported locked, while the rear locks are unreported. This fork does not
 reinterpret those missing readings as Locked. No physical car commands were used in testing.
 
+The Vehicle card now displays **Lock status unknown** rather than omitting the lock
+line when neither lock entity has a reading. **Alarm armed** and **Doors & windows
+closed** are separate indicators and do not stand in for a confirmed lock report.
+
+## Dashboard colours
+
+The custom cards use Home Assistant's card backgrounds, text and divider colours
+in light and dark mode. Their layout, typography, controls and semantic status
+colours are retained. The bundled JavaScript is rebuilt from the TypeScript source.
+
 ## Before a live upgrade
 
 1. Take and verify a full Home Assistant backup, including configuration, `.storage`,
@@ -66,7 +76,8 @@ it cannot prove the absence of malicious code or undisclosed vulnerabilities.
 - Home Assistant 2026.10.4 / Python 3.14.2: 947 tests passed.
 - Home Assistant 2025.3.0 / Python 3.13.2: 947 tests passed.
 - Ruff static checks and Git whitespace checks passed.
-- Frontend source and bundled assets are unchanged by this patch. The reviewed base
-  was rebuilt successfully and all 14 committed frontend files matched byte for byte.
+- The original authorization/history patch left the frontend unchanged; its reviewed
+  base reproduced all 14 committed assets. The later colour and status-label update
+  is limited to the frontend source and its rebuilt bundle.
 
 These checks do not replace a live, read-only validation on the intended car.

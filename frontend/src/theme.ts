@@ -1,4 +1,4 @@
-// The atlas: land-tint ground, road classes as the only colours, condensed caps for labels.
+// Keep the atlas drawings and typography, using Home Assistant's surface and text colours.
 
 import { css } from "lit";
 
@@ -30,13 +30,13 @@ export function loadFonts(base: string): void {
 
 export const tokens = css`
   :host {
-    --gac-land: #eaf0e2;
-    --gac-paper: #f8faf4;
-    --gac-water: #dce6ec;
-    --gac-ink: #1e2421;
-    --gac-muted: #535b56;
-    --gac-hair: rgba(30, 36, 33, 0.2);
-    --gac-edge: rgba(30, 36, 33, 0.34);
+    --gac-land: var(--ha-card-background, var(--card-background-color, #ffffff));
+    --gac-paper: var(--secondary-background-color, #f5f5f5);
+    --gac-water: var(--primary-background-color, #fafafa);
+    --gac-ink: var(--primary-text-color, #212121);
+    --gac-muted: var(--secondary-text-color, #727272);
+    --gac-hair: var(--divider-color, rgba(0, 0, 0, 0.12));
+    --gac-edge: var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.24)));
     --gac-mw: #2e6db4;
     --gac-mw-case: #1b3f6b;
     --gac-mw-ink: #ffffff;
@@ -47,26 +47,26 @@ export const tokens = css`
     --gac-red-ink: #b02a21;
     --gac-yellow: #f2c230;
     --gac-yellow-case: #8a6a0a;
-    --gac-minor: #ffffff;
-    --gac-minor-case: #a9b4a3;
-    --gac-road: #56625b;
-    --gac-road-case: #2f3833;
-    --gac-lamp: #f4f6f0;
+    --gac-minor: var(--secondary-background-color, #f5f5f5);
+    --gac-minor-case: var(--disabled-text-color, #bdbdbd);
+    --gac-road: var(--secondary-text-color, #727272);
+    --gac-road-case: var(--primary-text-color, #212121);
+    --gac-lamp: var(--secondary-text-color, #727272);
     --gac-lamp-high: #ffffff;
-    --gac-body: #f8faf4;
-    --gac-glass: #dce6ec;
+    --gac-body: var(--secondary-background-color, #f5f5f5);
+    --gac-glass: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, var(--gac-land));
     --gac-label: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
     --gac-text: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     color-scheme: light;
   }
   :host([dark]) {
-    --gac-land: #17201b;
-    --gac-paper: #1f2a24;
-    --gac-water: #1a2a35;
-    --gac-ink: #e4ebe2;
-    --gac-muted: #a4aea7;
-    --gac-hair: rgba(228, 235, 226, 0.16);
-    --gac-edge: rgba(228, 235, 226, 0.3);
+    --gac-land: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+    --gac-paper: var(--secondary-background-color, #282828);
+    --gac-water: var(--primary-background-color, #111111);
+    --gac-ink: var(--primary-text-color, #e1e1e1);
+    --gac-muted: var(--secondary-text-color, #9b9b9b);
+    --gac-hair: var(--divider-color, rgba(225, 225, 225, 0.12));
+    --gac-edge: var(--ha-card-border-color, var(--divider-color, rgba(225, 225, 225, 0.24)));
     --gac-mw: #3f86d4;
     --gac-mw-case: #9cc4ef;
     --gac-mw-ink: #0c1a2b;
@@ -77,14 +77,13 @@ export const tokens = css`
     --gac-red-ink: #f08a80;
     --gac-yellow: #f2c230;
     --gac-yellow-case: #f7dd8a;
-    --gac-minor: #2b3731;
-    --gac-minor-case: #4b5852;
-    --gac-road: #aeb9b1;
-    --gac-road-case: #dfe6dd;
-    --gac-lamp: #d9ded6;
+    --gac-minor: var(--secondary-background-color, #282828);
+    --gac-minor-case: var(--disabled-text-color, #6f6f6f);
+    --gac-road: var(--secondary-text-color, #9b9b9b);
+    --gac-road-case: var(--primary-text-color, #e1e1e1);
+    --gac-lamp: var(--secondary-text-color, #9b9b9b);
     --gac-lamp-high: #ffffff;
-    --gac-body: #26322c;
-    --gac-glass: #1f3442;
+    --gac-body: var(--secondary-background-color, #282828);
     color-scheme: dark;
   }
 `;

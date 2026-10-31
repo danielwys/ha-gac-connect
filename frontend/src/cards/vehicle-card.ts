@@ -268,6 +268,8 @@ export class GacVehicleCard extends GacCard {
     if (lock?.state === "open") items.push(html`<li>${mark("off")}Not locked</li>`);
     else if (locked !== undefined) {
       items.push(html`<li>${mark(locked ? "ok" : "off")}${locked ? "Locked" : "Unlocked"}</li>`);
+    } else if (lock || vehicle.has("binary_sensor.locked")) {
+      items.push(html`<li>${mark("warn")}Lock status unknown</li>`);
     }
     const alarm = isOn(vehicle.get("binary_sensor.anti_theft"));
     if (alarm !== undefined) items.push(html`<li>${mark(alarm ? "ok" : "off")}${alarm ? "Alarm armed" : "Alarm off"}</li>`);
@@ -284,7 +286,7 @@ export class GacVehicleCard extends GacCard {
     open.forEach((text) => items.push(html`<li>${mark("warn")}${text}</li>`));
     if (isOn(vehicle.get("binary_sensor.brake_fluid"))) items.push(html`<li>${mark("fault")}Check brake fluid</li>`);
     const anyKnown = Object.values(state.doors).some((v) => v !== undefined) || state.boot !== undefined;
-    if (!open.length && anyKnown) items.push(html`<li>${mark("ok")}All closed</li>`);
+    if (!open.length && anyKnown) items.push(html`<li>${mark("ok")}Doors & windows closed</li>`);
     const lights = state.lights ?? {};
     if (lights.indicators) items.push(html`<li>${mark("warn")}Indicators flashing</li>`);
     if (lights.highBeam) items.push(html`<li>${mark("lamp")}High beams on</li>`);
