@@ -222,6 +222,13 @@ still using its stored copy of Home Assistant's page: reload it, and if that is 
 clear the browser's stored data for your Home Assistant address (in the Companion app:
 Settings → Companion app → Debugging → Reset frontend cache).
 
+With storage-mode dashboard resources, the integration registers its bundled JavaScript
+module in **Settings → Dashboards → Resources** and keeps the versioned URL up to date.
+This uses the dashboard's own module-loading path instead of relying on a background
+page script. Existing registrations of this exact local bundle are reused; unrelated
+resources are preserved. YAML resource lists remain user-managed and keep the fallback
+page loader.
+
 **On your own dashboard:** Edit dashboard → Add card → search for **GAC**. Each card shows one
 car: with several cars, pick the car in the card's editor and add a card for each (with one
 car there is nothing to pick). The Vehicle card can also take a body style for its drawing, a

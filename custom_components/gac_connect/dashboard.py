@@ -78,6 +78,7 @@ def _available(hass: HomeAssistant) -> bool:
 class _Cards:
     def __init__(self) -> None:
         self.url: str | None = None
+        self.resource = False
         self.wanted: set[str] = set()
         self.lock = asyncio.Lock()
 
@@ -86,9 +87,38 @@ def _cards(hass: HomeAssistant) -> _Cards:
     return hass.data.setdefault(_DATA, _Cards())
 
 
+async def _async_card_resource(hass: HomeAssistant, url: str | None) -> bool:
+    """Keep the bundled module in Lovelace's loading path; YAML resources remain user-owned."""
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+    data: Any = hass.data.get(LOVELACE_DATA)
+    collection = data.get("resources") if isinstance(data, dict) else getattr(data, "resources", None)
+    if not isinstance(collection, ResourceStorageCollection):
+        return False
+
+    # Public API loads the collection on both the oldest and current supported HA.
+    await collection.async_get_info()
+    path = f"{URL_BASE}/{CARDS}"
+    owned = [item for item in collection.async_items() if item.get("url", "").split("?", 1)[0] == path]
+    if url is not None:
+        if owned:
+            if owned[0].get("url") != url or owned[0].get("type") != "module":
+                await collection.async_update_item(owned[0]["id"], {"url": url, "res_type": "module"})
+            owned = owned[1:]
+        else:
+            await collection.async_create_item({"url": url, "res_type": "module"})
+    # Retire duplicate/old registrations of this exact local module, never other resources.
+    for item in owned:
+        await collection.async_delete_item(item["id"])
+    return True
+
+
 async def async_want_cards(hass: HomeAssistant, entry_id: str, want: bool) -> None:
     """Load the bundle on every page while any entry that loads the cards is set up; drop it when none is."""
-    if not _available(hass) or not (FRONTEND_DIR / BUNDLE).exists() or not (FRONTEND_DIR / CARDS).exists():
+    if not _available(hass):
+        return
+    if want and (not (FRONTEND_DIR / BUNDLE).exists() or not (FRONTEND_DIR / CARDS).exists()):
         return
     from homeassistant.components import frontend
 
@@ -109,10 +139,23 @@ async def async_want_cards(hass: HomeAssistant, entry_id: str, want: bool) -> No
                     [StaticPathConfig(URL_BASE, str(FRONTEND_DIR), cache_headers=True)])
                 hass.data[f"{_DATA}_route"] = True
             cards.url = f"{URL_BASE}/{BUNDLE}?v={digest}"
-            frontend.add_extra_js_url(hass, cards.url)
-        elif not cards.wanted and cards.url is not None:
-            frontend.remove_extra_js_url(hass, cards.url)
+            try:
+                cards.resource = await _async_card_resource(hass, f"{URL_BASE}/{CARDS}?v={digest}")
+            except Exception as err:
+                _LOGGER.warning("Could not register GAC dashboard resource; using the page loader: %s", err)
+                cards.resource = False
+            if not cards.resource:
+                # YAML resource collections cannot be edited; retain the existing loader there.
+                frontend.add_extra_js_url(hass, cards.url)
+        elif not cards.wanted:
+            if cards.url is not None and not cards.resource:
+                frontend.remove_extra_js_url(hass, cards.url)
+            try:
+                await _async_card_resource(hass, None)
+            except Exception as err:
+                _LOGGER.warning("Could not remove GAC dashboard resource: %s", err)
             cards.url = None
+            cards.resource = False
 
 
 # ---- the generated dashboard -------------------------------------------------

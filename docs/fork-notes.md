@@ -55,6 +55,21 @@ colours are retained. Action grids adapt to the available width, and long button
 labels wrap instead of forcing columns beyond the card edge. The bundled
 JavaScript is rebuilt from the TypeScript source.
 
+## Dashboard module loading
+
+In storage mode, the integration registers the main card bundle as a Lovelace JavaScript
+module, with the same content-based cache version used by the loader. It adopts an
+existing registration of this exact local module and updates it when the bundle changes.
+Duplicate versions are retired so an older module cannot register the cards first.
+Unrelated or externally hosted resources are never changed. The registration is shared
+across opted-in cars and removed after the last car opts out. YAML resource lists stay
+user-owned and use the existing page-loader fallback.
+
+This addresses a loading failure where stock cards render but the GAC cards show
+Configuration error. Browser tests reproduced the error cards while the main script
+was deliberately delayed and confirmed all cards recovered when the registered module
+arrived. A phone's existing WebView still needs a refresh after registration or an update.
+
 ## Before a live upgrade
 
 1. Take and verify a full Home Assistant backup, including configuration, `.storage`,
