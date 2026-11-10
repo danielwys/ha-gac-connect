@@ -92,6 +92,34 @@ def test_lock_decoding(model, codes, expected):
     assert doors_locked(s, model) is expected
 
 
+@pytest.mark.parametrize(
+    "locks,alarm,rear_open,expected",
+    [
+        ([0, 0, -1, -1], 1, 0, True),
+        ([1, 1, -1, -1], 0, 0, False),
+        ([0, 0, -1, 1], 1, 0, False),
+        ([0, 0, -1, -1], 0, 0, None),
+        ([0, 0, -1, -1], 1, 1, None),
+    ],
+)
+def test_aion_v_central_lock_entities(locks, alarm, rear_open, expected):
+    from custom_components.gac_connect.lock import GacLock
+
+    status = decode_status({
+        "doorAccessors": [
+            {"door": i, "lock": code, "openMode": rear_open if i == 4 else 0}
+            for i, code in enumerate(locks, start=1)
+        ],
+        "antiTheftAccessors": [{"enable": alarm}],
+        "hatchAccessors": [{"hatch": 3, "openMode": 0, "openModeFlag": 0}],
+    })
+    coordinator = coord(status)
+    sensor = next(d for d in BINARY_SENSORS if d.key == "locked")
+
+    assert GacLock(coordinator).is_locked is expected
+    assert GacBinaryEntity(coordinator, sensor).is_on is (None if expected is None else not expected)
+
+
 def test_sensor_values_and_units_are_consistent():
     s = decode_status(
         {

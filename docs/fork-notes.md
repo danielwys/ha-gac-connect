@@ -36,14 +36,10 @@ and location tracking remain opt-in; setting a picture enables neither.
 
 ## Aion V lock readings
 
-The 0.5.0 library fixes the old false-Unlocked result for partial door-lock reports.
-For an Aion V reporting locks `[0, 0, -1, -1]`, the result is **Unknown**: the front
-locks are reported locked, while the rear locks are unreported. This fork does not
-reinterpret those missing readings as Locked. No physical car commands were used in testing.
-
-The Vehicle card now displays **Lock status unknown** rather than omitting the lock
-line when neither lock entity has a reading. **Alarm armed** and **Doors & windows
-closed** are separate indicators and do not stand in for a confirmed lock report.
+For the Aion V, the integration can infer central locking when both front doors
+report locked, both rear lock codes are `-1`, all four doors report closed and the
+body alarm reports armed. An explicit unlocked reading still takes precedence.
+The Vehicle card and Home Assistant lock entities use the same interpretation.
 
 ## Dashboard appearance
 

@@ -10,9 +10,10 @@ from homeassistant.helpers.storage import Store
 
 from gac_connect import GacError
 from gac_connect.commands import CYCLING_FRESH_AIR, CYCLING_RECIRCULATE
-from .api import Capabilities, Support, doors_locked, equipment_from_capabilities, ranges_from_capabilities
+from .api import Capabilities, Support, equipment_from_capabilities, ranges_from_capabilities
 from .entity_filter import LOCATION_ENTITIES
 from .location import location_enabled
+from .lock_state import doors_locked
 from .const import (
     CONF_ENABLE_ENTITIES, CONF_MODEL,
     CONF_ALLOW_CHARGER_UNLOCK,
@@ -154,8 +155,8 @@ class CapabilityManager:
         self._store.async_delay_save(self._snapshot, 10)
 
     def observe(self, status) -> None:
-        # Use the same model-aware interpretation as the lock entities (UT
-        # rear-door sentinels), without changing the coordinator's report.
+        # Use the same model-aware interpretation as the lock entities, without
+        # changing the coordinator's report.
         if status.locked is None and (locked := doors_locked(status, self.entry.data.get(CONF_MODEL))) is not None:
             status = replace(status, locked=locked)
         if self.detector.observe(status):

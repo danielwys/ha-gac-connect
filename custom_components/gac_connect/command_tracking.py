@@ -19,12 +19,12 @@ from gac_connect.capabilities import COMMAND_FEATURES
 from gac_connect.commands import refusal_hint
 from gac_connect.models import ChargingMode
 from gac_connect.errors import AuthError, CommandError, RateLimitedError, TokenInvalidError, result_reason
-from .api import doors_locked
 from .charging import CHARGE_COMMANDS
 from .const import (
     CONF_ALLOW_CHARGER_UNLOCK, CONF_ALLOW_VEHICLE_SHUTDOWN, CONF_EXPERIMENTAL_PINLESS_UNLOCK,
     VEHICLE_SHUTDOWN_COMMANDS,
 )
+from .lock_state import doors_locked
 from .seats import ventilation_level, ventilation_state
 
 _LOGGER = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .api import doors_locked
+from .lock_state import doors_locked
 
 HOLD_SECONDS = 300.0
 CAR_ALERT_TYPES = (
