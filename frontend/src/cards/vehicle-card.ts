@@ -83,8 +83,7 @@ export class GacVehicleCard extends GacCard {
     .photo {
       display: block;
       width: 100%;
-      height: 148px;
-      object-fit: cover;
+      height: auto;
       border-bottom: 1px solid var(--gac-hair);
     }
     .car {
