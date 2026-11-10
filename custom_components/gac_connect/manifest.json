@@ -10,10 +10,10 @@
   ],
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/wattferry/ha-gac-connect",
+  "documentation": "https://github.com/danielwys/ha-gac-connect#readme",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/wattferry/ha-gac-connect/issues",
+  "issue_tracker": "https://github.com/danielwys/ha-gac-connect/issues",
   "loggers": [
     "gac_connect"
   ],

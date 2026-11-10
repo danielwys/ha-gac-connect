@@ -44,5 +44,5 @@ def resolve_model_name(raw: object) -> str | None:
             f"Unrecognised vehicle model code {code!r}. Only "
             f"{sorted(_CONFIRMED_MODEL_CODES)} are confirmed; refusing to guess "
             "the model of an unknown vehicle. Please report this code at "
-            "https://github.com/wattferry/ha-gac-connect/issues."
+            "https://github.com/danielwys/ha-gac-connect/issues."
         ) from None

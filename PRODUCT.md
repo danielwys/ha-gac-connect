@@ -8,10 +8,11 @@ web
 
 ## Stack
 
-Home Assistant custom integration (Python). The dashboard cards are Lit + TypeScript web
-components, built to one bundle that is committed inside `custom_components/gac_connect`
-and registered by the integration when it loads, so one HACS install brings both. CI checks
-the committed bundle matches its source, as it already does for the bundled library.
+Home Assistant custom integration in Python, backed by the published `gac-connect` library.
+The optional dashboard cards are Lit and TypeScript web components. The integration ships
+their main bundle and page loader. In storage mode it registers the main bundle as a versioned
+dashboard resource. In YAML mode it uses the page loader. CI tests the pinned library and checks
+that the committed frontend assets match the source.
 
 ## Users
 
@@ -34,17 +35,16 @@ without opening Home Assistant's entity dialogs.
 
 ## Positioning
 
-Unofficial and capability-driven. The integration reads each car's capability list, so the
-cards show only what this car actually has, on every GAC model, including ones never
-tested. Commands are honest: a control shows the requested state, then whether the car
-confirmed it, refused it (with the car's own reason) or never answered.
+The integration uses the car's capability list and reports to decide which entities and
+controls to show. Commands show the requested state, then whether the car confirmed it,
+refused it with a reason or timed out.
 
 ## Operating Context
 
-- Cards sit in Home Assistant dashboards (masonry or sections view), on desktop browsers,
-  wall tablets and the Companion apps on iOS and Android. Each card must work from about
-  300 to 420 px wide.
-- They follow the user's Home Assistant theme, light or dark.
+- Cards sit in Home Assistant dashboards on desktop browsers, wall tablets and Companion
+  apps. The layout adapts to the card width. Controls wrap and the optional vehicle photo
+  keeps its aspect ratio.
+- Card surfaces, text, fonts and corners follow the user's Home Assistant theme.
 - Commands go through GAC's cloud: the car's answer takes up to about 10 seconds;
   confirmation from the car's next report can take up to 3 minutes.
 - Readings arrive by polling (default every 5 minutes, paused in quiet hours) or GAC's push
@@ -64,6 +64,10 @@ confirmed it, refused it (with the car's own reason) or never answered.
 - A shared request budget: at most 6 commands a minute and 60 an hour. A held-back command
   fails with an error.
 - Changing an entity's visibility reloads the integration.
+- Vehicle actions use Home Assistant permissions for the selected vehicle and command
+  feature. Administrators manage options and entity visibility.
+- The Aion V lock reading can use the front lock reports, closed doors and armed alarm
+  when both rear lock codes are unreported. The dashboard keeps lock, alarm and openings separate.
 - Body styles to draw: hatch/crossover, SUV, coupé-SUV and MPV with sliding rear doors;
   PHEVs as well as EVs.
 - Terminology follows the integration (British English): Boot, Bonnet, Tyre, Charge now,
@@ -77,16 +81,16 @@ confirmed it, refused it (with the car's own reason) or never answered.
   the project.
 - Car imagery is original line art drawn for the project, per body style, plus an optional
   photo the owner supplies.
-- User-facing docs and examples are model-neutral: written for every GAC owner, never
-  naming one model as the reader's car.
+- General instructions apply across models. Model-specific readings are documented where
+  they affect what the integration displays.
 
 ## Evidence on Hand
 
 - The full entity list and behaviour in `README.md` and `custom_components/gac_connect`.
 - `models/` holds GAC's showroom scenes and renders recovered for research. They are
   git-ignored and must not ship or be traced.
-- No screenshots of real owners' dashboards exist; demonstration data is synthetic and
-  labelled as such.
+- The development demo uses labelled synthetic data. The fork notes record which features
+  were also verified on a live installation.
 
 ## Product Principles
 

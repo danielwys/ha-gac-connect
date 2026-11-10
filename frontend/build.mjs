@@ -39,6 +39,16 @@ if (demo) {
   // Home Assistant loads the small loader on every page; the loader loads the cards once HA has booted.
   await build({ ...options, entryPoints: ["src/loader.ts"], outfile: `${out}/gac-connect-cards.js` });
   await build({ ...options, entryPoints: ["src/index.ts"], outfile: `${out}/gac-connect-cards-main.js` });
-  await writeFile(`${out}/README.md`,
-    "Built from `frontend/` by `npm run build`; do not edit. Fonts: Barlow and Barlow Condensed, SIL OFL 1.1 (fonts/OFL.txt).\n");
+  await writeFile(`${out}/README.md`, [
+    "# Generated dashboard assets",
+    "",
+    "From `frontend/`, run `npm ci` and `npm run build` to regenerate this directory.",
+    "",
+    "Storage-mode dashboards load `gac-connect-cards-main.js` as a versioned resource.",
+    "For YAML resources, `gac-connect-cards.js` loads the main bundle.",
+    "",
+    "The cards use Home Assistant's theme fonts. The retained Barlow files are",
+    "distributed under the [SIL Open Font License](fonts/OFL.txt).",
+    "",
+  ].join("\n"));
 }

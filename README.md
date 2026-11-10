@@ -11,28 +11,42 @@ Monitor and control a **GAC / AION** vehicle from Home Assistant: battery, range
 charging and charge scheduling, climate and seats, doors, windows, boot and
 location.
 
-This branch adds authorization checks, preserves Recorder statistics and restores
-custom car pictures on top of PR #11. See [fork notes and upgrade considerations](docs/fork-notes.md).
+This fork adds vehicle-level permissions, preserves Recorder statistics and retains
+custom car pictures. It also handles the Aion V's partial lock reports and includes
+optional dashboard cards that follow your Home Assistant theme. See the
+[fork changes and upgrade guide](docs/fork-notes.md).
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wattferry&repository=ha-gac-connect&category=integration)
+[![Open this fork in the Home Assistant Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=danielwys&repository=ha-gac-connect&category=integration)
 
 ## Requirements
 
-- Home Assistant 2025.3 or newer. Tested on 2025.3.0 and 2026.10.2; a current release is
-  recommended, as it carries Home Assistant's latest security fixes.
+- Home Assistant 2025.3 or newer. CI tests 2025.3.0 and 2026.10.2. The dashboard and
+  Aion V lock changes were also verified on a running 2026.11.0 instance.
 - A GAC International app account (or My AION in the United Kingdom) and the mobile
   number it uses.
 
 ## Install
 
-**HACS:** use the badge above, or:
+**Marketplace** (Home Assistant 2026.11 or later)
 
-1. HACS → three-dot menu → **Custom repositories**.
-2. Add this repository with category **Integration**.
-3. Install **GAC Connect (unofficial, beta)** and restart Home Assistant.
+1. Open the badge above or go to **Settings → Marketplace → Add from link**.
+   Marketplace shows a warning the first time you open it. Acknowledge it to enable installs.
+2. Add `danielwys/ha-gac-connect`. If prompted, connect GitHub and select **Integration**.
+3. Open **GAC Connect (unofficial, beta)**, install it and restart Home Assistant.
 
-Releases are pre-releases while in beta: enable **Show beta versions** on the
-integration's HACS page.
+**HACS** (older Home Assistant versions)
+
+1. Open **HACS → ⋮ → Custom repositories**.
+2. Add `https://github.com/danielwys/ha-gac-connect` with category **Integration**.
+3. Download **GAC Connect (unofficial, beta)** and restart Home Assistant.
+
+The fork publishes updates from `main`. The version shown in Marketplace or HACS
+can be a short commit hash. If your installation already tracks this fork, update it in
+place and restart Home Assistant.
+See the [upgrade guide](docs/fork-notes.md#before-a-live-upgrade) when moving from an older build.
+
+If you're upgrading Home Assistant from a version with HACS, Marketplace migrates
+installed repositories automatically. See the [Marketplace guide](https://www.home-assistant.io/integrations/marketplace/#coming-from-hacs).
 
 **Manually:** copy `custom_components/gac_connect` into your Home Assistant
 `config/custom_components/` folder and restart.
@@ -98,7 +112,7 @@ neither happened within 3 minutes (Not confirmed in time).
 | Flash lights | switch | Flashes the lights. |
 | Driver seat ventilation | select | Off and the levels the car's capability list offers (up to Low, Medium, High). Choosing a level replaces the console's Smart mode. |
 | Front passenger seat ventilation | select | As for the driver seat. |
-| Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. Locked needs all four doors reported locked and the boot shut; with the boot open the lock reads Open. |
+| Doors | lock | Locks. Unlocks only when **Allow remote unlocking** is on. See [lock status](#lock-status) for how vehicle reports are interpreted. |
 | Windows | cover | Open or close all windows. |
 | Sunroof | cover | Open or close. |
 | Boot | cover | Open or close. |
@@ -178,6 +192,16 @@ that would end before then is refused with that reason.
 | Anti-theft enabled | Alarm armed. |
 | Driver / Front passenger / Rear left / Rear right seat ventilation state | Seat fan running; level as an attribute. |
 
+### Lock status
+
+The Doors lock reads **Open** when the boot reports open. A door reported unlocked is
+enough to mark the doors **Unlocked**. Reports with insufficient lock data show **Unknown**.
+
+On the Aion V, the integration can infer **Locked** when both front locks report locked,
+both rear lock codes are unreported (`-1`), all four doors report closed and the body
+alarm is armed. The Vehicle card shows the lock state separately from the alarm and
+whether the doors and windows are closed. **Last report** shows the age of the reading.
+
 ### Events
 
 | Entity | Fires |
@@ -191,7 +215,7 @@ Six cards, each with one job, narrow enough for a three-column desktop or a phon
 
 | Card | Shows |
 |---|---|
-| GAC Vehicle | Battery and range, a plan of the car with what is open, tyres, and quick actions. |
+| GAC Vehicle | Battery and range, optional full vehicle photo, lock and opening status, tyres and quick actions. |
 | GAC Climate | Cabin and target temperature, A/C, fan, airflow, seats and comfort features, and the fridge where fitted. |
 | GAC Charging | Charging state, Charge now, and the charging window with its days. |
 | GAC Location | Where the car is, on Home Assistant's map, and location tracking. |
@@ -205,6 +229,10 @@ opening the boot or windows, sounding the horn, releasing the cable and switchin
 need a held press; for half a minute after the horn sounds, one tap stops it. Times and the
 first day of the week follow your Home Assistant profile's language and time format.
 
+The cards use Home Assistant's theme for colours, fonts and corners. Action buttons wrap
+at narrow widths. The Vehicle card scales an optional photo to its width and preserves
+the photo's aspect ratio.
+
 The cards are optional and off by default: until you install them, GAC Connect adds nothing
 to Home Assistant's pages. **At setup**, answer **Install dashboard cards?** and choose the
 cards for the car's dashboard (all six by default): GAC Connect creates a dashboard named
@@ -217,22 +245,21 @@ The generated dashboard stays GAC Connect's only while it is unchanged. Edit it 
 once edited it is yours, and GAC Connect will neither change nor remove it. Delete it and it is
 not recreated.
 
-If a card says **Custom element doesn't exist** after installing or updating, the browser is
-still using its stored copy of Home Assistant's page: reload it, and if that is not enough,
-clear the browser's stored data for your Home Assistant address (in the Companion app:
-Settings → Companion app → Debugging → Reset frontend cache).
+If a card shows **Configuration error** or **Custom element doesn't exist**, let Home
+Assistant finish starting, check that dashboard cards are enabled for the integration,
+then reload the dashboard. In the Companion app, reopen the app to reload its frontend.
 
-With storage-mode dashboard resources, the integration registers its bundled JavaScript
-module in **Settings → Dashboards → Resources** and keeps the versioned URL up to date.
-This uses the dashboard's own module-loading path instead of relying on a background
-page script. Existing registrations of this exact local bundle are reused; unrelated
-resources are preserved. YAML resource lists remain user-managed and keep the fallback
-page loader.
+With storage-mode dashboard resources, the integration registers a versioned JavaScript
+module under **Settings → Dashboards → Resources**. Check there for an entry starting
+with `/gac_connect/frontend/gac-connect-cards-main.js` if the error persists. The integration
+updates this entry when the bundle changes. YAML resource lists use the page-loader fallback.
 
 **On your own dashboard:** Edit dashboard → Add card → search for **GAC**. Each card shows one
 car: with several cars, pick the car in the card's editor and add a card for each (with one
-car there is nothing to pick). The Vehicle card can also take a body style for its drawing, a
-photo of your car, a tyre pressure to warn below, and which actions to show.
+car there is nothing to pick). Use the Vehicle card editor to choose the body style, image,
+tyre pressure warning threshold and actions. The integration's **Car picture** option sets
+the image on the generated dashboard and the location tracker. For a dashboard you've
+edited, change the image in the card editor.
 
 ## Options
 
@@ -281,6 +308,10 @@ charge now or refresh.
 own target charge level instead of the stop time, like the app's "Charge cutoff SOC".
 No stop time is sent then, and the car keeps its saved one. The `get_…` actions return
 their result as a response and send nothing to the car.
+
+Read actions require access to an enabled entity for the selected vehicle. Commands
+require control permission for the relevant feature on that vehicle. Changing options
+or entity visibility requires an administrator. See [permissions](docs/fork-notes.md#authorization).
 
 ## Events
 
@@ -332,6 +363,12 @@ and restart to reset it.
 - Only the driver and front passenger seats have level controls; rear seats have
   readings and `send_command`.
 
+## Reporting a problem
+
+Open an issue on this fork with your Home Assistant version, the installed GAC Connect
+commit, your vehicle model and region, and the behavior you observed. Keep account
+details, the VIN and the vehicle's location out of public reports. [Fork issue tracker](https://github.com/danielwys/ha-gac-connect/issues)
+
 ## Acknowledgements
 
 This project stands on the shoulders of the community projects that brought other
@@ -347,6 +384,19 @@ Thanks to their authors for showing what a good community integration looks like
 
 ## Changes
 
+### This fork
+
+- Scoped action permissions to the selected vehicle and feature, with administrator
+  access required for security and privacy settings.
+- Kept existing Recorder statistics when entities are removed and carried custom pictures
+  forward through upgrades and option changes.
+- Matched dashboard cards to the Home Assistant theme, made actions responsive and
+  displayed the full vehicle photo at its original proportions.
+- Registered the card bundle as a versioned dashboard resource in storage mode and
+  added support for the Aion V's central lock report.
+
+### Upstream history
+
 - **0.5.0** — admin settings as entities (every option and the charging-window editor),
   and the `set_entity_visibility`, `get_position`, `get_alerts` and `get_departure_plans`
   actions. Charge now starts a new charge after a one-time window ends or the connector
@@ -356,7 +406,7 @@ Thanks to their authors for showing what a good community integration looks like
   causes in errors and in `gac_connect_command_result`. Ventilation reads the windows;
   a new poll interval applies at once. A newer charging choice is
   never overwritten by Charge now's follow-up; a new sign-in is not lost to a refresh
-  in progress; partial reports no longer read as locked; command outcomes need the full
+  in progress; incomplete lock reports are handled conservatively; command outcomes need the full
   target and a fresh report, and the car's refusal wins; undecryptable or refused
   replies are errors. Sign-in uses the library's puzzle page. Bundled pictures and the
   example dashboard were removed; this fork keeps the custom car-picture option.
